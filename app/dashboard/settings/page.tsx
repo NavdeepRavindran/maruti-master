@@ -63,7 +63,7 @@ export default function SettingsPage() {
     }
     setSaving(true);
     try {
-      if (user && user.id) {
+        if (user && user.id && supabase) {
         // Update in Supabase
         const { error } = await supabase
           .from("profiles")
