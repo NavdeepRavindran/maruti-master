@@ -1,0 +1,162 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #1a1a2e;
+  --primary: #1565C0;
+  --primary-dark: #0D3B72;
+  --primary-light: #42A5F5;
+  --secondary: #FFB300; /* Golden Yellow */
+  --accent: #E8F5E9; /* Soft Health Green */
+  --accent-text: #2E7D32;
+  --navy: #0D3B72;
+  --subtext: #546E7A;
+  --card-bg: rgba(255, 255, 255, 0.9);
+  --section-bg: #F8FBFF;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+  --color-accent-text: var(--accent-text);
+  --color-navy: var(--navy);
+  --color-subtext: var(--subtext);
+  --color-section-bg: var(--section-bg);
+  
+  --font-sans: var(--font-inter), system-ui, sans-serif;
+  --font-cormorant: var(--font-cormorant), serif;
+  --font-mono: var(--font-geist-mono);
+
+  --radius-4xl: 2rem;
+  --radius-5xl: 3rem;
+
+  @keyframes bounce-slow {
+    0%, 100% { transform: translateY(-5%); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+    50% { transform: none; animation-timing-function: cubic-bezier(0,0,0.2,1); }
+  }
+  @keyframes pulse-slow {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(0.98); }
+  }
+  @keyframes loading {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  --animate-bounce-slow: bounce-slow 4s infinite;
+  --animate-pulse-slow: pulse-slow 6s infinite;
+}
+
+body {
+  background: 
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 400px),
+    radial-gradient(circle at bottom left, rgba(96, 165, 250, 0.05), transparent 400px),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.glass {
+  background: var(--card-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.glass-dark {
+  background: rgba(15, 23, 42, 0.05);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+.nav-link {
+  @apply flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-slate-400 hover:bg-white/10 hover:text-white;
+}
+
+.nav-link.active {
+  @apply bg-white/15 text-white font-medium shadow-lg shadow-black/10;
+}
+
+.stat-card {
+  @apply p-6 rounded-3xl border border-white/20 shadow-xl transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl;
+}
+
+.btn-primary {
+  @apply inline-flex items-center justify-center rounded-2xl bg-primary px-6 py-3 text-sm font-semibold text-white transition-all duration-200 hover:bg-primary-dark hover:shadow-lg active:scale-95 disabled:opacity-50;
+}
+
+.btn-secondary {
+  @apply inline-flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-navy transition-all duration-200 hover:bg-slate-50 hover:border-primary-light active:scale-95;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  @apply tracking-tight text-navy;
+}
+
+::selection {
+  @apply bg-primary/20 text-navy;
+}
+
+/* Dark Mode Overrides */
+.dark body {
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.dark .bg-white,
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-\[\#f8fbff\] {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+.dark .bg-slate-50\/50,
+.dark .bg-slate-50\/40,
+.dark .bg-slate-50\/30,
+.dark .bg-slate-50\/20 {
+  background-color: rgba(30, 41, 59, 0.6) !important;
+}
+
+.dark .text-navy {
+  color: #f1f5f9 !important;
+}
+
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: #94a3b8 !important;
+}
+
+.dark .border-slate-50,
+.dark .border-slate-100,
+.dark .border-slate-200 {
+  border-color: #334155 !important;
+}
+
+.dark aside.bg-navy {
+  background-color: #020617 !important;
+}
+
+.dark input, .dark select, .dark textarea {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.dark .bg-white\/10 {
+  background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.dark h1, .dark h2, .dark h3, .dark h4, .dark h5, .dark h6 {
+  color: #f8fafc !important;
+}
