@@ -12,18 +12,34 @@ interface DocData {
   client_name?: string;
   client_id: string;
   file_url?: string;
+  category?: DocCategory;
 }
+
+type DocCategory = "documents" | "assets" | "health" | "life";
+
+const CATEGORIES: { key: DocCategory; label: string; icon: string; color: string; bg: string }[] = [
+  { key: "documents", label: "Documents", icon: "📄", color: "#3b82f6", bg: "#eff6ff" },
+  { key: "assets",    label: "Assets",    icon: "🏠", color: "#f59e0b", bg: "#fffbeb" },
+  { key: "health",    label: "Health",    icon: "🏥", color: "#22c55e", bg: "#f0fdf4" },
+  { key: "life",      label: "Life",      icon: "❤️", color: "#ef4444", bg: "#fef2f2" },
+];
+
+const getCat = (key?: DocCategory) => CATEGORIES.find(c => c.key === key) ?? CATEGORIES[0];
 
 export default function DocumentsPage() {
   const [docs, setDocs] = useState<DocData[]>([]);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [activeCategory, setActiveCategory] = useState<DocCategory | "all">("all");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploadForm, setUploadForm] = useState({ name: "", file_name: "", file_size: 0, file_url: "", client_id: "" });
+  const [uploadForm, setUploadForm] = useState({
+    name: "", file_name: "", file_size: 0, file_url: "", client_id: "",
+    category: "" as DocCategory | "",
+  });
 
   useEffect(() => {
     const t = setTimeout(fetchDocs, 300);
@@ -55,18 +71,19 @@ export default function DocumentsPage() {
   }
 
   async function handleUpload() {
-    if (!uploadForm.name || !selectedFile || !uploadForm.client_id)
-      return alert("Please fill all fields and select a file");
+    if (!uploadForm.name || !selectedFile || !uploadForm.client_id || !uploadForm.category)
+      return alert("Please fill all fields, select a category, and attach a file");
     setUploading(true);
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
       formData.append("client_id", uploadForm.client_id);
       formData.append("name", uploadForm.name);
+      formData.append("category", uploadForm.category);
       const res = await fetch("/api/documents", { method: "POST", body: formData });
       if (res.ok) {
         setShowUploadModal(false);
-        setUploadForm({ name: "", file_name: "", file_size: 0, file_url: "", client_id: "" });
+        setUploadForm({ name: "", file_name: "", file_size: 0, file_url: "", client_id: "", category: "" });
         setSelectedFile(null);
         fetchDocs();
       } else {
@@ -88,6 +105,7 @@ export default function DocumentsPage() {
   };
   const getType = (t: string) => typeConfig[t] || { bg: "#f0fdf4", color: "#22c55e", icon: "📎" };
 
+  const filteredDocs = activeCategory === "all" ? docs : docs.filter(d => d.category === activeCategory);
   const totalSize = docs.reduce((a, d) => a + d.file_size, 0);
   const pdfCount = docs.filter(d => d.file_type === "PDF").length;
   const imgCount = docs.filter(d => d.file_type === "IMG").length;
@@ -153,6 +171,45 @@ export default function DocumentsPage() {
         @media (min-width: 640px) { .dp-upload-btn { align-self: auto; } }
         .dp-upload-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.45); }
         .dp-upload-btn:active { transform: scale(0.97); }
+
+        /* ── Category Cards (NEW) ── */
+        .dp-cat-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 10px;
+          margin-bottom: 16px;
+        }
+        @media (min-width: 640px) { .dp-cat-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; } }
+
+        .dp-cat-card {
+          background: #fff;
+          border: 1.5px solid #e2e8f0;
+          border-radius: 16px;
+          padding: 14px 16px;
+          cursor: pointer;
+          transition: all 0.18s;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+          text-align: left;
+          font-family: inherit;
+        }
+        .dp-cat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
+        .dp-cat-card.active { border-width: 2px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+        .dp-cat-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; margin-bottom: 10px; }
+        .dp-cat-count { font-family: 'Sora', sans-serif; font-size: clamp(20px,4vw,26px); font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 3px; }
+        .dp-cat-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; }
+
+        /* ── Filter tabs (NEW) ── */
+        .dp-filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
+        .dp-filter-tab {
+          display: flex; align-items: center; gap: 6px;
+          padding: 7px 14px; border-radius: 20px;
+          border: 1.5px solid #e2e8f0; background: #fff;
+          font-size: 12px; font-weight: 700; color: #64748b;
+          cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap;
+        }
+        .dp-filter-tab:hover { border-color: #94a3b8; color: #334155; }
+        .dp-filter-tab.active { color: #fff; border-color: transparent; }
+        .dp-filter-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
 
         /* ── Stats row ── */
         .dp-stats {
@@ -281,6 +338,13 @@ export default function DocumentsPage() {
         }
         @keyframes dpspin { to { transform: rotate(360deg); } }
 
+        /* ── Category pill (NEW) ── */
+        .dp-cat-pill {
+          display: inline-flex; align-items: center; gap: 3px;
+          padding: 2px 7px; border-radius: 99px;
+          font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+        }
+
         /* ── Grid view ── */
         .dp-grid {
           display: grid;
@@ -332,7 +396,7 @@ export default function DocumentsPage() {
           white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
           margin-bottom: 4px;
         }
-        .dp-card-owner { font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 10px; }
+        .dp-card-owner { font-size: 10px; color: #94a3b8; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
         .dp-card-footer {
           display: flex; align-items: center; justify-content: space-between;
           padding-top: 8px;
@@ -361,7 +425,7 @@ export default function DocumentsPage() {
         }
         .dp-list-info { flex: 1; min-width: 0; }
         .dp-list-name { font-size: 13px; font-weight: 700; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
-        .dp-list-meta { font-size: 11px; color: #94a3b8; font-weight: 500; }
+        .dp-list-meta { font-size: 11px; color: #94a3b8; font-weight: 500; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
         /* Desktop table columns */
         .dp-list-col-owner { display: none; font-size: 12px; color: #64748b; font-weight: 500; min-width: 100px; }
@@ -424,20 +488,15 @@ export default function DocumentsPage() {
         .dp-storage-num-lbl { font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 3px; }
         .dp-storage-num.dim .dp-storage-num { color: #cbd5e1; }
 
-        .dp-type-list { display: flex; flex-direction: column; gap: 10px; }
-        .dp-type-row { display: flex; align-items: center; justify-content: space-between; }
-        .dp-type-left { display: flex; align-items: center; gap: 8px; }
-        .dp-type-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-        .dp-type-lbl { font-size: 12px; font-weight: 600; color: #334155; }
-        .dp-type-count { font-size: 11px; font-weight: 700; color: #94a3b8; }
-
-        /* ── Mobile storage row ── */
-        .dp-stats-mobile {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 8px;
-        }
-        @media (min-width: 1024px) { .dp-stats-mobile { display: none; } }
+        /* Sidebar category breakdown (NEW — replaces old type list) */
+        .dp-cat-breakdown { display: flex; flex-direction: column; gap: 10px; }
+        .dp-cat-br-row { display: flex; align-items: center; justify-content: space-between; }
+        .dp-cat-br-left { display: flex; align-items: center; gap: 8px; }
+        .dp-cat-br-icon { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; }
+        .dp-cat-br-lbl { font-size: 12px; font-weight: 600; color: #334155; }
+        .dp-cat-br-count { font-size: 11px; font-weight: 700; color: #94a3b8; }
+        .dp-cat-br-bar-bg { height: 3px; background: #f1f5f9; border-radius: 99px; margin-top: 5px; overflow: hidden; }
+        .dp-cat-br-bar { height: 100%; border-radius: 99px; }
 
         /* ── Modal ── */
         .dp-modal-bg {
@@ -499,6 +558,19 @@ export default function DocumentsPage() {
         .dp-field-file:hover { border-color: #93c5fd; }
         .dp-file-hint { font-size: 11px; color: #22c55e; font-weight: 600; margin-top: 5px; }
 
+        /* Category picker in modal (NEW) */
+        .dp-cat-picker { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        .dp-cat-pick-btn {
+          display: flex; align-items: center; gap: 8px;
+          padding: 10px 12px; border-radius: 12px;
+          border: 1.5px solid #e2e8f0; background: #f8fafc;
+          cursor: pointer; font-family: inherit; font-size: 13px;
+          font-weight: 600; color: #334155; transition: all 0.15s; text-align: left;
+        }
+        .dp-cat-pick-btn:hover { border-color: #94a3b8; background: #fff; }
+        .dp-cat-pick-btn.active { border-width: 2px; }
+        .dp-cat-pick-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 15px; flex-shrink: 0; }
+
         .dp-modal-actions { display: flex; gap: 10px; margin-top: 20px; }
         .dp-btn-cancel {
           flex: 1; padding: 12px; border-radius: 12px;
@@ -532,6 +604,52 @@ export default function DocumentsPage() {
             </svg>
             Upload Document
           </button>
+        </div>
+
+        {/* ── Category Cards (NEW) ── */}
+        <div className="dp-cat-grid">
+          {CATEGORIES.map(cat => {
+            const count = docs.filter(d => d.category === cat.key).length;
+            const isActive = activeCategory === cat.key;
+            return (
+              <button
+                key={cat.key}
+                className={`dp-cat-card${isActive ? " active" : ""}`}
+                style={isActive ? { borderColor: cat.color, background: cat.bg } : {}}
+                onClick={() => setActiveCategory(isActive ? "all" : cat.key)}
+              >
+                <div className="dp-cat-icon" style={{ background: cat.bg }}>{cat.icon}</div>
+                <div className="dp-cat-count" style={isActive ? { color: cat.color } : {}}>{loading ? "—" : count}</div>
+                <div className="dp-cat-name" style={isActive ? { color: cat.color, opacity: 0.8 } : {}}>{cat.label}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Filter tabs (NEW) ── */}
+        <div className="dp-filter-tabs">
+          <button
+            className={`dp-filter-tab${activeCategory === "all" ? " active" : ""}`}
+            style={activeCategory === "all" ? { background: "#0f172a" } : {}}
+            onClick={() => setActiveCategory("all")}
+          >
+            All Files ({docs.length})
+          </button>
+          {CATEGORIES.map(cat => {
+            const count = docs.filter(d => d.category === cat.key).length;
+            const isActive = activeCategory === cat.key;
+            return (
+              <button
+                key={cat.key}
+                className={`dp-filter-tab${isActive ? " active" : ""}`}
+                style={isActive ? { background: cat.color } : {}}
+                onClick={() => setActiveCategory(isActive ? "all" : cat.key)}
+              >
+                <span className="dp-filter-tab-dot" style={{ background: isActive ? "rgba(255,255,255,0.6)" : cat.color }} />
+                {cat.label} ({count})
+              </button>
+            );
+          })}
         </div>
 
         {/* Quick stats */}
@@ -569,7 +687,9 @@ export default function DocumentsPage() {
                   onChange={e => setSearch(e.target.value)}
                 />
               </div>
-              <span className="dp-files-title">All Files</span>
+              <span className="dp-files-title">
+                {activeCategory === "all" ? "All Files" : getCat(activeCategory as DocCategory).label}
+              </span>
               <div className="dp-view-toggle">
                 <button className={`dp-view-btn${viewMode === "list" ? " active" : ""}`} onClick={() => setViewMode("list")}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -590,15 +710,21 @@ export default function DocumentsPage() {
                 <div className="dp-spinner" />
                 <p style={{ color: "#94a3b8", fontSize: 13, fontWeight: 600 }}>Loading documents…</p>
               </div>
-            ) : docs.length === 0 ? (
+            ) : filteredDocs.length === 0 ? (
               <div className="dp-empty">
                 <div style={{ fontSize: 40, marginBottom: 10 }}>📂</div>
                 <p style={{ color: "#94a3b8", fontWeight: 700, fontSize: 14 }}>No documents found</p>
+                {activeCategory !== "all" && (
+                  <p style={{ color: "#cbd5e1", fontSize: 12, marginTop: 4 }}>
+                    No files in <b>{getCat(activeCategory as DocCategory).label}</b> yet
+                  </p>
+                )}
               </div>
             ) : viewMode === "grid" ? (
               <div className="dp-grid">
-                {docs.map(doc => {
+                {filteredDocs.map(doc => {
                   const tc = getType(doc.file_type);
+                  const cat = getCat(doc.category);
                   return (
                     <div key={doc.id} className="dp-card">
                       <div className="dp-card-top">
@@ -623,6 +749,12 @@ export default function DocumentsPage() {
                       </div>
                       <div className="dp-card-name">{doc.name}</div>
                       <div className="dp-card-owner">👤 {doc.client_name || "—"}</div>
+                      {/* Category pill */}
+                      <div style={{ marginBottom: 8 }}>
+                        <span className="dp-cat-pill" style={{ background: cat.bg, color: cat.color }}>
+                          {cat.icon} {cat.label}
+                        </span>
+                      </div>
                       <div className="dp-card-footer">
                         <span className="dp-card-meta">{formatSize(doc.file_size)}</span>
                         <span className="dp-card-meta">{formatDate(doc.created_at)}</span>
@@ -633,14 +765,21 @@ export default function DocumentsPage() {
               </div>
             ) : (
               <div className="dp-list">
-                {docs.map(doc => {
+                {filteredDocs.map(doc => {
                   const tc = getType(doc.file_type);
+                  const cat = getCat(doc.category);
                   return (
                     <div key={doc.id} className="dp-list-row">
                       <div className="dp-list-type" style={{ background: tc.bg }}>{tc.icon}</div>
                       <div className="dp-list-info">
                         <div className="dp-list-name">{doc.name}</div>
-                        <div className="dp-list-meta">{doc.file_type} · {formatSize(doc.file_size)}</div>
+                        <div className="dp-list-meta">
+                          <span>{doc.file_type} · {formatSize(doc.file_size)}</span>
+                          {/* Category pill */}
+                          <span className="dp-cat-pill" style={{ background: cat.bg, color: cat.color }}>
+                            {cat.icon} {cat.label}
+                          </span>
+                        </div>
                       </div>
                       <div className="dp-list-col-owner">{doc.client_name || "—"}</div>
                       <div className="dp-list-col-date">{formatDate(doc.created_at)}</div>
@@ -686,20 +825,28 @@ export default function DocumentsPage() {
                   <div className="dp-storage-num-lbl">Limit</div>
                 </div>
               </div>
-              <div className="dp-type-list">
-                {[
-                  { label: "PDF Documents", count: pdfCount, color: "#ef4444" },
-                  { label: "Images", count: imgCount, color: "#f59e0b" },
-                  { label: "Other Formats", count: otherCount, color: "#3b82f6" },
-                ].map(item => (
-                  <div key={item.label} className="dp-type-row">
-                    <div className="dp-type-left">
-                      <div className="dp-type-dot" style={{ background: item.color }} />
-                      <span className="dp-type-lbl">{item.label}</span>
+
+              {/* ── Category breakdown (NEW — replaces old type list) ── */}
+              <div className="dp-storage-title" style={{ fontSize: 12, marginBottom: 12 }}>By Category</div>
+              <div className="dp-cat-breakdown">
+                {CATEGORIES.map(cat => {
+                  const count = docs.filter(d => d.category === cat.key).length;
+                  const pct = docs.length > 0 ? Math.round((count / docs.length) * 100) : 0;
+                  return (
+                    <div key={cat.key}>
+                      <div className="dp-cat-br-row">
+                        <div className="dp-cat-br-left">
+                          <div className="dp-cat-br-icon" style={{ background: cat.bg }}>{cat.icon}</div>
+                          <span className="dp-cat-br-lbl">{cat.label}</span>
+                        </div>
+                        <span className="dp-cat-br-count">{count} files</span>
+                      </div>
+                      <div className="dp-cat-br-bar-bg">
+                        <div className="dp-cat-br-bar" style={{ width: `${pct}%`, background: cat.color }} />
+                      </div>
                     </div>
-                    <span className="dp-type-count">{item.count} Files</span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -714,6 +861,28 @@ export default function DocumentsPage() {
             <div className="dp-modal-header">
               <span className="dp-modal-title">Upload Document</span>
               <button className="dp-modal-close" onClick={() => setShowUploadModal(false)}>✕</button>
+            </div>
+
+            {/* ── Category picker (NEW) ── */}
+            <div className="dp-field">
+              <label className="dp-field-label">Document Category</label>
+              <div className="dp-cat-picker">
+                {CATEGORIES.map(cat => {
+                  const isActive = uploadForm.category === cat.key;
+                  return (
+                    <button
+                      key={cat.key}
+                      type="button"
+                      className={`dp-cat-pick-btn${isActive ? " active" : ""}`}
+                      style={isActive ? { borderColor: cat.color, background: cat.bg, color: cat.color } : {}}
+                      onClick={() => setUploadForm({ ...uploadForm, category: cat.key })}
+                    >
+                      <div className="dp-cat-pick-icon" style={{ background: cat.bg }}>{cat.icon}</div>
+                      {cat.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className="dp-field">
@@ -762,7 +931,7 @@ export default function DocumentsPage() {
               <button
                 className="dp-btn-upload"
                 onClick={handleUpload}
-                disabled={uploading || !uploadForm.name || !selectedFile || !uploadForm.client_id}
+                disabled={uploading || !uploadForm.name || !selectedFile || !uploadForm.client_id || !uploadForm.category}
               >
                 {uploading ? "Uploading…" : "Upload File"}
               </button>

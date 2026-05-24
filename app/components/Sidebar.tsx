@@ -286,20 +286,60 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
       `}</style>
 
       <aside className="sidebar">
-        {/* Logo */}
-        <div className="sb-logo">
-          <Link href="/" className="sb-logo-link">
-            <div className="sb-logo-icon">
-              <svg width="20" height="20" fill="none" stroke="white" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
-            </div>
-            <div className="sb-logo-text">
-              <span className="sb-logo-name">Maruthi</span>
-              <span className="sb-logo-sub">Insure Care</span>
-            </div>
-          </Link>
-        </div>
+{/* Logo */}
+<div className="sb-logo">
+  <Link
+    href="/"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "12px",
+      textDecoration: "none",
+    }}
+  >
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <img
+        src="/images/logo-mic.png"
+        alt="Maruthi Insure Care Logo"
+        width={50}
+        height={50}
+      />
+    </div>
+
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        lineHeight: "1.1",
+      }}
+    >
+      <span
+        style={{
+          fontSize: "16px",
+          fontWeight: 700,
+          color: "#0d3b8f",
+        }}
+      >
+        Maruthi
+      </span>
+
+      <span
+        style={{
+          fontSize: "12px",
+          color: "#666",
+        }}
+      >
+        Insure Care
+      </span>
+    </div>
+  </Link>
+</div>
 
         {/* Nav */}
         <div className="sb-section-label">Main Menu</div>
