@@ -4,7 +4,7 @@ import { useEffect, useState, use } from "react";
 import Link from "next/link";
 import { supabase } from "../../../../lib/supabaseClient";
 
-interface ClientData { id: string; name: string; phone: string; email?: string; date_of_birth: string; address?: string; status: string; family_count?: number; document_count?: number; }
+interface ClientData { id: string; name: string; phone: string; email?: string; date_of_birth: string; address?: string; status: string; family_count?: number; document_count?: number; clientLoginId?: string; temporaryPassword?: string; }
 interface FamilyMember { id: string; client_id: string; name: string; date_of_birth: string; relationship: string; phone?: string; }
 interface DocData { id: string; name: string; file_name: string; file_type: string; file_size: number; created_at: string; family_member_id?: string | null; file_url?: string; }
 
@@ -17,10 +17,41 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
   const [showFamilyModal, setShowFamilyModal] = useState(false);
   const [showDocModal, setShowDocModal] = useState(false);
   const [familyForm, setFamilyForm] = useState({ name: "", date_of_birth: "", relationship: "", phone: "" });
-  const [docForm, setDocForm] = useState({ name: "", file_name: "", file_size: 0, file_url: "", family_member_id: "" });
+  const [docForm, setDocForm] = useState({ name: "", file_name: "", file_size: 0, file_url: "", family_member_id: "", category: "" });
   const [selectedDocFile, setSelectedDocFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"docs" | "family">("docs");
+  const [showPassword, setShowPassword] = useState(false);
+  const [regenerating, setRegenerating] = useState(false);
+
+  async function regeneratePassword() {
+    if (!client) return;
+    if (!confirm("Are you sure you want to regenerate the portal password? The old password will be invalidated.")) return;
+    setRegenerating(true);
+    try {
+      const res = await fetch(`/api/clients/${id}/regenerate`, { method: "POST" });
+      const data = await res.json();
+      if (data.client) {
+        setClient({ ...client, temporaryPassword: data.client.temporaryPassword });
+        alert("Password regenerated successfully.");
+      }
+    } catch {
+      alert("Failed to regenerate password.");
+    } finally {
+      setRegenerating(false);
+    }
+  }
+
+  function copyToClipboard(text: string, msg: string) {
+    navigator.clipboard.writeText(text);
+    alert(msg);
+  }
+
+  function copyAllCredentials() {
+    if (!client) return;
+    const text = `Client Portal Access\n\nLogin ID: ${client.clientLoginId || "N/A"}\nPassword: ${client.temporaryPassword || "N/A"}\nPortal URL: ${window.location.origin}/client-login`;
+    copyToClipboard(text, "All credentials copied to clipboard!");
+  }
 
   useEffect(() => { fetchClient(); }, [id]);
 
@@ -57,13 +88,14 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
   }
 
   async function addDocument() {
-    if (!docForm.name || !selectedDocFile) return alert("Please provide a name and select a file");
+    if (!docForm.name || !selectedDocFile || !docForm.category) return alert("Please provide a name, select a category and attach a file");
     setSaving(true);
     try {
       const formData = new FormData();
       formData.append("file", selectedDocFile);
       formData.append("client_id", id);
       formData.append("name", docForm.name);
+      formData.append("category", docForm.category);
       if (docForm.family_member_id) {
         formData.append("family_member_id", docForm.family_member_id);
       }
@@ -79,7 +111,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
       }
 
       setShowDocModal(false);
-      setDocForm({ name: "", file_name: "", file_size: 0, file_url: "", family_member_id: "" });
+      setDocForm({ name: "", file_name: "", file_size: 0, file_url: "", family_member_id: "", category: "" });
       setSelectedDocFile(null);
       fetchClient();
     } catch (e: any) {
@@ -138,6 +170,61 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
           </div>
         ))}
       </div>
+
+      {/* Portal Access Card */}
+      {client.clientLoginId && (
+        <div className="mb-10 bg-white rounded-2xl border border-slate-100 shadow-sm p-6 overflow-hidden relative">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50 rounded-bl-full pointer-events-none -z-10" />
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-lg font-black text-navy flex items-center gap-2">
+                <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                Portal Access
+              </h2>
+              <p className="text-xs text-slate-400 font-bold mt-1">Manage credentials for the client self-service portal</p>
+            </div>
+            <button onClick={copyAllCredentials} className="flex items-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-xl text-xs font-bold transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+              Copy Details
+            </button>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Client Login ID</label>
+              <div className="flex items-center gap-2">
+                <input type="text" readOnly value={client.clientLoginId || ""} className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold text-slate-700 outline-none" />
+                <button onClick={() => copyToClipboard(client.clientLoginId || "", "Login ID copied!")} className="p-3 bg-slate-50 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors border border-slate-200">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Temporary Password</label>
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input type={showPassword ? "text" : "password"} readOnly value={client.temporaryPassword || ""} className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-4 pr-10 py-3 text-sm font-bold text-slate-700 outline-none tracking-widest" />
+                  <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-navy">
+                    {showPassword ? (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" /></svg>
+                    ) : (
+                      <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                    )}
+                  </button>
+                </div>
+                <button onClick={() => copyToClipboard(client.temporaryPassword || "", "Password copied!")} className="p-3 bg-slate-50 hover:bg-slate-200 rounded-xl text-slate-500 transition-colors border border-slate-200">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                </button>
+                <button onClick={regeneratePassword} disabled={regenerating} className="p-3 bg-red-50 hover:bg-red-100 rounded-xl text-red-600 transition-colors border border-red-100 font-bold text-xs disabled:opacity-50 flex items-center gap-1.5" title="Regenerate Password">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                  <span className="hidden xl:inline">Regenerate</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-2 mb-8 p-1 bg-slate-50 rounded-2xl border border-slate-100 w-fit">
@@ -238,6 +325,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
             <h2 className="text-2xl font-black text-navy mb-8">Upload Document</h2>
             <div className="space-y-5">
               <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Document Name *</label><input type="text" value={docForm.name} onChange={e => setDocForm({...docForm, name: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 focus:bg-white focus:border-primary outline-none font-bold text-navy" placeholder="e.g. LIC Term Policy" /></div>
+              <div><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-1">Category *</label><select value={docForm.category} onChange={e => setDocForm({...docForm, category: e.target.value})} className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-100 focus:bg-white focus:border-primary outline-none font-bold text-navy appearance-none"><option value="">Select Category...</option>{["Policy Documents", "KYC / Identity", "Health Records", "Vehicle RC / Insurance", "Financial / Tax", "Others"].map(c => <option key={c} value={c}>{c}</option>)}</select></div>
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-2 block">Attach File *</label>
                 <input 
@@ -259,7 +347,7 @@ export default function ClientProfilePage({ params }: { params: Promise<{ id: st
             </div>
             <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-slate-100">
               <button onClick={() => setShowDocModal(false)} className="px-6 py-3 rounded-2xl border border-slate-200 text-navy font-bold hover:bg-slate-50">Cancel</button>
-              <button onClick={addDocument} disabled={saving || !docForm.name || !selectedDocFile} className="px-8 py-3 rounded-2xl bg-navy text-white font-bold hover:bg-primary transition-all disabled:opacity-50">{saving ? "Uploading..." : "Upload"}</button>
+              <button onClick={addDocument} disabled={saving || !docForm.name || !selectedDocFile || !docForm.category} className="px-8 py-3 rounded-2xl bg-navy text-white font-bold hover:bg-primary transition-all disabled:opacity-50">{saving ? "Uploading..." : "Upload"}</button>
             </div>
           </div>
         </div>

@@ -13,6 +13,19 @@ export interface Client {
   id: string;
   agent_id: string;
   name: string;
+  surname?: string;
+  alternateMobile?: string;
+  anniversaryDate?: string;
+  gender?: "Male" | "Female" | "Other" | "Prefer not to say";
+  maritalStatus?: "Single" | "Married" | "Divorced" | "Widowed";
+  occupation?: string;
+  city?: string;
+  state?: string;
+  pinCode?: string;
+  notes?: string;
+  clientLoginId?: string;
+  temporaryPassword?: string;
+  isAnniversaryWished?: boolean;
   phone: string;
   email?: string;
   date_of_birth: string;
@@ -42,6 +55,7 @@ export interface Document {
   client_id: string;
   family_member_id?: string | null;
   name: string;
+  category?: "policy" | "kyc" | "claims" | "other";
   file_name: string;
   file_url: string;
   file_type: string;
@@ -59,6 +73,16 @@ export interface BirthdayEntry {
   client_id: string;
   family_member_id?: string;
   type: "client" | "family_member";
+}
+
+export interface AnniversaryEntry {
+  name: string;
+  anniversaryDate: string;
+  relationship: string;
+  phone?: string;
+  client_name?: string;
+  client_id: string;
+  type: "client";
 }
 
 export interface BirthdayWish {

@@ -33,10 +33,25 @@ Insurance clients managed by agents.
 | `phone` | text | Required |
 | `email` | text | Optional |
 | `date_of_birth` | date | Required |
+| `anniversary_date` | date | Optional |
 | `address` | text | Optional |
 | `status` | text | `'Active'`, `'Pending'`, `'Inactive'` |
-| `login_email` | text | For client portal login |
-| `login_password_hash` | text | For client portal login |
+| `fatherName` | text | Optional |
+| `spouseName` | text | Optional |
+| `vehicleNo` | text | Optional |
+| `rcExpDate` | date | Optional |
+| `healthIns` | text | Optional |
+| `healthExpDate` | date | Optional |
+| `lifeIns` | text | Optional |
+| `lifeExpDate` | date | Optional |
+| `termIns` | text | Optional |
+| `termExpDate` | date | Optional |
+| `lic` | text | Optional |
+| `licExpDate` | date | Optional |
+| `otherIns` | text | Optional |
+| `otherExpDate` | date | Optional |
+| `clientLoginId` | text | Auto-generated MC-XXXXXX for client portal |
+| `temporaryPassword` | text | Auto-generated password for client portal |
 | `created_at` | timestamptz | Default `now()` |
 | `updated_at` | timestamptz | Default `now()` |
 
@@ -66,6 +81,7 @@ Document metadata (actual files stored in Supabase Storage).
 | `file_url` | text | Supabase Storage URL |
 | `file_type` | text | `'PDF'`, `'IMG'`, `'DOC'`, `'XLS'`, `'FILE'` |
 | `file_size` | bigint | File size in bytes |
+| `category` | text | e.g. `'Policy Documents'`, `'KYC / Identity'` |
 | `uploaded_by` | text | Uploader identifier |
 | `created_at` | timestamptz | Default `now()` |
 

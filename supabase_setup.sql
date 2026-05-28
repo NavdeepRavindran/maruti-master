@@ -41,10 +41,25 @@ CREATE TABLE IF NOT EXISTS public.clients (
   phone TEXT NOT NULL,
   email TEXT,
   date_of_birth DATE NOT NULL,
+  anniversary_date DATE,
   address TEXT,
   status TEXT NOT NULL DEFAULT 'Active' CHECK (status IN ('Active', 'Pending', 'Inactive')),
-  login_email TEXT,
-  login_password_hash TEXT,
+  fatherName TEXT,
+  spouseName TEXT,
+  vehicleNo TEXT,
+  rcExpDate DATE,
+  healthIns TEXT,
+  healthExpDate DATE,
+  lifeIns TEXT,
+  lifeExpDate DATE,
+  termIns TEXT,
+  termExpDate DATE,
+  lic TEXT,
+  licExpDate DATE,
+  otherIns TEXT,
+  otherExpDate DATE,
+  clientLoginId TEXT,
+  temporaryPassword TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -82,6 +97,7 @@ CREATE TABLE IF NOT EXISTS public.documents (
   file_url TEXT NOT NULL DEFAULT '',
   file_type TEXT NOT NULL DEFAULT 'FILE',
   file_size BIGINT NOT NULL DEFAULT 0,
+  category TEXT,
   uploaded_by TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -213,6 +229,18 @@ INSERT INTO public.clients (name, phone, email, date_of_birth, address, status) 
   ('Priya Das', '+91 94455 66778', 'priya.das@email.com', '1992-09-18', '23, Salt Lake, Kolkata - 700091', 'Active'),
   ('Rohan Sharma', '+91 98877 11223', 'rohan.sharma@email.com', '1988-01-30', '56, Banjara Hills, Hyderabad - 500034', 'Active');
 */
+
+-- ============================================================
+-- 11. SEQUENCES & ID GENERATION
+-- ============================================================
+CREATE SEQUENCE IF NOT EXISTS public.client_login_seq START 1;
+
+CREATE OR REPLACE FUNCTION public.get_next_client_id()
+RETURNS TEXT AS $$
+BEGIN
+  RETURN 'MC-' || LPAD(nextval('public.client_login_seq')::TEXT, 6, '0');
+END;
+$$ LANGUAGE plpgsql;
 
 -- ============================================================
 -- DONE! Your database is ready.

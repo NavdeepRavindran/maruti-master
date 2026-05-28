@@ -32,6 +32,18 @@ const ENGLISH_MESSAGES = [
   "With heartfelt wishes, we pray that the Almighty grants you good health, great wisdom, and boundless happiness in all your endeavours.",
 ];
 
+const ANNIVERSARY_TEMPLATES = TEMPLATES.map(t => ({
+  ...t,
+  tamilWish: "இனிய திருமண நாள் வாழ்த்துக்கள்!",
+  tamilSub: "இறைவன் அருளால் உங்கள் இல்லறம் இனிதே சிறக்க வாழ்த்துக்கள்!"
+}));
+
+const ENGLISH_ANNIVERSARY_MESSAGES = [
+  "May the divine blessings shower upon your beautiful bond today and always. Wishing you a lifetime of joy and togetherness on your anniversary.",
+  "On this auspicious occasion of your anniversary, may God's grace illuminate your journey together with endless love and prosperity.",
+  "May this anniversary mark the beginning of another magnificent year filled with shared laughter, deep love, and boundless blessings.",
+];
+
 const WhatsAppIcon = () => (
   <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
     <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z" />
@@ -39,8 +51,11 @@ const WhatsAppIcon = () => (
 );
 
 export default function BirthdaysPage() {
+  const [activeMainTab, setActiveMainTab] = useState<"birthdays" | "anniversaries">("birthdays");
   const [birthdays, setBirthdays] = useState<BirthdayItem[]>([]);
+  const [anniversaries, setAnniversaries] = useState<BirthdayItem[]>([]);
   const [stats, setStats] = useState<Stats>({ today: 0, thisWeek: 0, thisMonth: 0, total: 0 });
+  const [anniversaryStats, setAnniversaryStats] = useState<Stats>({ today: 0, thisWeek: 0, thisMonth: 0, total: 0 });
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState("month");
   const [selectedPerson, setSelectedPerson] = useState<BirthdayItem | null>(null);
@@ -50,7 +65,7 @@ export default function BirthdaysPage() {
   const [generating, setGenerating] = useState(false);
   const [shareStatus, setShareStatus] = useState<"idle" | "success" | "error">("idle");
 
-  useEffect(() => { fetchBirthdays(); }, [range]);
+  useEffect(() => { fetchBirthdays(); fetchAnniversaries(); }, [range]);
 
   async function fetchBirthdays() {
     setLoading(true);
@@ -59,6 +74,16 @@ export default function BirthdaysPage() {
       const data = await res.json();
       setBirthdays(data.birthdays || []);
       if (data.stats) setStats(data.stats);
+    } catch { } finally { setLoading(false); }
+  }
+
+  async function fetchAnniversaries() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/anniversaries?range=${range}`);
+      const data = await res.json();
+      setAnniversaries(data.anniversaries || []);
+      if (data.stats) setAnniversaryStats(data.stats);
     } catch { } finally { setLoading(false); }
   }
 
@@ -86,8 +111,8 @@ export default function BirthdaysPage() {
 
   const handleOpenGreeting = (person: BirthdayItem) => {
     setSelectedPerson(person);
-    setSelectedTemplate(TEMPLATES[0]);
-    setEnglishMsg(ENGLISH_MESSAGES[0]);
+    setSelectedTemplate(activeMainTab === "birthdays" ? TEMPLATES[0] : ANNIVERSARY_TEMPLATES[0]);
+    setEnglishMsg(activeMainTab === "birthdays" ? ENGLISH_MESSAGES[0] : ENGLISH_ANNIVERSARY_MESSAGES[0]);
     setShareStatus("idle");
   };
 
@@ -153,7 +178,7 @@ export default function BirthdaysPage() {
 
     ctx.font = "italic 36px Georgia, serif";
     ctx.fillStyle = tpl.textSub; ctx.textAlign = "center";
-    ctx.fillText("✦  Heartfelt Birthday Wishes to  ✦", W / 2, 540);
+    ctx.fillText(activeMainTab === "birthdays" ? "✦  Heartfelt Birthday Wishes to  ✦" : "✦  Heartfelt Anniversary Wishes to  ✦", W / 2, 540);
 
     const nameSize = selectedPerson.name.length > 18 ? 74 : 92;
     ctx.font = `bold ${nameSize}px Georgia, serif`;
@@ -168,7 +193,7 @@ export default function BirthdaysPage() {
     ctx.strokeStyle = tpl.accent + "44"; ctx.lineWidth = 1;
     roundRect(ctx, pX, pY, pW, pH, 26); ctx.stroke();
     ctx.font = "500 28px Georgia, serif"; ctx.fillStyle = tpl.accent; ctx.textAlign = "center";
-    ctx.fillText(`Turning ${age} Years of Grace`, W / 2, pY + 33);
+    ctx.fillText(activeMainTab === "birthdays" ? `Turning ${age} Years of Grace` : `Celebrating ${age} Years of Togetherness`, W / 2, pY + 33);
 
     drawDivider(ctx, W / 2, 758, 360, tpl.accent);
 
@@ -227,7 +252,8 @@ export default function BirthdaysPage() {
     setGenerating(true); setShareStatus("idle");
     try {
       const blob = await generateCardBlob();
-      const file = new File([blob], `birthday-${selectedPerson.name.replace(/\s+/g, "-")}.png`, { type: "image/png" });
+      const prefix = activeMainTab === "birthdays" ? "birthday" : "anniversary";
+      const file = new File([blob], `${prefix}-${selectedPerson.name.replace(/\s+/g, "-")}.png`, { type: "image/png" });
       const whatsappText = `${selectedTemplate.tamilWish}\n\n${englishMsg}\n\n— ${senderName}\nMaruthi Insure Care`;
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ files: [file], text: whatsappText, title: `Happy Birthday ${selectedPerson.name}!` });
@@ -252,8 +278,9 @@ export default function BirthdaysPage() {
     try {
       const blob = await generateCardBlob();
       const url = URL.createObjectURL(blob);
+      const prefix = activeMainTab === "birthdays" ? "birthday" : "anniversary";
       const a = document.createElement("a"); a.href = url;
-      a.download = `birthday-${selectedPerson.name.replace(/\s+/g, "-")}.png`; a.click();
+      a.download = `${prefix}-${selectedPerson.name.replace(/\s+/g, "-")}.png`; a.click();
       URL.revokeObjectURL(url);
     } finally { setGenerating(false); }
   };
@@ -390,6 +417,21 @@ export default function BirthdaysPage() {
           width: fit-content;
           box-shadow: 0 2px 8px rgba(59,130,246,.06);
           position: relative; z-index: 1;
+        }
+        
+        .main-tabs {
+          display: flex; gap: 6px;
+          margin-bottom: 24px; position: relative; z-index: 1;
+        }
+        .mtab {
+          padding: 10px 24px; border-radius: 12px; border: 2px solid transparent; cursor: pointer;
+          font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em;
+          background: var(--surface); color: var(--muted); font-family: inherit; transition: all .2s;
+          box-shadow: 0 2px 8px rgba(59,130,246,.06);
+        }
+        .mtab.on {
+          border-color: var(--blue-500); color: var(--blue-900);
+          box-shadow: 0 4px 16px rgba(59,130,246,.12);
         }
         .fbtn {
           padding: 7px 22px; border-radius: 9px; border: none; cursor: pointer;
@@ -681,17 +723,23 @@ export default function BirthdaysPage() {
             <span className="hdr-eyebrow-dot" />
             Maruthi Insure Care
           </div>
-          <h1 className="hdr-title">Birthday <em>Outreach</em></h1>
+          <h1 className="hdr-title">Outreach & <em>Engagement</em></h1>
           <p className="hdr-sub">🪔 Tamil & English bilingual greetings · Traditional temple themes</p>
         </header>
+
+        {/* Main Tabs */}
+        <div className="main-tabs">
+          <button className={`mtab${activeMainTab === "birthdays" ? " on" : ""}`} onClick={() => setActiveMainTab("birthdays")}>🎂 Birthdays</button>
+          <button className={`mtab${activeMainTab === "anniversaries" ? " on" : ""}`} onClick={() => setActiveMainTab("anniversaries")}>💍 Anniversaries</button>
+        </div>
 
         {/* Stats */}
         <div className="stats">
           {[
-            { label: "Today", value: stats.today, icon: "📆", hl: false },
-            { label: "This Week", value: stats.thisWeek, icon: "✨", hl: true },
-            { label: "This Month", value: stats.thisMonth, icon: "🍰", hl: false },
-            { label: "All People", value: stats.total, icon: "🎈", hl: false },
+            { label: "Today", value: activeMainTab === "birthdays" ? stats.today : anniversaryStats.today, icon: "📆", hl: false },
+            { label: "This Week", value: activeMainTab === "birthdays" ? stats.thisWeek : anniversaryStats.thisWeek, icon: "✨", hl: true },
+            { label: "This Month", value: activeMainTab === "birthdays" ? stats.thisMonth : anniversaryStats.thisMonth, icon: "🍰", hl: false },
+            { label: "All People", value: activeMainTab === "birthdays" ? stats.total : anniversaryStats.total, icon: "🎈", hl: false },
           ].map(s => (
             <div key={s.label} className={`stat${s.hl ? " hl" : ""}`}>
               <div className="stat-icon">{s.icon}</div>
@@ -725,10 +773,10 @@ export default function BirthdaysPage() {
             </div>
           ) : birthdays.length === 0 ? (
             <div className="empty">
-              <div style={{ fontSize: 36 }}>🎂</div>
-              <p style={{ color: "var(--muted)", fontWeight: 700, marginTop: 10, fontSize: 14 }}>No birthdays found</p>
+              <div style={{ fontSize: 36 }}>{activeMainTab === "birthdays" ? "🎂" : "💍"}</div>
+              <p style={{ color: "var(--muted)", fontWeight: 700, marginTop: 10, fontSize: 14 }}>No {activeMainTab} found</p>
             </div>
-          ) : birthdays.map((p, i) => {
+          ) : (activeMainTab === "birthdays" ? birthdays : anniversaries).map((p, i) => {
             const days = daysUntil(p.date_of_birth);
             const parts = getNextBday(p.date_of_birth).split(" ");
             return (
@@ -741,7 +789,7 @@ export default function BirthdaysPage() {
                   <div className="rname">{p.name}</div>
                   <div className="rmeta">{p.relationship} · Age {getAge(p.date_of_birth)}</div>
                   <div className={`rcnt${days === 0 ? " today" : ""}`}>
-                    {days === 0 ? "🎂 TODAY!" : days === 1 ? "Tomorrow" : `In ${days} days`}
+                    {days === 0 ? (activeMainTab === "birthdays" ? "🎂 TODAY!" : "💍 TODAY!") : days === 1 ? "Tomorrow" : `In ${days} days`}
                   </div>
                 </div>
                 <button className="wbtn" onClick={e => { e.stopPropagation(); handleOpenGreeting(p); }}>

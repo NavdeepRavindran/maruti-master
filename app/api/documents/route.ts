@@ -51,9 +51,10 @@ export async function POST(request: Request) {
     const client_id = formData.get("client_id") as string;
     const family_member_id = formData.get("family_member_id") as string | null;
     const name = formData.get("name") as string;
+    const category = formData.get("category") as string;
 
-    if (!file || !client_id || !name) {
-      return NextResponse.json({ error: "Client ID, name, and file are required." }, { status: 400 });
+    if (!file || !client_id || !name || !category) {
+      return NextResponse.json({ error: "Client ID, name, category, and file are required." }, { status: 400 });
     }
 
     if (!supabaseAdmin) {
@@ -85,6 +86,7 @@ export async function POST(request: Request) {
         client_id,
         family_member_id: family_member_id || null,
         name,
+        category: category || "Others",
         file_name: file.name,
         file_url: finalUrl,
         file_type: getFileType(file.name),
