@@ -12,6 +12,11 @@ Authenticate a user with email and password.
 - **Request:** `{ "email": "...", "password": "..." }`
 - **Response:** `{ "user": {...}, "session": {...} }`
 
+### `POST /api/auth/client-login`
+Authenticate a client for the Client Portal.
+
+- **Request:** `{ "loginId": "MC-XXXXXX", "password": "..." }`
+- **Response:** `{ "success": true, "clientId": "uuid" }`
 
 ---
 
@@ -24,10 +29,15 @@ List all clients with optional search and filter.
 - **Response:** `{ "clients": [...], "total": number }`
 
 ### `POST /api/clients`
-Create a new client.
+Create a new client. Includes auto-generation of `clientLoginId` and `temporaryPassword`.
 
-- **Request:** `{ "name", "phone", "date_of_birth", "email?", "address?" }`
+- **Request:** `{ "name", "phone", "date_of_birth", "anniversary_date?", "fatherName?", "spouseName?", "vehicleNo?", "rcExpDate?", "healthIns?", "healthExpDate?", "lifeIns?", "lifeExpDate?", "termIns?", "termExpDate?", "lic?", "licExpDate?", "otherIns?", "otherExpDate?", "email?", "address?" }`
 - **Response:** `{ "client": {...} }`
+
+### `POST /api/clients/[id]/regenerate`
+Regenerate portal access credentials for a client.
+
+- **Response:** `{ "success": true, "clientLoginId": "...", "temporaryPassword": "..." }`
 
 ### `GET /api/clients/[id]`
 Get single client with family members and documents.
@@ -69,22 +79,28 @@ List all documents with optional filters.
 - **Response:** `{ "documents": [...], "total": number }`
 
 ### `POST /api/documents`
-Create document metadata entry.
+Create document metadata entry and upload a file. Requires `category`.
 
-- **Request:** `{ "client_id", "name", "file_name", "family_member_id?", "file_url?", "file_size?" }`
+- **Request FormData:** `file` (File), `client_id`, `name`, `category` (string), `family_member_id?`
 
 ### `DELETE /api/documents/[id]`
 Delete a document (metadata + storage file).
 
 ---
 
-## Birthdays
+## Outreach & Engagement
 
 ### `GET /api/birthdays`
 Get upcoming birthdays from clients and family members.
 
 - **Query Params:** `range` (`today`, `week`, `month`, `all`)
 - **Response:** `{ "birthdays": [...], "stats": { "today", "thisWeek", "thisMonth", "total" } }`
+
+### `GET /api/anniversaries`
+Get upcoming anniversaries from clients.
+
+- **Query Params:** `range` (`today`, `week`, `month`, `all`)
+- **Response:** `{ "anniversaries": [...], "stats": { "today", "thisWeek", "thisMonth", "total" } }`
 
 ---
 
@@ -97,9 +113,11 @@ Get upcoming birthdays from clients and family members.
 | `/dashboard` | Dashboard overview |
 | `/dashboard/clients` | Client directory with search, add, edit, delete |
 | `/dashboard/clients/[id]` | Client profile with family members and documents |
-| `/dashboard/documents` | Document vault with search and delete |
-| `/dashboard/birthdays` | Birthday outreach with WhatsApp integration |
-| `/dashboard/settings` | Portal settings |
+| `/dashboard/documents` | Document vault with search, category filtering, and delete |
+| `/dashboard/birthdays` | Birthday & Anniversary outreach with WhatsApp integration |
+| `/dashboard/settings` | Portal settings (Agency Profile, User Mgmt, Templates, Portal Config) |
+| `/client-login` | Client Portal authentication page |
+| `/client-portal/[id]` | Read-only Client Dashboard (Profile, Family, Documents) |
 
 ---
 

@@ -15,13 +15,15 @@ interface DocData {
   category?: DocCategory;
 }
 
-type DocCategory = "documents" | "assets" | "health" | "life";
+type DocCategory = "Policy Documents" | "KYC / Identity" | "Health Records" | "Vehicle RC / Insurance" | "Financial / Tax" | "Others";
 
 const CATEGORIES: { key: DocCategory; label: string; icon: string; color: string; bg: string }[] = [
-  { key: "documents", label: "Documents", icon: "📄", color: "#3b82f6", bg: "#eff6ff" },
-  { key: "assets",    label: "Assets",    icon: "🏠", color: "#f59e0b", bg: "#fffbeb" },
-  { key: "health",    label: "Health",    icon: "🏥", color: "#22c55e", bg: "#f0fdf4" },
-  { key: "life",      label: "Life",      icon: "❤️", color: "#ef4444", bg: "#fef2f2" },
+  { key: "Policy Documents",       label: "Policy",      icon: "📄", color: "#3b82f6", bg: "#eff6ff" },
+  { key: "KYC / Identity",         label: "KYC/ID",      icon: "🆔", color: "#8b5cf6", bg: "#f5f3ff" },
+  { key: "Health Records",         label: "Health",      icon: "🏥", color: "#22c55e", bg: "#f0fdf4" },
+  { key: "Vehicle RC / Insurance", label: "Vehicle",     icon: "🚗", color: "#f59e0b", bg: "#fffbeb" },
+  { key: "Financial / Tax",        label: "Financial",   icon: "💰", color: "#06b6d4", bg: "#ecfeff" },
+  { key: "Others",                 label: "Others",      icon: "📁", color: "#64748b", bg: "#f8fafc" },
 ];
 
 const getCat = (key?: DocCategory) => CATEGORIES.find(c => c.key === key) ?? CATEGORIES[0];
@@ -179,7 +181,8 @@ export default function DocumentsPage() {
           gap: 10px;
           margin-bottom: 16px;
         }
-        @media (min-width: 640px) { .dp-cat-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; } }
+        @media (min-width: 640px) { .dp-cat-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; } }
+        @media (min-width: 1024px) { .dp-cat-grid { grid-template-columns: repeat(6, 1fr); } }
 
         .dp-cat-card {
           background: #fff;

@@ -57,7 +57,12 @@ export default function ClientsPage() {
   const [loading, setLoading]       = useState(true);
   const [showAddModal, setShowAdd]  = useState(false);
   const [editingClient, setEditing] = useState<ClientData | null>(null);
-  const [formData, setForm]         = useState({ name: "", phone: "", email: "", date_of_birth: "", address: "" });
+  const defaultForm = {
+    name: "", surname: "", phone: "", alternateMobile: "", email: "", date_of_birth: "",
+    anniversaryDate: "", gender: "", maritalStatus: "", occupation: "",
+    address: "", city: "", state: "", pinCode: "", notes: ""
+  };
+  const [formData, setForm]         = useState(defaultForm);
   const [saving, setSaving]         = useState(false);
   const [total, setTotal]           = useState(0);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -88,15 +93,25 @@ export default function ClientsPage() {
   }, [fetchClients]);
 
   const handleSave = async () => {
-    if (!formData.name || !formData.phone || !formData.date_of_birth) return;
+    const phoneValid = /^\d{10}$/.test(formData.phone);
+    const pinValid = /^\d{6}$/.test(formData.pinCode);
+    if (!formData.name || !formData.surname || !phoneValid || !formData.date_of_birth || !formData.email || !pinValid) {
+      alert("Please ensure all mandatory fields are filled correctly (10-digit phone, 6-digit PIN).");
+      return;
+    }
     setSaving(true);
     try {
       if (editingClient) {
         await fetch(`/api/clients/${editingClient.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+        closeModal(); fetchClients();
       } else {
-        await fetch("/api/clients", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+        const res = await fetch("/api/clients", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(formData) });
+        const data = await res.json();
+        if (data.client && data.client.clientLoginId) {
+          alert(`Client created successfully!\n\nPortal Login ID: ${data.client.clientLoginId}\nTemporary Password: ${data.client.temporaryPassword}\n\nPlease copy and share these credentials with the client.`);
+        }
+        closeModal(); fetchClients();
       }
-      closeModal(); fetchClients();
     } catch { /* silent */ } finally { setSaving(false); }
   };
 
@@ -105,15 +120,20 @@ export default function ClientsPage() {
     setDeleteConfirm(null);
   };
 
-  const openEdit = (c: ClientData) => {
+  const openEdit = (c: ClientData | any) => {
     setEditing(c);
-    setForm({ name: c.name, phone: c.phone, email: c.email || "", date_of_birth: c.date_of_birth, address: c.address || "" });
+    setForm({ 
+      name: c.name || "", surname: c.surname || "", phone: c.phone || "", alternateMobile: c.alternateMobile || "",
+      email: c.email || "", date_of_birth: c.date_of_birth || "", anniversaryDate: c.anniversaryDate || "",
+      gender: c.gender || "", maritalStatus: c.maritalStatus || "", occupation: c.occupation || "",
+      address: c.address || "", city: c.city || "", state: c.state || "", pinCode: c.pinCode || "", notes: c.notes || ""
+    });
     setShowAdd(true);
   };
 
   const closeModal = () => {
     setShowAdd(false); setEditing(null);
-    setForm({ name: "", phone: "", email: "", date_of_birth: "", address: "" });
+    setForm(defaultForm);
   };
 
   const formatDob = (d: string) => new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
@@ -441,27 +461,133 @@ export default function ClientsPage() {
 
             {/* Form */}
             <div className="px-6 py-5 space-y-4">
-              <div>
-                <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
-                <input type="text" value={formData.name} onChange={e => setForm({...formData, name: e.target.value})} placeholder="e.g. Anil Kapoor" className={inputCls} />
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Phone <span className="text-red-500">*</span></label>
-                  <input type="tel" value={formData.phone} onChange={e => setForm({...formData, phone: e.target.value})} placeholder="+91 98765 43210" className={inputCls} />
+                  <label className={labelCls}>Full Name <span className="text-red-500">*</span></label>
+                  <input type="text" value={formData.name} onChange={e => setForm({...formData, name: e.target.value})} placeholder="First Name" className={inputCls} />
                 </div>
+                <div>
+                  <label className={labelCls}>Surname <span className="text-red-500">*</span></label>
+                  <input type="text" value={formData.surname} onChange={e => setForm({...formData, surname: e.target.value})} placeholder="Last Name" className={inputCls} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Mobile <span className="text-red-500">*</span></label>
+                  <input type="tel" maxLength={10} value={formData.phone} onChange={e => setForm({...formData, phone: e.target.value.replace(/\D/g, '')})} placeholder="10-digit number" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Alternate Mobile</label>
+                  <input type="tel" maxLength={10} value={formData.alternateMobile} onChange={e => setForm({...formData, alternateMobile: e.target.value.replace(/\D/g, '')})} placeholder="Optional" className={inputCls} />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Email Address <span className="text-red-500">*</span></label>
+                <input type="email" value={formData.email} onChange={e => setForm({...formData, email: e.target.value})} placeholder="client@email.com" className={inputCls} />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Date of Birth <span className="text-red-500">*</span></label>
                   <input type="date" value={formData.date_of_birth} onChange={e => setForm({...formData, date_of_birth: e.target.value})} className={inputCls} />
                 </div>
+                <div>
+                  <label className={labelCls}>Anniversary Date</label>
+                  <input type="date" value={formData.anniversaryDate} onChange={e => setForm({...formData, anniversaryDate: e.target.value})} className={inputCls} />
+                </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Gender</label>
+                  <select value={formData.gender} onChange={e => setForm({...formData, gender: e.target.value})} className={inputCls}>
+                    <option value="">Select...</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Marital Status</label>
+                  <select value={formData.maritalStatus} onChange={e => setForm({...formData, maritalStatus: e.target.value})} className={inputCls}>
+                    <option value="">Select...</option>
+                    <option value="Single">Single</option>
+                    <option value="Married">Married</option>
+                    <option value="Divorced">Divorced</option>
+                    <option value="Widowed">Widowed</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
-                <label className={labelCls}>Email Address</label>
-                <input type="email" value={formData.email} onChange={e => setForm({...formData, email: e.target.value})} placeholder="client@email.com" className={inputCls} />
+                <label className={labelCls}>Occupation</label>
+                <input type="text" value={formData.occupation} onChange={e => setForm({...formData, occupation: e.target.value})} placeholder="e.g. Engineer, Business" className={inputCls} />
               </div>
+
               <div>
                 <label className={labelCls}>Address</label>
-                <input type="text" value={formData.address} onChange={e => setForm({...formData, address: e.target.value})} placeholder="Full address" className={inputCls} />
+                <textarea value={formData.address} onChange={e => setForm({...formData, address: e.target.value})} placeholder="Full address" className={inputCls} rows={2} />
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div>
+                  <label className={labelCls}>City</label>
+                  <input type="text" value={formData.city} onChange={e => setForm({...formData, city: e.target.value})} placeholder="City" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>State</label>
+                  <select value={formData.state} onChange={e => setForm({...formData, state: e.target.value})} className={inputCls}>
+                    <option value="">Select State</option>
+                    <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
+                    <option value="Andhra Pradesh">Andhra Pradesh</option>
+                    <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+                    <option value="Assam">Assam</option>
+                    <option value="Bihar">Bihar</option>
+                    <option value="Chandigarh">Chandigarh</option>
+                    <option value="Chhattisgarh">Chhattisgarh</option>
+                    <option value="Dadra and Nagar Haveli">Dadra and Nagar Haveli</option>
+                    <option value="Daman and Diu">Daman and Diu</option>
+                    <option value="Delhi">Delhi</option>
+                    <option value="Goa">Goa</option>
+                    <option value="Gujarat">Gujarat</option>
+                    <option value="Haryana">Haryana</option>
+                    <option value="Himachal Pradesh">Himachal Pradesh</option>
+                    <option value="Jammu and Kashmir">Jammu and Kashmir</option>
+                    <option value="Jharkhand">Jharkhand</option>
+                    <option value="Karnataka">Karnataka</option>
+                    <option value="Kerala">Kerala</option>
+                    <option value="Lakshadweep">Lakshadweep</option>
+                    <option value="Madhya Pradesh">Madhya Pradesh</option>
+                    <option value="Maharashtra">Maharashtra</option>
+                    <option value="Manipur">Manipur</option>
+                    <option value="Meghalaya">Meghalaya</option>
+                    <option value="Mizoram">Mizoram</option>
+                    <option value="Nagaland">Nagaland</option>
+                    <option value="Odisha">Odisha</option>
+                    <option value="Puducherry">Puducherry</option>
+                    <option value="Punjab">Punjab</option>
+                    <option value="Rajasthan">Rajasthan</option>
+                    <option value="Sikkim">Sikkim</option>
+                    <option value="Tamil Nadu">Tamil Nadu</option>
+                    <option value="Telangana">Telangana</option>
+                    <option value="Tripura">Tripura</option>
+                    <option value="Uttar Pradesh">Uttar Pradesh</option>
+                    <option value="Uttarakhand">Uttarakhand</option>
+                    <option value="West Bengal">West Bengal</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>PIN Code <span className="text-red-500">*</span></label>
+                  <input type="text" maxLength={6} value={formData.pinCode} onChange={e => setForm({...formData, pinCode: e.target.value.replace(/\D/g, '')})} placeholder="6 digits" className={inputCls} />
+                </div>
+              </div>
+
+              <div>
+                <label className={labelCls}>Notes</label>
+                <textarea value={formData.notes} onChange={e => setForm({...formData, notes: e.target.value})} placeholder="Any additional notes..." className={inputCls} style={{ minHeight: "100px" }} />
               </div>
             </div>
 
@@ -473,7 +599,7 @@ export default function ClientsPage() {
               </button>
               <button
                 onClick={handleSave}
-                disabled={saving || !formData.name || !formData.phone || !formData.date_of_birth}
+                disabled={saving || !formData.name || !formData.surname || !/^\d{10}$/.test(formData.phone) || !formData.date_of_birth || !formData.email || !/^\d{6}$/.test(formData.pinCode)}
                 className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm shadow-blue-200"
               >
                 {saving ? (

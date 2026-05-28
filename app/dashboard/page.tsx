@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 interface UserData { name?: string; email?: string; role?: string; }
-interface DashboardStats { totalClients: number; totalDocuments: number; upcomingBirthdays: number; todayBirthdays: number; }
+interface DashboardStats { totalClients: number; totalDocuments: number; upcomingBirthdays: number; todayBirthdays: number; todayAnniversaries: number; upcomingAnniversaries: number; }
 interface BirthdayItem { name: string; date_of_birth: string; relationship: string; phone?: string; client_id: string; }
 interface DocumentItem { name: string; file_name: string; file_type: string; file_size: number; created_at: string; client_name?: string; }
 
@@ -66,7 +66,7 @@ const Skeleton = ({ className }: { className: string }) => (
 
 export default function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
-  const [stats, setStats] = useState<DashboardStats>({ totalClients: 0, totalDocuments: 0, upcomingBirthdays: 0, todayBirthdays: 0 });
+  const [stats, setStats] = useState<DashboardStats>({ totalClients: 0, totalDocuments: 0, upcomingBirthdays: 0, todayBirthdays: 0, todayAnniversaries: 0, upcomingAnniversaries: 0 });
   const [birthdays, setBirthdays] = useState<BirthdayItem[]>([]);
   const [recentDocs, setRecentDocs] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -81,11 +81,11 @@ export default function DashboardPage() {
 
   async function fetchDashboardData() {
     try {
-      const [cR, dR, bR] = await Promise.all([
-        fetch("/api/clients"), fetch("/api/documents"), fetch("/api/birthdays?range=week"),
+      const [cR, dR, bR, aR] = await Promise.all([
+        fetch("/api/clients"), fetch("/api/documents"), fetch("/api/birthdays?range=week"), fetch("/api/anniversaries?range=week")
       ]);
-      const c = await cR.json(), d = await dR.json(), b = await bR.json();
-      setStats({ totalClients: c.total || 0, totalDocuments: d.total || 0, upcomingBirthdays: b.stats?.thisWeek || 0, todayBirthdays: b.stats?.today || 0 });
+      const c = await cR.json(), d = await dR.json(), b = await bR.json(), a = await aR.json();
+      setStats({ totalClients: c.total || 0, totalDocuments: d.total || 0, upcomingBirthdays: b.stats?.thisWeek || 0, todayBirthdays: b.stats?.today || 0, todayAnniversaries: a.stats?.today || 0, upcomingAnniversaries: a.stats?.thisWeek || 0 });
       setBirthdays((b.birthdays || []).slice(0, 5));
       setRecentDocs((d.documents || []).slice(0, 5));
     } catch { /* silent */ } finally { setLoading(false); }
@@ -102,8 +102,6 @@ export default function DashboardPage() {
   const statCards = [
     { label: "Total Clients",      value: stats.totalClients,      icon: <IC.Users />,  sub: "Active profiles",   ib: "bg-blue-50 text-blue-600",   bb: "bg-blue-50 text-blue-600 ring-1 ring-blue-100" },
     { label: "Documents",          value: stats.totalDocuments,     icon: <IC.Folder />, sub: "Stored files",      ib: "bg-violet-50 text-violet-600",bb: "bg-violet-50 text-violet-600 ring-1 ring-violet-100" },
-    { label: "Upcoming Birthdays", value: stats.upcomingBirthdays,  icon: <IC.Cake />,   sub: "This week",         ib: "bg-rose-50 text-rose-600",    bb: "bg-rose-50 text-rose-600 ring-1 ring-rose-100" },
-    { label: "Today's Birthdays",  value: stats.todayBirthdays,     icon: <IC.Star />,   sub: stats.todayBirthdays > 0 ? "Celebrate!" : "None today", ib: stats.todayBirthdays > 0 ? "bg-amber-50 text-amber-600" : "bg-slate-100 text-slate-400", bb: stats.todayBirthdays > 0 ? "bg-amber-50 text-amber-600 ring-1 ring-amber-100" : "bg-slate-100 text-slate-400 ring-1 ring-slate-200" },
   ];
 
   const actions = [
@@ -179,7 +177,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Stat Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {statCards.map((c) => (
             <div key={c.label} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 flex flex-col gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
               <div className="flex items-start justify-between">
@@ -192,6 +190,53 @@ export default function DashboardPage() {
               </div>
             </div>
           ))}
+          
+          {/* Card 3: Split Events */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col justify-center gap-3">
+            {/* Row 1: Birthdays */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 transition-colors hover:bg-slate-100/50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><IC.Cake /></div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-none mb-1.5">Birthdays</p>
+                  <div className="flex items-center gap-2.5">
+                    <Link href="/dashboard/clients?filter=birthdays-today" className="flex items-center gap-1 hover:opacity-80 transition-opacity">
+                      <span className="text-[13px] font-black text-rose-600 leading-none">{stats.todayBirthdays}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">Today</span>
+                    </Link>
+                    <span className="text-slate-300 text-xs">|</span>
+                    <Link href="/dashboard/clients?filter=birthdays-upcoming" className="flex items-center gap-1 hover:opacity-80 transition-opacity">
+                      <span className="text-[13px] font-black text-slate-700 leading-none">{stats.upcomingBirthdays}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">Next 7 Days</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Row 2: Anniversaries */}
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 transition-colors hover:bg-slate-100/50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center shrink-0">
+                  <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.7}><path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" /></svg>
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider leading-none mb-1.5">Anniversaries</p>
+                  <div className="flex items-center gap-2.5">
+                    <Link href="/dashboard/clients?filter=anniversaries-today" className="flex items-center gap-1 hover:opacity-80 transition-opacity">
+                      <span className="text-[13px] font-black text-fuchsia-600 leading-none">{stats.todayAnniversaries}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">Today</span>
+                    </Link>
+                    <span className="text-slate-300 text-xs">|</span>
+                    <Link href="/dashboard/clients?filter=anniversaries-upcoming" className="flex items-center gap-1 hover:opacity-80 transition-opacity">
+                      <span className="text-[13px] font-black text-slate-700 leading-none">{stats.upcomingAnniversaries}</span>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase leading-none">Next 7 Days</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Main 3-col grid */}
