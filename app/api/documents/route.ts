@@ -1,10 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "../../../lib/supabaseClient";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseAdmin = process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY
-  ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "", process.env.SUPABASE_SERVICE_ROLE_KEY)
-  : null;
+import { supabaseAdmin } from "../../../lib/supabaseClient";
 
 // GET /api/documents — List all documents (optionally filter by client_id)
 export async function GET(request: Request) {
@@ -13,12 +8,12 @@ export async function GET(request: Request) {
   const familyMemberId = searchParams.get("family_member_id");
   const search = searchParams.get("search")?.toLowerCase() || "";
 
-  if (!supabase) {
+  if (!supabaseAdmin) {
     return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
   }
 
   try {
-    let query = supabase
+    let query = supabaseAdmin
       .from("documents")
       .select("*, clients(name)")
       .order("created_at", { ascending: false });
@@ -65,7 +60,7 @@ export async function POST(request: Request) {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `${client_id}/${fileName}`;
-    
+
     const { error: uploadError } = await supabaseAdmin.storage
       .from('documents')
       .upload(filePath, file);
@@ -74,7 +69,7 @@ export async function POST(request: Request) {
 
     const { data: signedData, error: signError } = await supabaseAdmin.storage
       .from('documents')
-      .createSignedUrl(filePath, 315360000); // Valid for 10 years
+      .createSignedUrl(filePath, 315360000);
 
     if (signError) throw signError;
     const finalUrl = signedData?.signedUrl || "";

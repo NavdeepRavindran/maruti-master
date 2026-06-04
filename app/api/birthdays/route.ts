@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { supabase } from "../../../lib/supabaseClient";
+import { supabaseAdmin } from "../../../lib/supabaseClient";
+
 function daysUntilBirthday(dob: string): number {
   const birth = new Date(dob);
   const now = new Date();
@@ -8,31 +9,39 @@ function daysUntilBirthday(dob: string): number {
   thisYear.setHours(0, 0, 0, 0);
   const next = thisYear >= now ? thisYear : new Date(now.getFullYear() + 1, birth.getMonth(), birth.getDate());
   next.setHours(0, 0, 0, 0);
-  const diffTime = next.getTime() - now.getTime();
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return Math.ceil((next.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 }
-import { BirthdayEntry } from "../../../lib/types";
 
-// GET /api/birthdays — Get upcoming birthdays
+interface BirthdayEntry {
+  name: string;
+  date_of_birth: string;
+  relationship: string;
+  phone?: string;
+  client_name?: string;
+  client_id: string;
+  family_member_id?: string;
+  type: string;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const range = searchParams.get("range") || "month"; // "today", "week", "month", "all"
+  const range = searchParams.get("range") || "month";
 
-  if (!supabase) {
+  if (!supabaseAdmin) {
     return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
   }
 
   try {
-    // Get all clients
-    const { data: clients } = await supabase
+    const { data: clients } = await supabaseAdmin
       .from("clients")
       .select("id, name, date_of_birth, phone")
+      .not("date_of_birth", "is", null)
       .order("name");
 
-    // Get all family members
-    const { data: familyMembers } = await supabase
+    const { data: familyMembers } = await supabaseAdmin
       .from("family_members")
       .select("id, client_id, name, date_of_birth, relationship, phone, clients(name)")
+      .not("date_of_birth", "is", null)
       .order("name");
 
     const entries: BirthdayEntry[] = [];
@@ -61,35 +70,30 @@ export async function GET(request: Request) {
       });
     }
 
-    // Sort by next birthday
     entries.sort((a, b) => daysUntilBirthday(a.date_of_birth) - daysUntilBirthday(b.date_of_birth));
-
     const filtered = filterByRange(entries, range);
 
-    return NextResponse.json({
-      birthdays: filtered,
-      stats: getStats(entries),
-    });
+    return NextResponse.json({ birthdays: filtered, stats: getStats(entries) });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-function filterByRange(entries: BirthdayEntry[], range: string): BirthdayEntry[] {
-  return entries.filter((e) => {
+function filterByRange(entries: BirthdayEntry[], range: string) {
+  return entries.filter(e => {
     const days = daysUntilBirthday(e.date_of_birth);
-    switch (range) {
-      case "today": return days === 0;
-      case "week": return days <= 7;
-      case "month": return days <= 30;
-      default: return true;
-    }
+    if (range === "today") return days === 0;
+    if (range === "week") return days <= 7;
+    if (range === "month") return days <= 30;
+    return true;
   });
 }
 
 function getStats(entries: BirthdayEntry[]) {
-  const today = entries.filter((e) => daysUntilBirthday(e.date_of_birth) === 0).length;
-  const thisWeek = entries.filter((e) => daysUntilBirthday(e.date_of_birth) <= 7).length;
-  const thisMonth = entries.filter((e) => daysUntilBirthday(e.date_of_birth) <= 30).length;
-  return { today, thisWeek, thisMonth, total: entries.length };
+  return {
+    today: entries.filter(e => daysUntilBirthday(e.date_of_birth) === 0).length,
+    thisWeek: entries.filter(e => daysUntilBirthday(e.date_of_birth) <= 7).length,
+    thisMonth: entries.filter(e => daysUntilBirthday(e.date_of_birth) <= 30).length,
+    total: entries.length,
+  };
 }

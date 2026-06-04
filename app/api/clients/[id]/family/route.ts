@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "../../../../../lib/supabaseClient";
-
+import { supabaseAdmin } from "../../../../../lib/supabaseClient";
 
 // GET /api/clients/[id]/family — List family members for a client
 export async function GET(
@@ -9,12 +8,12 @@ export async function GET(
 ) {
   const { id } = await params;
 
-  if (!supabase) {
+  if (!supabaseAdmin) {
     return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
   }
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("family_members")
       .select("*")
       .eq("client_id", id)
@@ -38,12 +37,12 @@ export async function POST(
     return NextResponse.json({ error: "Name, date of birth, and relationship are required." }, { status: 400 });
   }
 
-  if (!supabase) {
+  if (!supabaseAdmin) {
     return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
   }
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("family_members")
       .insert({
         client_id: id,

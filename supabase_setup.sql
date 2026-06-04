@@ -146,7 +146,7 @@ CREATE POLICY "Agents can manage all clients" ON public.clients
 
 CREATE POLICY "Clients can view own record" ON public.clients
   FOR SELECT USING (
-    login_email = (SELECT email FROM auth.users WHERE id = auth.uid())
+    email = (SELECT email FROM auth.users WHERE id = auth.uid())
   );
 
 -- Family Members: Agents can manage all, follows client access
@@ -159,7 +159,7 @@ CREATE POLICY "Clients can view own family" ON public.family_members
   FOR SELECT USING (
     client_id IN (
       SELECT id FROM public.clients
-      WHERE login_email = (SELECT email FROM auth.users WHERE id = auth.uid())
+      WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())
     )
   );
 
@@ -173,7 +173,7 @@ CREATE POLICY "Clients can view own documents" ON public.documents
   FOR SELECT USING (
     client_id IN (
       SELECT id FROM public.clients
-      WHERE login_email = (SELECT email FROM auth.users WHERE id = auth.uid())
+      WHERE email = (SELECT email FROM auth.users WHERE id = auth.uid())
     )
   );
 
