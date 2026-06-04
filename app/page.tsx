@@ -1,364 +1,621 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Image from "next/image";
 
 const slides = [
   {
-    title: "Protecting what matters most.",
+    title: "Protecting what\nmatters most.",
     subtitle: "Welcome to Maruthi Insure Care",
     description: "A promise of security for your family's future. Our digital portal ensures your peace of mind is always reachable.",
     image: "https://images.unsplash.com/photo-1542382257-80dedb725088?auto=format&fit=crop&q=80&w=1200",
-    gradient: "from-navy/90 via-navy/50 to-transparent",
-    accent: "!text-secondary",
+    accent: "#C9A84C",
   },
   {
-    title: "Health is your greatest wealth.",
+    title: "Health is your\ngreatest wealth.",
     subtitle: "Complete Health Protection",
     description: "Stay prepared for the unexpected with comprehensive health coverage for you and your loved ones.",
     image: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&q=80&w=1200",
-    gradient: "from-emerald-900/90 via-emerald-900/50 to-transparent",
-    accent: "!text-emerald-400",
+    accent: "#4CAF82",
   },
   {
-    title: "Claims made simple & fast.",
+    title: "Claims made\nsimple & fast.",
     subtitle: "Hassle-Free Support",
     description: "We are with you when it counts. Our digital-first approach ensures quick settlements and constant support.",
     image: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&q=80&w=1200",
-    gradient: "from-primary-dark/90 via-primary-dark/50 to-transparent",
-    accent: "!text-primary-light",
+    accent: "#4C7EC9",
   }
+];
+
+const stats = [
+  { label: "Satisfied Clients", value: "2,000+", icon: "◈" },
+  { label: "Claims Settled", value: "₹15Cr+", icon: "◈" },
+  { label: "Documents Saved", value: "10,000+", icon: "◈" },
+  { label: "Cities Reached", value: "25+", icon: "◈" },
+];
+
+const services = [
+  { title: "Health Insurance", icon: "⊕", desc: "Comprehensive coverage for every stage of life" },
+  { title: "Life Insurance", icon: "⊕", desc: "Secure your family's financial tomorrow" },
+  { title: "Vehicle Insurance", icon: "⊕", desc: "Protection on every road you travel" },
+  { title: "Wealth Creation", icon: "⊕", desc: "Build a legacy worth inheriting" },
 ];
 
 export default function Home() {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 6000);
-    
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
+    const handleScroll = () => setIsScrolled(window.scrollY > 50);
+    const handleMouse = (e: MouseEvent) => {
+      setMousePos({ x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
     };
-    
     window.addEventListener("scroll", handleScroll);
+    window.addEventListener("mousemove", handleMouse);
     return () => {
       clearInterval(timer);
       window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("mousemove", handleMouse);
     };
   }, []);
 
+  const slide = slides[currentSlide];
+
   return (
-    <div className="min-h-screen bg-white">
-      {/* Navigation */}
-      <nav className={`fixed top-0 w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-primary-dark shadow-xl py-0' : 'bg-transparent py-2'}`}>
-        <div className="container mx-auto px-6 h-20 md:h-24 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-white/10 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg border border-white/20">
-              <svg className="w-5 h-5 md:w-6 md:h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+    <div className="min-h-screen bg-[#0A0A0A] text-white overflow-x-hidden" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+        
+        :root {
+          --gold: #C9A84C;
+          --dark: #0A0A0A;
+          --surface: #141414;
+          --surface2: #1C1C1C;
+          --border: rgba(255,255,255,0.08);
+          --text-muted: rgba(255,255,255,0.45);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        .playfair { font-family: 'Playfair Display', serif; }
+
+        .nav-link {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.5);
+          transition: color 0.3s;
+          text-decoration: none;
+        }
+        .nav-link:hover { color: white; }
+
+        .slide-enter { animation: slideIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+        .slide-exit { animation: slideOut 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+
+        @keyframes slideIn {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; } to { opacity: 1; }
+        }
+        @keyframes scaleIn {
+          from { transform: scale(1.08); } to { transform: scale(1); }
+        }
+
+        .stat-card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        .stat-card:hover {
+          border-color: var(--gold);
+          transform: translateY(-4px);
+          background: var(--surface2);
+        }
+
+        .service-item {
+          border-bottom: 1px solid var(--border);
+          transition: all 0.3s ease;
+          cursor: pointer;
+        }
+        .service-item:hover { background: var(--surface); }
+        .service-item:hover .service-arrow { transform: translateX(6px) rotate(-45deg); }
+
+        .service-arrow { transition: transform 0.3s ease; }
+
+        .portal-card {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+          position: relative;
+          overflow: hidden;
+        }
+        .portal-card::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background: linear-gradient(135deg, transparent 60%, rgba(201,168,76,0.05) 100%);
+          opacity: 0;
+          transition: opacity 0.4s;
+        }
+        .portal-card:hover::before { opacity: 1; }
+        .portal-card:hover { border-color: rgba(201,168,76,0.3); transform: translateY(-6px); }
+
+        .btn-primary {
+          display: inline-flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px 32px;
+          background: var(--gold);
+          color: #0A0A0A;
+          border-radius: 4px;
+          font-size: 11px;
+          font-weight: 800;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          text-decoration: none;
+          transition: all 0.3s ease;
+        }
+        .btn-primary:hover { background: #DDB95C; transform: translateY(-2px); }
+
+        .btn-outline {
+          display: inline-flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px 32px;
+          background: transparent;
+          color: white;
+          border: 1px solid rgba(255,255,255,0.2);
+          border-radius: 4px;
+          font-size: 11px;
+          font-weight: 700;
+          letter-spacing: 0.2em;
+          text-transform: uppercase;
+          text-decoration: none;
+          transition: all 0.3s ease;
+          cursor: pointer;
+        }
+        .btn-outline:hover { border-color: white; background: rgba(255,255,255,0.05); }
+
+        .noise-overlay {
+          position: fixed;
+          inset: 0;
+          pointer-events: none;
+          z-index: 9999;
+          opacity: 0.025;
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+          background-repeat: repeat;
+          background-size: 128px;
+        }
+
+        .cursor-glow {
+          position: fixed;
+          width: 400px;
+          height: 400px;
+          border-radius: 50%;
+          background: radial-gradient(circle, rgba(201,168,76,0.06) 0%, transparent 70%);
+          pointer-events: none;
+          z-index: 1;
+          transform: translate(-50%, -50%);
+          transition: left 0.6s ease, top 0.6s ease;
+        }
+
+        .section-label {
+          font-size: 10px;
+          font-weight: 800;
+          letter-spacing: 0.35em;
+          text-transform: uppercase;
+          color: var(--gold);
+        }
+
+        .divider { border: none; border-top: 1px solid var(--border); }
+
+        .quick-action {
+          background: var(--surface);
+          border: 1px solid var(--border);
+          border-radius: 2px;
+          padding: 28px;
+          transition: all 0.3s ease;
+          cursor: pointer;
+        }
+        .quick-action:hover { border-color: var(--gold); background: var(--surface2); }
+
+        .image-reveal {
+          animation: scaleIn 8s ease forwards;
+        }
+
+        .text-reveal {
+          animation: slideIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        }
+
+        .footer-link {
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.15em;
+          text-transform: uppercase;
+          color: rgba(255,255,255,0.4);
+          text-decoration: none;
+          transition: color 0.2s;
+        }
+        .footer-link:hover { color: var(--gold); }
+      `}</style>
+
+      {/* Noise overlay */}
+      <div className="noise-overlay" />
+
+      {/* Cursor glow */}
+      <div className="cursor-glow" style={{
+        left: `${mousePos.x * 100}vw`,
+        top: `${mousePos.y * 100}vh`,
+      }} />
+
+      {/* ─── NAVIGATION ─── */}
+      <nav style={{
+        position: 'fixed', top: 0, width: '100%', zIndex: 100,
+        background: isScrolled ? 'rgba(10,10,10,0.95)' : 'transparent',
+        backdropFilter: isScrolled ? 'blur(20px)' : 'none',
+        borderBottom: isScrolled ? '1px solid rgba(255,255,255,0.06)' : 'none',
+        transition: 'all 0.4s ease',
+        padding: '0 40px',
+      }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', height: 80, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+            <div style={{
+              width: 40, height: 40,
+              border: '1px solid rgba(201,168,76,0.4)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#C9A84C" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
             </div>
             <div>
-              <span className="block text-lg md:text-xl font-bold tracking-tight text-white font-cormorant leading-none">Maruthi Insure</span>
-              <span className="text-[8px] md:text-[10px] uppercase tracking-[0.2em] text-white/60 font-bold">Care & Protection</span>
+              <div className="playfair" style={{ fontSize: 18, fontWeight: 700, color: 'white', lineHeight: 1.1 }}>Maruthi Insure</div>
+              <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.3em', color: 'rgba(201,168,76,0.7)', textTransform: 'uppercase' }}>Care & Protection</div>
             </div>
           </div>
-          
-          <div className="hidden md:flex items-center gap-10">
-            <a href="#about" className="text-xs font-bold text-white/70 hover:text-white transition-colors uppercase tracking-[0.2em]">Our Story</a>
-            <a href="#services" className="text-xs font-bold text-white/70 hover:text-white transition-colors uppercase tracking-[0.2em]">Portals</a>
-            <a href="#why-us" className="text-xs font-bold text-white/70 hover:text-white transition-colors uppercase tracking-[0.2em]">Why Choose Us</a>
-            <Link href="/login" className="px-8 py-3 bg-white text-primary-dark rounded-full text-xs font-bold uppercase tracking-[0.2em] hover:bg-secondary transition-all shadow-xl shadow-black/20">
+
+          {/* Desktop Nav */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 48 }} className="hidden md:flex">
+            <a href="#about" className="nav-link">Our Story</a>
+            <a href="#services" className="nav-link">Services</a>
+            <a href="#why-us" className="nav-link">Why Us</a>
+            <Link href="/client-login" className="btn-primary" style={{ padding: '12px 24px', fontSize: 10 }}>
               Client Login
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
             </Link>
           </div>
 
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="md:hidden text-white p-2">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={mobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
+          {/* Mobile menu btn */}
+          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: 8 }} className="md:hidden">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d={mobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
             </svg>
           </button>
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden bg-primary-dark border-t border-white/10 px-6 py-4 flex flex-col gap-4 shadow-xl">
-            <a href="#about" onClick={() => setMobileMenuOpen(false)} className="text-xs font-bold text-white/70 hover:text-white transition-colors uppercase tracking-[0.2em] py-2">Our Story</a>
-            <a href="#services" onClick={() => setMobileMenuOpen(false)} className="text-xs font-bold text-white/70 hover:text-white transition-colors uppercase tracking-[0.2em] py-2">Portals</a>
-            <a href="#why-us" onClick={() => setMobileMenuOpen(false)} className="text-xs font-bold text-white/70 hover:text-white transition-colors uppercase tracking-[0.2em] py-2">Why Choose Us</a>
-            <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="px-6 py-3 bg-white text-primary-dark rounded-xl text-center text-xs font-bold uppercase tracking-[0.2em] mt-2">
-              Client Login
-            </Link>
+          <div style={{ background: '#141414', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '20px 40px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <a href="#about" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Our Story</a>
+            <a href="#services" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Services</a>
+            <a href="#why-us" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Why Us</a>
+            <Link href="/client-login" className="btn-primary" style={{ marginTop: 8, justifyContent: 'center' }} onClick={() => setMobileMenuOpen(false)}>Client Login</Link>
           </div>
         )}
       </nav>
 
-      {/* Hero Slider */}
-      <section className="relative pt-24 min-h-[100vh] lg:min-h-[85vh] flex items-center overflow-hidden bg-slate-900">
-        {slides.map((slide, index) => (
-          <div 
-            key={index}
-            className={`absolute inset-0 transition-all duration-1000 ease-in-out transform ${index === currentSlide ? 'opacity-100 scale-100 translate-x-0' : 'opacity-0 scale-105 translate-x-full'}`}
-          >
-            <Image 
-              src={slide.image} 
-              alt={slide.title} 
-              fill 
-              className="object-cover opacity-60"
-              priority={index === 0}
-            />
-            <div className={`absolute inset-0 bg-gradient-to-r ${slide.gradient} sm:bg-gradient-to-r`}></div>
-            <div className={`absolute inset-0 bg-gradient-to-t from-slate-900/80 via-transparent to-transparent sm:hidden`}></div>
-            
-            <div className="container mx-auto px-6 relative h-full flex flex-col justify-center py-20 lg:py-24">
-              <div className="max-w-2xl space-y-6 md:space-y-8">
-                <div className="space-y-3 md:space-y-4">
-                  <h2 className={`font-bold uppercase tracking-[0.2em] md:tracking-[0.3em] text-xs md:text-sm ${slide.accent}`}>{slide.subtitle}</h2>
-                  <h1 className="text-4xl sm:text-5xl lg:text-7xl font-medium !text-white font-cormorant leading-[1.1]">
-                    {slide.title.split('.').map((part, i) => (
-                      <span key={i} className="block">{part}{i === 0 ? '.' : ''}</span>
-                    ))}
-                  </h1>
-                </div>
-                <p className="text-lg md:text-xl text-white/80 leading-relaxed font-light max-w-lg">
-                  {slide.description}
-                </p>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-4">
-                  <Link href="/login" className="text-center px-6 py-4 md:px-8 md:py-4 bg-secondary text-primary-dark rounded-full font-bold text-xs md:text-sm uppercase tracking-widest hover:scale-105 transition-all shadow-xl shadow-secondary/20">
-                    Get Started
-                  </Link>
-                  <button className="px-6 py-4 md:px-8 md:py-4 bg-white/10 backdrop-blur-md text-white border border-white/20 rounded-full font-bold text-xs md:text-sm uppercase tracking-widest hover:bg-white/20 transition-all">
-                    View Products
-                  </button>
-                </div>
-              </div>
-            </div>
+      {/* ─── HERO ─── */}
+      <section ref={heroRef} style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'flex-end', overflow: 'hidden', background: '#060606' }}>
+        {/* Background image */}
+        {slides.map((s, i) => (
+          <div key={i} style={{
+            position: 'absolute', inset: 0,
+            opacity: i === currentSlide ? 1 : 0,
+            transition: 'opacity 1.2s ease',
+          }}>
+            <Image src={s.image} alt={s.title} fill className="object-cover image-reveal" style={{ opacity: 0.35 }} priority={i === 0} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, #0A0A0A 20%, rgba(10,10,10,0.5) 60%, transparent)' }} />
+            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(10,10,10,0.8) 30%, transparent)' }} />
           </div>
         ))}
-        
-        {/* Slider Controls */}
-        <div className="absolute bottom-12 left-12 flex gap-4 z-20">
-          {slides.map((_, i) => (
-            <button 
-              key={i} 
-              onClick={() => setCurrentSlide(i)}
-              className={`h-1.5 transition-all duration-500 rounded-full ${i === currentSlide ? 'w-12 bg-secondary' : 'w-6 bg-white/30'}`}
-            />
+
+        {/* Hero content */}
+        <div style={{ position: 'relative', zIndex: 10, maxWidth: 1400, margin: '0 auto', padding: '0 40px 100px', width: '100%' }}>
+          <div style={{ maxWidth: 780 }}>
+            <div key={`label-${currentSlide}`} className="text-reveal" style={{ marginBottom: 24 }}>
+              <span className="section-label">{slide.subtitle}</span>
+            </div>
+
+            <h1 key={`title-${currentSlide}`} className="playfair text-reveal" style={{
+              fontSize: 'clamp(52px, 8vw, 110px)',
+              fontWeight: 400,
+              lineHeight: 1.0,
+              color: 'white',
+              marginBottom: 32,
+              whiteSpace: 'pre-line',
+            }}>
+              {slide.title}
+            </h1>
+
+            <p key={`desc-${currentSlide}`} className="text-reveal" style={{
+              fontSize: 17,
+              color: 'rgba(255,255,255,0.55)',
+              lineHeight: 1.7,
+              maxWidth: 520,
+              marginBottom: 48,
+              fontWeight: 300,
+            }}>
+              {slide.description}
+            </p>
+
+            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+              <Link href="/client-login" className="btn-primary">
+                Get Started
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </Link>
+              <button className="btn-outline">View Products</button>
+            </div>
+          </div>
+
+          {/* Slide indicators */}
+          <div style={{ position: 'absolute', bottom: 100, right: 40, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+            {slides.map((_, i) => (
+              <button key={i} onClick={() => setCurrentSlide(i)} style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <span style={{ fontSize: 10, color: i === currentSlide ? 'rgba(255,255,255,0.5)' : 'transparent', fontWeight: 700, letterSpacing: '0.2em' }}>0{i + 1}</span>
+                <div style={{
+                  height: 1,
+                  width: i === currentSlide ? 48 : 16,
+                  background: i === currentSlide ? '#C9A84C' : 'rgba(255,255,255,0.2)',
+                  transition: 'all 0.4s ease',
+                }} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Scroll indicator */}
+        <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, zIndex: 10 }}>
+          <div style={{ width: 1, height: 48, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.3))', animation: 'fadeIn 2s ease infinite alternate' }} />
+          <span style={{ fontSize: 9, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', fontWeight: 700 }}>Scroll</span>
+        </div>
+      </section>
+
+      {/* ─── STATS ─── */}
+      <section style={{ padding: '80px 40px', maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
+          {stats.map((stat, i) => (
+            <div key={i} className="stat-card" style={{ padding: '40px 32px' }}>
+              <div style={{ fontSize: 11, color: '#C9A84C', letterSpacing: '0.3em', marginBottom: 16, fontWeight: 800, textTransform: 'uppercase' }}>{stat.icon} {stat.label}</div>
+              <div className="playfair" style={{ fontSize: 48, fontWeight: 700, color: 'white', lineHeight: 1 }}>{stat.value}</div>
+            </div>
           ))}
         </div>
       </section>
 
-      {/* Quick Actions Grid */}
-      <section className="relative z-20 -mt-12 md:-mt-16 pb-16 md:pb-24">
-        <div className="container mx-auto px-6">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-8">
-            {[
-              { title: "Policy Download", icon: "📁", desc: "Access your digital copies" },
-              { title: "Instant Renewal", icon: "🔄", desc: "Renew in 2 minutes" },
-              { title: "Claims Status", icon: "🛡️", desc: "Track your settlement" },
-              { title: "Expert Help", icon: "📞", desc: "Talk to Sampath Kumar" },
-            ].map((action, i) => (
-              <div key={i} className="bg-white p-6 md:p-8 rounded-3xl md:rounded-[2rem] shadow-2xl shadow-slate-200 border border-slate-50 hover:-translate-y-2 transition-all cursor-pointer group">
-                <div className="w-12 h-12 md:w-14 md:h-14 bg-section-bg rounded-2xl flex items-center justify-center text-2xl md:text-3xl mb-4 md:mb-6 group-hover:bg-primary-dark group-hover:text-white transition-all">
-                  {action.icon}
-                </div>
-                <h4 className="text-sm md:text-lg font-bold text-primary-dark mb-1 md:mb-2 leading-tight">{action.title}</h4>
-                <p className="text-xs md:text-sm text-subtext leading-relaxed">{action.desc}</p>
-              </div>
-            ))}
-          </div>
+      {/* ─── QUICK ACTIONS ─── */}
+      <section style={{ padding: '0 40px 100px', maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 2 }}>
+          {[
+            { title: "Policy Download", icon: "↓", desc: "Access your digital copies instantly" },
+            { title: "Instant Renewal", icon: "↻", desc: "Renew your policy in under 2 minutes" },
+            { title: "Claims Status", icon: "◎", desc: "Track your settlement in real time" },
+            { title: "Expert Help", icon: "⟶", desc: "Talk directly to Sampath Kumar" },
+          ].map((action, i) => (
+            <div key={i} className="quick-action">
+              <div style={{ fontSize: 28, color: '#C9A84C', marginBottom: 20, fontWeight: 300 }}>{action.icon}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 8, letterSpacing: '0.05em' }}>{action.title}</div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>{action.desc}</div>
+            </div>
+          ))}
         </div>
       </section>
 
-      {/* Why Choose Us Section */}
-      <section id="why-us" className="py-32 bg-white">
-        <div className="container mx-auto px-6">
-          <div className="flex flex-col lg:flex-row gap-20 items-center">
-            <div className="flex-1 space-y-12">
-              <div className="space-y-4">
-                <h2 className="text-secondary font-bold uppercase tracking-[0.3em] text-sm">Why Maruthi Insure</h2>
-                <h3 className="text-5xl lg:text-6xl font-cormorant text-primary-dark leading-tight">Heritage of trust, <br/>powered by technology.</h3>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-10">
-                {[
-                  { title: "Personalized Care", desc: "You are not just a policy number. We know our clients by name." },
-                  { title: "Rapid Settlement", desc: "Our claims process is optimized for speed and transparency." },
-                  { title: "Digital-First", desc: "Manage everything from your phone. No more paper piles." },
-                  { title: "Expert Advice", desc: "Decades of experience to guide your family's future." },
-                ].map((item, i) => (
-                  <div key={i} className="space-y-3">
-                    <div className="w-2 h-2 bg-secondary rounded-full"></div>
-                    <h5 className="font-bold text-primary-dark uppercase tracking-widest text-sm">{item.title}</h5>
-                    <p className="text-subtext text-sm leading-relaxed">{item.desc}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="flex-1 relative w-full aspect-square max-w-lg">
-              <div className="absolute inset-0 bg-primary-dark rounded-[5rem] rotate-6 scale-95 opacity-10"></div>
-              <div className="relative rounded-[5rem] overflow-hidden shadow-3xl h-full border-8 border-white">
-                <Image 
-                  src="https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=1000" 
-                  alt="Our Team" 
-                  fill 
-                  className="object-cover"
-                />
-              </div>
-              <div className="absolute -bottom-10 -right-10 bg-secondary p-10 rounded-4xl shadow-2xl text-primary-dark">
-                <div className="text-5xl font-cormorant font-bold">15+</div>
-                <div className="text-xs font-black uppercase tracking-widest mt-1">Years of Service</div>
-              </div>
-            </div>
+      {/* ─── SERVICES ─── */}
+      <section id="services" style={{ padding: '100px 40px', maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'start' }} className="lg:grid-cols-2 grid-cols-1">
+          <div>
+            <div className="section-label" style={{ marginBottom: 20 }}>What We Offer</div>
+            <h2 className="playfair" style={{ fontSize: 'clamp(36px, 5vw, 64px)', fontWeight: 400, color: 'white', lineHeight: 1.1, marginBottom: 24 }}>
+              Everything you<br />need, just a<br /><em>click away.</em>
+            </h2>
+            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.4)', lineHeight: 1.8, fontWeight: 300 }}>
+              Comprehensive insurance solutions tailored to protect what you value most — your health, your family, and your future.
+            </p>
           </div>
-        </div>
-      </section>
-
-      {/* Our Reach Section (Stats) */}
-      <section className="py-24 bg-primary-dark text-white overflow-hidden relative">
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary rounded-full blur-[150px] opacity-20 -translate-y-1/2"></div>
-        <div className="container mx-auto px-6 relative z-10">
-          <div className="grid md:grid-cols-4 gap-12 text-center">
-            {[
-              { label: "Satisfied Clients", value: "2,000+" },
-              { label: "Claims Settled", value: "₹15Cr+" },
-              { label: "Documents Saved", value: "10,000+" },
-              { label: "Cities Reached", value: "25+" },
-            ].map((stat, i) => (
-              <div key={i} className="space-y-4 border-r border-white/10 last:border-0">
-                <div className="text-4xl lg:text-6xl font-cormorant font-bold text-secondary">{stat.value}</div>
-                <div className="text-xs font-bold uppercase tracking-[0.3em] text-white/60">{stat.label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Services Portals Section */}
-      <section id="services" className="py-32 bg-section-bg">
-        <div className="container mx-auto px-6 text-center mb-20">
-          <h2 className="text-primary font-bold uppercase tracking-[0.3em] text-sm mb-4">Dedicated Gateways</h2>
-          <h3 className="text-5xl font-cormorant text-primary-dark">Everything you need, <br/>just a click away.</h3>
-        </div>
-        <div className="container mx-auto px-6">
-          <div className="grid md:grid-cols-2 gap-12 max-w-6xl mx-auto">
-            <div className="bg-white p-12 lg:p-20 rounded-[4rem] shadow-xl border border-slate-100 hover:shadow-primary-dark/10 transition-all group overflow-hidden relative">
-              <div className="absolute top-0 right-0 p-12 text-slate-50 group-hover:text-primary/5 transition-colors">
-                <svg className="w-48 h-48" fill="currentColor" viewBox="0 0 24 24"><path d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-              </div>
-              <div className="relative z-10 space-y-8">
-                <div className="text-xs font-black uppercase tracking-[0.3em] text-secondary">Sampath Kumar's Hub</div>
-                <h4 className="text-4xl font-cormorant font-bold text-primary-dark">Agent Workspace</h4>
-                <p className="text-lg text-subtext leading-relaxed">Full administrative access to manage client profiles, family trees, and automated document storage workflows.</p>
-                <Link href="/login?role=agent" className="inline-flex items-center gap-4 px-10 py-5 bg-primary-dark text-white rounded-full font-bold text-sm uppercase tracking-widest hover:bg-primary transition-all shadow-xl shadow-primary-dark/20">
-                  Enter Hub
-                </Link>
-              </div>
-            </div>
-            <div className="bg-white p-12 lg:p-20 rounded-[4rem] shadow-xl border border-slate-100 hover:shadow-primary-dark/10 transition-all group overflow-hidden relative">
-              <div className="absolute top-0 right-0 p-12 text-slate-50 group-hover:text-primary/5 transition-colors">
-                <svg className="w-48 h-48" fill="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-              </div>
-              <div className="relative z-10 space-y-8">
-                <div className="text-xs font-black uppercase tracking-[0.3em] text-secondary">Customer Portal</div>
-                <h4 className="text-4xl font-cormorant font-bold text-primary-dark">Client Secure View</h4>
-                <p className="text-lg text-subtext leading-relaxed">Read-only access for policy holders to safely view profiles and download their personal documents anytime.</p>
-                <Link href="/login?role=client" className="inline-flex items-center gap-4 px-10 py-5 bg-primary text-white rounded-full font-bold text-sm uppercase tracking-widest hover:bg-primary-dark transition-all shadow-xl shadow-primary/20">
-                  Client Access
-                </Link>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Founder's Personal Touch */}
-      <section id="about" className="py-32 bg-white relative overflow-hidden">
-        <div className="container mx-auto px-6">
-          <div className="max-w-5xl mx-auto flex flex-col lg:flex-row items-center gap-20">
-            <div className="flex-1 space-y-8 order-2 lg:order-1">
-              <div className="text-secondary text-5xl font-cormorant italic">"Your family's peace of mind is my only priority."</div>
-              <p className="text-xl text-subtext leading-relaxed font-light italic">
-                Over 15 years ago, I started Maruthi Insure Care with a simple mission: to be the most trusted name in insurance for my neighborhood. 
-                Today, technology helps us scale that promise, but the core value remains the same—real care for real people.
-              </p>
-              <div className="pt-6 flex items-center gap-6">
-                <div className="w-20 h-20 bg-secondary rounded-full flex items-center justify-center text-primary-dark text-3xl font-cormorant font-bold shadow-2xl">SK</div>
+          <div>
+            {services.map((s, i) => (
+              <div key={i} className="service-item" style={{ padding: '28px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
-                  <div className="text-primary-dark font-bold text-xl uppercase tracking-widest">Sampath Kumar R</div>
-                  <div className="text-subtext text-xs font-bold uppercase tracking-[0.2em]">Principal Consultant & Founder</div>
+                  <div style={{ fontSize: 11, color: '#C9A84C', letterSpacing: '0.3em', marginBottom: 6, fontWeight: 800, textTransform: 'uppercase' }}>{String(i + 1).padStart(2, '0')}</div>
+                  <div style={{ fontSize: 17, fontWeight: 600, color: 'white', marginBottom: 4 }}>{s.title}</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>{s.desc}</div>
                 </div>
+                <div className="service-arrow" style={{ fontSize: 20, color: 'rgba(255,255,255,0.2)', flexShrink: 0, marginLeft: 24 }}>↗</div>
               </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ─── PORTALS ─── */}
+      <section style={{ padding: '100px 40px', background: '#0D0D0D' }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+          <div style={{ textAlign: 'center', marginBottom: 64 }}>
+            <div className="section-label" style={{ marginBottom: 16 }}>Dedicated Gateways</div>
+            <h2 className="playfair" style={{ fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 400, color: 'white' }}>Two portals. One mission.</h2>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 2 }}>
+            {/* Agent Portal */}
+            <div className="portal-card" style={{ padding: '56px 48px' }}>
+              <div style={{ fontSize: 11, color: '#C9A84C', letterSpacing: '0.35em', marginBottom: 32, fontWeight: 800, textTransform: 'uppercase' }}>Sampath Kumar's Hub</div>
+              <h3 className="playfair" style={{ fontSize: 42, fontWeight: 700, color: 'white', marginBottom: 20, lineHeight: 1.1 }}>Agent<br />Workspace</h3>
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', lineHeight: 1.8, marginBottom: 40 }}>
+                Full administrative access to manage client profiles, family trees, and automated document storage workflows.
+              </p>
+              <Link href="/login?role=agent" className="btn-primary">
+                Enter Hub
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </Link>
+              <div style={{ position: 'absolute', bottom: 32, right: 32, opacity: 0.04, fontSize: 120 }}>⊞</div>
             </div>
-            <div className="flex-1 relative w-full aspect-square max-w-md order-1 lg:order-2">
-               <div className="absolute inset-0 bg-secondary/10 rounded-full translate-x-10 translate-y-10"></div>
-               <div className="relative h-full rounded-full overflow-hidden border-[12px] border-section-bg shadow-3xl">
-                  <Image 
-                    src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=800" 
-                    alt="Sampath Kumar" 
-                    fill 
-                    className="object-cover"
-                  />
-               </div>
+
+            {/* Client Portal */}
+            <div className="portal-card" style={{ padding: '56px 48px', background: 'linear-gradient(135deg, #141414 0%, #1a1508 100%)' }}>
+              <div style={{ fontSize: 11, color: '#C9A84C', letterSpacing: '0.35em', marginBottom: 32, fontWeight: 800, textTransform: 'uppercase' }}>Customer Portal</div>
+              <h3 className="playfair" style={{ fontSize: 42, fontWeight: 700, color: 'white', marginBottom: 20, lineHeight: 1.1 }}>Client<br />Secure View</h3>
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', lineHeight: 1.8, marginBottom: 40 }}>
+                Read-only access for policy holders to safely view profiles and download their personal documents anytime.
+              </p>
+              <Link href="/client-login" className="btn-primary">
+                Client Access
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                </svg>
+              </Link>
+              <div style={{ position: 'absolute', bottom: 32, right: 32, opacity: 0.04, fontSize: 120 }}>⊙</div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="bg-primary-dark text-white py-24 relative overflow-hidden">
-        <div className="absolute bottom-0 right-0 w-full h-1 bg-secondary"></div>
-        <div className="container mx-auto px-6">
-          <div className="grid lg:grid-cols-4 gap-16 mb-16 border-b border-white/10 pb-16">
-            <div className="col-span-1 lg:col-span-2 space-y-8">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-primary-dark shadow-xl">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-                  </svg>
+      {/* ─── WHY US ─── */}
+      <section id="why-us" style={{ padding: '120px 40px', maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 100, alignItems: 'center' }} className="lg:grid-cols-2 grid-cols-1">
+          <div style={{ position: 'relative' }}>
+            <div style={{ aspectRatio: '4/5', position: 'relative', overflow: 'hidden' }}>
+              <Image src="https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=1000" alt="Our Team" fill className="object-cover" />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,10,10,0.6) 0%, transparent 50%)' }} />
+            </div>
+            <div style={{
+              position: 'absolute', bottom: -24, right: -24,
+              background: '#C9A84C', padding: '32px 36px',
+            }}>
+              <div className="playfair" style={{ fontSize: 52, fontWeight: 700, color: '#0A0A0A', lineHeight: 1 }}>15+</div>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'rgba(10,10,10,0.6)', marginTop: 6 }}>Years of Service</div>
+            </div>
+          </div>
+
+          <div>
+            <div className="section-label" style={{ marginBottom: 20 }}>Why Maruthi Insure</div>
+            <h2 className="playfair" style={{ fontSize: 'clamp(36px, 4vw, 56px)', fontWeight: 400, color: 'white', lineHeight: 1.1, marginBottom: 48 }}>
+              Heritage of trust,<br /><em>powered by technology.</em>
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
+              {[
+                { title: "Personalized Care", desc: "You are not just a policy number. We know our clients by name." },
+                { title: "Rapid Settlement", desc: "Our claims process is optimized for speed and transparency." },
+                { title: "Digital-First", desc: "Manage everything from your phone. No more paper piles." },
+                { title: "Expert Advice", desc: "Decades of experience to guide your family's future." },
+              ].map((item, i) => (
+                <div key={i}>
+                  <div style={{ width: 24, height: 1, background: '#C9A84C', marginBottom: 16 }} />
+                  <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'white', marginBottom: 8 }}>{item.title}</div>
+                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>{item.desc}</div>
                 </div>
-                <span className="text-3xl font-bold tracking-tight font-cormorant">Maruthi Insure Care</span>
-              </div>
-              <p className="text-lg text-white/60 max-w-md leading-relaxed">
-                Dedicated to providing comprehensive insurance solutions with a personal touch. 
-                Securing your future, one policy at a time.
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FOUNDER ─── */}
+      <section id="about" style={{ padding: '120px 40px', background: '#0D0D0D' }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 100, alignItems: 'center' }} className="lg:grid-cols-2 grid-cols-1">
+            <div>
+              <div className="section-label" style={{ marginBottom: 32 }}>A Personal Message</div>
+              <blockquote className="playfair" style={{ fontSize: 'clamp(28px, 3.5vw, 44px)', fontStyle: 'italic', fontWeight: 400, color: 'white', lineHeight: 1.3, marginBottom: 40 }}>
+                "Your family's peace of mind is my only priority."
+              </blockquote>
+              <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.45)', lineHeight: 1.9, fontWeight: 300, marginBottom: 48 }}>
+                Over 15 years ago, I started Maruthi Insure Care with a simple mission: to be the most trusted name in insurance for my neighborhood. Today, technology helps us scale that promise, but the core value remains — real care for real people.
               </p>
-              <div className="flex gap-6">
-                {[1,2,3,4].map(i => (
-                  <div key={i} className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center hover:bg-secondary hover:text-primary-dark transition-all cursor-pointer">
-                    <div className="w-5 h-5 bg-current rounded-sm opacity-40"></div>
-                  </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                <div style={{
+                  width: 56, height: 56,
+                  background: '#C9A84C',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'Playfair Display, serif', fontSize: 20, fontWeight: 700, color: '#0A0A0A',
+                }}>SK</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Sampath Kumar R</div>
+                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', textTransform: 'uppercase', marginTop: 2 }}>Principal Consultant & Founder</div>
+                </div>
+              </div>
+            </div>
+            <div style={{ position: 'relative' }}>
+              <div style={{ aspectRatio: '1/1', borderRadius: '50%', overflow: 'hidden', border: '1px solid rgba(201,168,76,0.2)', position: 'relative' }}>
+                <Image src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=800" alt="Sampath Kumar" fill className="object-cover" />
+              </div>
+              <div style={{ position: 'absolute', top: '10%', right: '-5%', width: '40%', aspectRatio: '1/1', border: '1px solid rgba(201,168,76,0.15)', borderRadius: '50%', pointerEvents: 'none' }} />
+              <div style={{ position: 'absolute', top: '20%', right: '5%', width: '20%', aspectRatio: '1/1', border: '1px solid rgba(201,168,76,0.1)', borderRadius: '50%', pointerEvents: 'none' }} />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ─── FOOTER ─── */}
+      <footer style={{ background: '#060606', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '80px 40px 48px' }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 64, paddingBottom: 64, borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 40 }} className="lg:grid-cols-3 grid-cols-1">
+            <div>
+              <div className="playfair" style={{ fontSize: 24, fontWeight: 700, color: 'white', marginBottom: 16 }}>Maruthi Insure Care</div>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.8, maxWidth: 320, marginBottom: 32 }}>
+                Dedicated to providing comprehensive insurance solutions with a personal touch. Securing your future, one policy at a time.
+              </p>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {['◈', '◉', '◎', '◍'].map((icon, i) => (
+                  <div key={i} style={{
+                    width: 40, height: 40, border: '1px solid rgba(255,255,255,0.08)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 16,
+                    transition: 'all 0.2s',
+                  }}>{icon}</div>
                 ))}
               </div>
             </div>
-            
-            <div className="space-y-8">
-              <h5 className="text-xs font-black uppercase tracking-[0.3em] text-secondary">Services</h5>
-              <ul className="space-y-4 text-white/60 text-sm font-medium uppercase tracking-widest">
-                <li><a href="#" className="hover:text-white transition-colors">Health Insurance</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Life Insurance</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Vehicle Insurance</a></li>
-                <li><a href="#" className="hover:text-white transition-colors">Wealth Creation</a></li>
-              </ul>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.3em', textTransform: 'uppercase', color: '#C9A84C', marginBottom: 28 }}>Services</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {["Health Insurance", "Life Insurance", "Vehicle Insurance", "Wealth Creation"].map(s => (
+                  <a key={s} href="#" className="footer-link">{s}</a>
+                ))}
+              </div>
             </div>
-            
-            <div className="space-y-8">
-              <h5 className="text-xs font-black uppercase tracking-[0.3em] text-secondary">Contact</h5>
-              <div className="space-y-4 text-white/60 text-sm font-medium">
-                <p className="leading-relaxed uppercase tracking-widest">Bengaluru, Karnataka, India</p>
-                <p className="uppercase tracking-widest">+91 98XXX XXXXX</p>
-                <p className="lowercase tracking-widest">sampath@maruthiinsure.care</p>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.3em', textTransform: 'uppercase', color: '#C9A84C', marginBottom: 28 }}>Contact</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>Bengaluru, Karnataka<br />India</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>+91 98XXX XXXXX</div>
+                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>sampath@maruthiinsure.care</div>
               </div>
             </div>
           </div>
-          
-          <div className="flex flex-col md:flex-row justify-between items-center gap-8 text-white/40 text-[10px] font-black uppercase tracking-[0.4em]">
-            <p>© 2026 Maruthi Insure Care. All rights reserved.</p>
-            <p>Designed with care by <a href="https://auxacode.com" className="text-white hover:text-secondary">Auxacode Technologies</a></p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.15em', textTransform: 'uppercase' }}>© 2026 Maruthi Insure Care. All rights reserved.</div>
+            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
+              Designed by <a href="https://auxacode.com" style={{ color: '#C9A84C', textDecoration: 'none' }}>Auxacode Technologies</a>
+            </div>
           </div>
         </div>
       </footer>
