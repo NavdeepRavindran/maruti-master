@@ -106,7 +106,7 @@ export default function LoginPage() {
           </div>
 
           {/* Trust badges */}
-          <div className="relative z-10 flex flex-wrap gap-2">
+          {/* <div className="relative z-10 flex flex-wrap gap-2">
             {[
               { icon: "lock", label: "256-bit SSL" },
               { icon: "certificate", label: "IRDAI licensed" },
@@ -124,7 +124,7 @@ export default function LoginPage() {
                 {b.label}
               </span>
             ))}
-          </div>
+          </div> */}
         </div>
 
         {/* ── Right Panel: Form ── */}
@@ -202,7 +202,7 @@ export default function LoginPage() {
                 className="w-4 h-4 rounded border-slate-300 accent-[#4f8ef7]"
               />
               <label htmlFor="remember" className="text-sm text-slate-500">
-                Keep me signed in for 30 days
+                Remember me 
               </label>
             </div>
 
@@ -244,14 +244,14 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Divider */}
+          {/* Divider
           <div className="flex items-center gap-3 my-5">
             <div className="flex-1 h-px bg-slate-200" />
             <span className="text-xs text-slate-400">or continue with</span>
             <div className="flex-1 h-px bg-slate-200" />
-          </div>
+          </div> */}
 
-          {/* Google SSO */}
+          {/* Google SSO
           <button
             type="button"
             className="w-full h-11 bg-slate-50 hover:bg-slate-100 active:scale-[0.99] border border-slate-200 rounded-lg text-sm font-medium text-slate-700 flex items-center justify-center gap-2.5 transition-all duration-200"
@@ -263,15 +263,15 @@ export default function LoginPage() {
               <path fill="#1976D2" d="M43.6 22H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.5l6.1 5.2C40.9 37.4 44 31.7 44 25.8c0-1.3-.2-2.6-.4-3.8z"/>
             </svg>
             Sign in with Google SSO
-          </button>
+          </button> */}
 
-          {/* Footer */}
+          {/* Footer
           <p className="text-center mt-6 text-sm text-slate-400">
             New to Maruthi Insure?{" "}
             <a href="#" className="text-[#4f8ef7] font-medium hover:underline">
               Request admin access
             </a>
-          </p>
+          </p> */}
 
           <p className="text-center mt-6 text-[10px] text-slate-300 uppercase tracking-widest">
             © 2026 Maruthi Insure Care · All Rights Reserved

@@ -20,6 +20,7 @@ const clientSchema = z.object({
   pinCode: z.string().regex(/^\d{6}$/, "PIN Code must be 6 digits"),
   notes: z.string().optional(),
   agent_id: z.string().optional(),
+  profilePic: z.string().optional(), // ← ADDED: base64 data URL from frontend
 });
 
 // GET /api/clients
@@ -39,10 +40,11 @@ export async function GET(request: Request) {
         id, name, surname, phone, alternate_mobile, email,
         date_of_birth, anniversary_date, address, city, state, pin_code,
         gender, marital_status, occupation, notes,
-        status, clientloginid, created_at,
+        status, clientloginid, profile_pic, created_at,
         family_members(count),
         documents(count)
       `)
+      // ↑ CHANGED: photo_url → profile_pic (matches the new DB column name)
       .order("created_at", { ascending: false });
 
     if (search) {
@@ -68,6 +70,7 @@ export async function GET(request: Request) {
       address: [c.address, c.city, c.state, c.pin_code].filter(Boolean).join(", "),
       status: c.status,
       clientLoginId: c.clientloginid,
+      profile_pic: c.profile_pic || null, // ← CHANGED: photo_url → profile_pic
       created_at: c.created_at,
       family_count: c.family_members?.[0]?.count ?? 0,
       document_count: c.documents?.[0]?.count ?? 0,
@@ -114,6 +117,7 @@ export async function POST(request: Request) {
         state: validatedData.state || null,
         pin_code: validatedData.pinCode || null,
         notes: validatedData.notes || null,
+        profile_pic: validatedData.profilePic || null, // ← ADDED: saves photo on create
         status: "Active",
         agent_id: validatedData.agent_id || null,
         clientloginid: seqData,

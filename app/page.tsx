@@ -1,624 +1,921 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 
-const slides = [
+// ─── Data ────────────────────────────────────────────────────────────────────
+
+const PRODUCTS = [
   {
-    title: "Protecting what\nmatters most.",
-    subtitle: "Welcome to Maruthi Insure Care",
-    description: "A promise of security for your family's future. Our digital portal ensures your peace of mind is always reachable.",
-    image: "https://images.unsplash.com/photo-1542382257-80dedb725088?auto=format&fit=crop&q=80&w=1200",
-    accent: "#C9A84C",
+    num: "01",
+    icon: "🏥",
+    name: "Health Insurance",
+    desc: "Cashless hospitalisation, critical illness cover, and annual health check-ups for the whole family.",
+    badge: "Most Popular",
   },
   {
-    title: "Health is your\ngreatest wealth.",
-    subtitle: "Complete Health Protection",
-    description: "Stay prepared for the unexpected with comprehensive health coverage for you and your loved ones.",
-    image: "https://images.unsplash.com/photo-1576091160550-2173dba999ef?auto=format&fit=crop&q=80&w=1200",
-    accent: "#4CAF82",
+    num: "02",
+    icon: "🛡️",
+    name: "Life Insurance",
+    desc: "Term plans and wealth-building policies that secure your family's financial future for generations.",
+    badge: "",
   },
   {
-    title: "Claims made\nsimple & fast.",
-    subtitle: "Hassle-Free Support",
-    description: "We are with you when it counts. Our digital-first approach ensures quick settlements and constant support.",
-    image: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&q=80&w=1200",
-    accent: "#4C7EC9",
-  }
+    num: "03",
+    icon: "🚗",
+    name: "Vehicle Insurance",
+    desc: "Comprehensive and third-party cover for cars and two-wheelers, renewed in minutes.",
+    badge: "",
+  },
+  {
+    num: "04",
+    icon: "📈",
+    name: "Wealth Creation",
+    desc: "ULIPs and endowment plans that grow your money while protecting your life.",
+    badge: "High Returns",
+  },
+  {
+    num: "05",
+    icon: "🏠",
+    name: "Home Insurance",
+    desc: "Protect your home against fire, theft, natural calamities, and everything in between.",
+    badge: "",
+  },
+  {
+    num: "06",
+    icon: "✈️",
+    name: "Travel Insurance",
+    desc: "Worry-free journeys with medical, baggage, and trip cancellation cover worldwide.",
+    badge: "",
+  },
 ];
 
-const stats = [
-  { label: "Satisfied Clients", value: "2,000+", icon: "◈" },
-  { label: "Claims Settled", value: "₹15Cr+", icon: "◈" },
-  { label: "Documents Saved", value: "10,000+", icon: "◈" },
-  { label: "Cities Reached", value: "25+", icon: "◈" },
+const WHY_ITEMS = [
+  {
+    icon: "🤝",
+    title: "Personalized Care",
+    body: "You are not just a policy number. Sampath Kumar personally knows every client by name.",
+  },
+  {
+    icon: "⚡",
+    title: "Rapid Settlement",
+    body: "Our digital claims process is built for speed — most claims settled within 7 working days.",
+  },
+  {
+    icon: "📱",
+    title: "Digital-First",
+    body: "Manage everything from your phone. No queues, no paperwork, no stress. Ever.",
+  },
+  {
+    icon: "🧠",
+    title: "Expert Guidance",
+    body: "15+ years of expertise guiding families toward the right coverage at the right price.",
+  },
 ];
 
-const services = [
-  { title: "Health Insurance", icon: "⊕", desc: "Comprehensive coverage for every stage of life" },
-  { title: "Life Insurance", icon: "⊕", desc: "Secure your family's financial tomorrow" },
-  { title: "Vehicle Insurance", icon: "⊕", desc: "Protection on every road you travel" },
-  { title: "Wealth Creation", icon: "⊕", desc: "Build a legacy worth inheriting" },
-];
+const AGENT_FEATURES = ["Client Management", "Document Upload", "Family Records", "Reports & Analytics"];
+const CLIENT_FEATURES = ["View Policies", "Download Docs", "Family Info", "Renewal Dates"];
 
-export default function Home() {
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const [isScrolled, setIsScrolled] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const heroRef = useRef<HTMLDivElement>(null);
+// ─── Sub-components ──────────────────────────────────────────────────────────
+
+function SectionTag({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 mb-5">
+      <span className="w-6 h-[1.5px] bg-blue-600 shrink-0" />
+      <span className="text-[11px] font-bold tracking-[.2em] uppercase text-blue-600">
+        {children}
+      </span>
+    </div>
+  );
+}
+
+function ArrowIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2.5}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+    </svg>
+  );
+}
+
+function ChevronIcon({ size = 10, rotated = false }: { size?: number; rotated?: boolean }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={3}
+      style={{ transform: rotated ? "rotate(180deg)" : undefined, transition: "transform 0.2s" }}
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+
+export default function LandingPage() {
+  const [scrolled, setScrolled] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [hoveredProduct, setHoveredProduct] = useState<number | null>(null);
+  const [hoveredWhy, setHoveredWhy] = useState<number | null>(null);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % slides.length);
-    }, 6000);
-    const handleScroll = () => setIsScrolled(window.scrollY > 50);
-    const handleMouse = (e: MouseEvent) => {
-      setMousePos({ x: e.clientX / window.innerWidth, y: e.clientY / window.innerHeight });
-    };
-    window.addEventListener("scroll", handleScroll);
-    window.addEventListener("mousemove", handleMouse);
-    return () => {
-      clearInterval(timer);
-      window.removeEventListener("scroll", handleScroll);
-      window.removeEventListener("mousemove", handleMouse);
-    };
+    const onScroll = () => setScrolled(window.scrollY > 60);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const slide = slides[currentSlide];
+  // Close login dropdown on outside click
+  useEffect(() => {
+    if (!loginOpen) return;
+    const close = () => setLoginOpen(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [loginOpen]);
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-white overflow-x-hidden" style={{ fontFamily: "'DM Sans', sans-serif" }}>
+    <div
+      style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" }}
+      className="bg-slate-50 text-slate-900 overflow-x-hidden"
+    >
+      {/* ── Global font import ── */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400;1,700&display=swap');
-        
-        :root {
-          --gold: #C9A84C;
-          --dark: #0A0A0A;
-          --surface: #141414;
-          --surface2: #1C1C1C;
-          --border: rgba(255,255,255,0.08);
-          --text-muted: rgba(255,255,255,0.45);
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
-        .playfair { font-family: 'Playfair Display', serif; }
-
-        .nav-link {
-          font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
-          color: rgba(255,255,255,0.5);
-          transition: color 0.3s;
-          text-decoration: none;
-        }
-        .nav-link:hover { color: white; }
-
-        .slide-enter { animation: slideIn 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
-        .slide-exit { animation: slideOut 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
-
-        @keyframes slideIn {
-          from { opacity: 0; transform: translateY(30px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeIn {
-          from { opacity: 0; } to { opacity: 1; }
-        }
-        @keyframes scaleIn {
-          from { transform: scale(1.08); } to { transform: scale(1); }
-        }
-
-        .stat-card {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        .stat-card:hover {
-          border-color: var(--gold);
-          transform: translateY(-4px);
-          background: var(--surface2);
-        }
-
-        .service-item {
-          border-bottom: 1px solid var(--border);
-          transition: all 0.3s ease;
-          cursor: pointer;
-        }
-        .service-item:hover { background: var(--surface); }
-        .service-item:hover .service-arrow { transform: translateX(6px) rotate(-45deg); }
-
-        .service-arrow { transition: transform 0.3s ease; }
-
-        .portal-card {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          transition: all 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-          position: relative;
-          overflow: hidden;
-        }
-        .portal-card::before {
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Lora:ital,wght@0,400;0,600;1,400;1,600&display=swap');
+        body { font-family: 'Inter', -apple-system, sans-serif; }
+        .serif { font-family: 'Lora', Georgia, serif; font-style: italic; }
+        .product-card-line::after {
           content: '';
           position: absolute;
-          inset: 0;
-          background: linear-gradient(135deg, transparent 60%, rgba(201,168,76,0.05) 100%);
-          opacity: 0;
-          transition: opacity 0.4s;
+          bottom: 0; left: 0; right: 0;
+          height: 2px;
+          background: #2563EB;
+          transform: scaleX(0);
+          transform-origin: left;
+          transition: transform 0.3s ease;
+          border-radius: 0;
         }
-        .portal-card:hover::before { opacity: 1; }
-        .portal-card:hover { border-color: rgba(201,168,76,0.3); transform: translateY(-6px); }
-
-        .btn-primary {
-          display: inline-flex;
-          align-items: center;
-          gap: 12px;
-          padding: 16px 32px;
-          background: var(--gold);
-          color: #0A0A0A;
-          border-radius: 4px;
-          font-size: 11px;
-          font-weight: 800;
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
-          text-decoration: none;
-          transition: all 0.3s ease;
+        .product-card-line:hover::after { transform: scaleX(1); }
+        .why-card-hover { transition: background 0.3s, color 0.3s; }
+        .why-card-hover:hover { background: #0B1F3A !important; }
+        .why-card-hover:hover .why-title { color: #fff !important; }
+        .why-card-hover:hover .why-body { color: rgba(255,255,255,0.45) !important; }
+        .why-card-hover:hover .why-icon { background: rgba(255,255,255,0.07) !important; color: #93C5FD !important; }
+        .portal-hover { transition: transform 0.3s ease; }
+        .portal-hover:hover { transform: translateY(-4px); }
+        .nav-a-link { color: rgba(255,255,255,0.45); font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; text-decoration: none; transition: color 0.2s; }
+        .nav-a-link:hover { color: #fff; }
+        .footer-link { display: block; font-size: 13px; color: rgba(255,255,255,0.3); margin-bottom: 14px; text-decoration: none; transition: color 0.2s; }
+        .footer-link:hover { color: rgba(255,255,255,0.7); }
+        @keyframes dropIn {
+          from { opacity: 0; transform: translateY(-8px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .btn-primary:hover { background: #DDB95C; transform: translateY(-2px); }
-
-        .btn-outline {
-          display: inline-flex;
-          align-items: center;
-          gap: 12px;
-          padding: 16px 32px;
-          background: transparent;
-          color: white;
-          border: 1px solid rgba(255,255,255,0.2);
-          border-radius: 4px;
-          font-size: 11px;
-          font-weight: 700;
-          letter-spacing: 0.2em;
-          text-transform: uppercase;
-          text-decoration: none;
-          transition: all 0.3s ease;
-          cursor: pointer;
+        .drop-in { animation: dropIn 0.18s ease both; }
+        @keyframes heroFadeUp {
+          from { opacity: 0; transform: translateY(32px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .btn-outline:hover { border-color: white; background: rgba(255,255,255,0.05); }
-
-        .noise-overlay {
-          position: fixed;
-          inset: 0;
-          pointer-events: none;
-          z-index: 9999;
-          opacity: 0.025;
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-          background-repeat: repeat;
-          background-size: 128px;
-        }
-
-        .cursor-glow {
-          position: fixed;
-          width: 400px;
-          height: 400px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(201,168,76,0.06) 0%, transparent 70%);
-          pointer-events: none;
-          z-index: 1;
-          transform: translate(-50%, -50%);
-          transition: left 0.6s ease, top 0.6s ease;
-        }
-
-        .section-label {
-          font-size: 10px;
-          font-weight: 800;
-          letter-spacing: 0.35em;
-          text-transform: uppercase;
-          color: var(--gold);
-        }
-
-        .divider { border: none; border-top: 1px solid var(--border); }
-
-        .quick-action {
-          background: var(--surface);
-          border: 1px solid var(--border);
-          border-radius: 2px;
-          padding: 28px;
-          transition: all 0.3s ease;
-          cursor: pointer;
-        }
-        .quick-action:hover { border-color: var(--gold); background: var(--surface2); }
-
-        .image-reveal {
-          animation: scaleIn 8s ease forwards;
-        }
-
-        .text-reveal {
-          animation: slideIn 0.9s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        }
-
-        .footer-link {
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.15em;
-          text-transform: uppercase;
-          color: rgba(255,255,255,0.4);
-          text-decoration: none;
-          transition: color 0.2s;
-        }
-        .footer-link:hover { color: var(--gold); }
+        .hero-fade { animation: heroFadeUp 0.9s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .hero-fade-1 { animation-delay: 0s; }
+        .hero-fade-2 { animation-delay: 0.12s; }
+        .hero-fade-3 { animation-delay: 0.22s; }
+        .hero-fade-4 { animation-delay: 0.35s; }
       `}</style>
 
-      {/* Noise overlay */}
-      <div className="noise-overlay" />
+      {/* ════════════════════════════════════════════════════
+          NAVBAR
+      ════════════════════════════════════════════════════ */}
+      <nav
+        className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+          scrolled ? "bg-[#0B1F3A]/97 shadow-lg shadow-black/20" : "bg-[#0B1F3A]"
+        }`}
+        style={{ height: 72, display: "flex", alignItems: "center" }}
+      >
+        <div className="w-full max-w-[1280px] mx-auto px-16 flex items-center justify-between">
 
-      {/* Cursor glow */}
-      <div className="cursor-glow" style={{
-        left: `${mousePos.x * 100}vw`,
-        top: `${mousePos.y * 100}vh`,
-      }} />
-
-      {/* ─── NAVIGATION ─── */}
-      <nav style={{
-        position: 'fixed', top: 0, width: '100%', zIndex: 100,
-        background: isScrolled ? 'rgba(10,10,10,0.95)' : 'transparent',
-        backdropFilter: isScrolled ? 'blur(20px)' : 'none',
-        borderBottom: isScrolled ? '1px solid rgba(255,255,255,0.06)' : 'none',
-        transition: 'all 0.4s ease',
-        padding: '0 40px',
-      }}>
-        <div style={{ maxWidth: 1400, margin: '0 auto', height: 80, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            <div style={{
-              width: 40, height: 40,
-              border: '1px solid rgba(201,168,76,0.4)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="#C9A84C" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+          <Link href="/" className="flex items-center gap-3 no-underline">
+            <div
+              className="w-[42px] h-[42px] bg-blue-600 rounded-[10px] flex items-center justify-center text-white font-black text-[13px] shrink-0"
+              style={{ letterSpacing: -0.5 }}
+            >
+              MIC
             </div>
             <div>
-              <div className="playfair" style={{ fontSize: 18, fontWeight: 700, color: 'white', lineHeight: 1.1 }}>Maruthi Insure</div>
-              <div style={{ fontSize: 8, fontWeight: 800, letterSpacing: '0.3em', color: 'rgba(201,168,76,0.7)', textTransform: 'uppercase' }}>Care & Protection</div>
+              <div className="text-[15px] font-bold text-white leading-tight" style={{ letterSpacing: -0.3 }}>
+                Maruthi Insure Care
+              </div>
+              <div className="text-[9px] font-bold text-white/35 tracking-[.22em] uppercase">
+                Care &amp; Protection
+              </div>
             </div>
+          </Link>
+
+          {/* Nav Links */}
+          <div className="hidden md:flex items-center gap-9">
+            {[
+              ["#products", "Products"],
+              ["#why-us", "Why Us"],
+              ["#about", "Our Story"],
+              ["#contact", "Contact"],
+            ].map(([href, label]) => (
+              <a key={href} href={href} className="nav-a-link">
+                {label}
+              </a>
+            ))}
           </div>
 
-          {/* Desktop Nav */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 48 }} className="hidden md:flex">
-            <a href="#about" className="nav-link">Our Story</a>
-            <a href="#services" className="nav-link">Services</a>
-            <a href="#why-us" className="nav-link">Why Us</a>
-            <Link href="/client-login" className="btn-primary" style={{ padding: '12px 24px', fontSize: 10 }}>
-              Client Login
-              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-              </svg>
+          {/* CTA */}
+          <div className="flex items-center gap-3">
+            {/* Login dropdown */}
+            <div className="relative" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => setLoginOpen((o) => !o)}
+                className="flex items-center gap-2 px-5 py-[9px] border border-white/15 rounded-lg text-white/70 text-[11px] font-bold tracking-[.1em] uppercase bg-transparent hover:border-white/35 hover:text-white transition-all"
+              >
+                <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+                Login
+                <ChevronIcon rotated={loginOpen} />
+              </button>
+
+              {loginOpen && (
+                <div className="drop-in absolute top-[calc(100%+8px)] right-0 bg-white rounded-xl shadow-2xl shadow-black/15 border border-slate-200 overflow-hidden min-w-[200px]">
+                  <Link
+                    href="/login"
+                    className="flex items-center gap-3 px-5 py-4 border-b border-slate-100 hover:bg-slate-50 transition-colors no-underline"
+                    onClick={() => setLoginOpen(false)}
+                  >
+                    <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center text-base shrink-0">🏢</div>
+                    <div>
+                      <div className="text-[13px] font-bold text-slate-900">Agent Login</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">Admin dashboard access</div>
+                    </div>
+                  </Link>
+                  <Link
+                    href="/client-login"
+                    className="flex items-center gap-3 px-5 py-4 hover:bg-slate-50 transition-colors no-underline"
+                    onClick={() => setLoginOpen(false)}
+                  >
+                    <div className="w-9 h-9 bg-blue-50 rounded-lg flex items-center justify-center text-base shrink-0">👤</div>
+                    <div>
+                      <div className="text-[13px] font-bold text-slate-900">Client Login</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">View your documents</div>
+                    </div>
+                  </Link>
+                </div>
+              )}
+            </div>
+
+            <Link
+              href="/client-login"
+              className="flex items-center gap-2 px-[22px] py-[9px] bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-bold tracking-[.1em] uppercase rounded-lg transition-colors no-underline"
+            >
+              Get Started <ArrowIcon size={13} />
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* ════════════════════════════════════════════════════
+          HERO
+      ════════════════════════════════════════════════════ */}
+      <section
+        className="relative flex flex-col justify-center overflow-hidden"
+        style={{ background: "#0B1F3A", minHeight: "92vh", paddingTop: 120, paddingBottom: 100 }}
+      >
+        {/* Grid bg */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
+            backgroundSize: "64px 64px",
+          }}
+        />
+        {/* Glow */}
+        <div
+          className="absolute pointer-events-none"
+          style={{
+            top: -200,
+            right: -100,
+            width: 600,
+            height: 600,
+            background: "radial-gradient(circle, rgba(37,99,235,0.14) 0%, transparent 70%)",
+          }}
+        />
+
+        <div className="relative z-10 max-w-[1280px] mx-auto w-full px-16">
+          {/* Eyebrow */}
+          <div className="hero-fade hero-fade-1 flex items-center gap-3 mb-7">
+            <span className="w-7 h-[1.5px] bg-blue-500 shrink-0" />
+            <span className="text-[11px] font-bold tracking-[.25em] uppercase text-blue-500">
+              Family Protection
+            </span>
+          </div>
+
+          {/* Headline */}
+          <h1
+            className="serif hero-fade hero-fade-2 text-white"
+            style={{
+              fontSize: "clamp(52px, 6.5vw, 96px)",
+              fontWeight: 600,
+              lineHeight: 1.0,
+              letterSpacing: -0.5,
+              maxWidth: 800,
+              marginBottom: 28,
+            }}
+          >
+            Security That<br />Never Sleeps.
+          </h1>
+
+          {/* Sub */}
+          <p
+            className="hero-fade hero-fade-3"
+            style={{
+              fontSize: 18,
+              color: "rgba(255,255,255,0.45)",
+              lineHeight: 1.8,
+              maxWidth: 520,
+              marginBottom: 52,
+              fontWeight: 400,
+            }}
+          >
+            Comprehensive insurance built around real Indian families — not just policies, but a promise.
+          </p>
+
+          {/* CTAs */}
+          <div className="hero-fade hero-fade-4 flex items-center gap-4 flex-wrap mb-20">
+            <Link
+              href="/client-login"
+              className="inline-flex items-center gap-3 text-white bg-blue-600 hover:bg-blue-700 rounded-[9px] no-underline transition-all hover:-translate-y-px"
+              style={{ padding: "18px 36px", fontSize: 13, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase" }}
+            >
+              Access Portal <ArrowIcon size={14} />
+            </Link>
+            <a
+              href="#products"
+              className="inline-flex items-center gap-3 rounded-[9px] no-underline transition-all"
+              style={{
+                padding: "17px 32px",
+                fontSize: 13,
+                fontWeight: 700,
+                letterSpacing: ".1em",
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,0.65)",
+                border: "1px solid rgba(255,255,255,0.12)",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.35)";
+                (e.currentTarget as HTMLElement).style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.12)";
+                (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.65)";
+              }}
+            >
+              Explore Products
+            </a>
+          </div>
+
+          {/* Stats row */}
+          <div
+            className="flex gap-16 flex-wrap pt-[52px]"
+            style={{ borderTop: "0.5px solid rgba(255,255,255,0.07)" }}
+          >
+            {[
+              { n: "2,000+", l: "Families Protected" },
+              { n: "₹15Cr+", l: "Claims Settled" },
+              { n: "15+", l: "Years of Trust" },
+              { n: "10K+", l: "Documents Secured" },
+            ].map((s) => (
+              <div key={s.l}>
+                <div
+                  className="serif text-white"
+                  style={{ fontSize: 36, fontWeight: 700, lineHeight: 1, marginBottom: 5 }}
+                >
+                  {s.n}
+                </div>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: ".18em",
+                    textTransform: "uppercase",
+                    color: "rgba(255,255,255,0.3)",
+                  }}
+                >
+                  {s.l}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════
+          PRODUCTS
+      ════════════════════════════════════════════════════ */}
+      <section id="products" className="max-w-[1280px] mx-auto px-16 py-28">
+        <SectionTag>Our Products</SectionTag>
+        <div className="flex justify-between items-end gap-8 flex-wrap mb-16">
+          <h2 className="serif" style={{ fontSize: "clamp(36px, 4.5vw, 62px)", fontWeight: 600, color: "#0F172A", lineHeight: 1.05 }}>
+            Protection for every<br />
+            <em style={{ color: "#2563EB" }}>chapter of life.</em>
+          </h2>
+          <p style={{ fontSize: 16, color: "#64748B", lineHeight: 1.8, maxWidth: 380 }}>
+            Six carefully curated insurance products, each designed to give complete peace of mind at every stage.
+          </p>
+        </div>
+
+        <div
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3"
+          style={{ border: "0.5px solid #E2E8F0", borderRadius: 20, overflow: "hidden" }}
+        >
+          {PRODUCTS.map((p, i) => (
+            <div
+              key={p.num}
+              className="product-card-line relative bg-white"
+              style={{
+                padding: "48px 40px",
+                borderRight: (i + 1) % 3 === 0 ? "none" : "0.5px solid #E2E8F0",
+                borderBottom: i < 3 ? "0.5px solid #E2E8F0" : "none",
+                transition: "background 0.25s",
+                cursor: "default",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "#FAFCFF";
+                setHoveredProduct(i);
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = "#fff";
+                setHoveredProduct(null);
+              }}
+            >
+              {p.badge && (
+                <div
+                  className="absolute top-5 right-5 bg-blue-600 text-white text-[9px] font-black tracking-[.1em] uppercase px-[10px] py-[4px] rounded-full"
+                >
+                  {p.badge}
+                </div>
+              )}
+
+              <div
+                className="flex items-center justify-center rounded-[14px] mb-7 transition-colors"
+                style={{
+                  width: 56,
+                  height: 56,
+                  fontSize: 24,
+                  background: hoveredProduct === i ? "#DBEAFE" : "#EFF6FF",
+                }}
+              >
+                {p.icon}
+              </div>
+
+              <div
+                style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".22em", textTransform: "uppercase", color: "#2563EB", marginBottom: 10 }}
+              >
+                {p.num}
+              </div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, color: "#0F172A", marginBottom: 12 }}>
+                {p.name}
+              </h3>
+              <p style={{ fontSize: 14, color: "#64748B", lineHeight: 1.75 }}>{p.desc}</p>
+
+              <div
+                className="flex items-center gap-2 mt-7"
+                style={{ fontSize: 11, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#2563EB" }}
+              >
+                Learn More <ArrowIcon size={12} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════
+          PORTALS
+      ════════════════════════════════════════════════════ */}
+      <section className="max-w-[1280px] mx-auto px-16 pb-28">
+        <SectionTag>Dedicated Portals</SectionTag>
+        <h2
+          className="serif mb-16"
+          style={{ fontSize: "clamp(36px, 4.5vw, 62px)", fontWeight: 600, color: "#0F172A", lineHeight: 1.05 }}
+        >
+          Two gateways.<br />
+          <em style={{ color: "#2563EB" }}>One mission.</em>
+        </h2>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Agent portal */}
+          <div
+            className="portal-hover rounded-[20px] relative overflow-hidden"
+            style={{ background: "#0B1F3A", padding: "72px 60px" }}
+          >
+            <div
+              className="absolute pointer-events-none"
+              style={{ top: -80, right: -80, width: 300, height: 300, border: "1px solid rgba(37,99,235,0.1)", borderRadius: "50%" }}
+            />
+            <div
+              className="absolute pointer-events-none"
+              style={{ bottom: -40, left: -40, width: 200, height: 200, border: "0.5px solid rgba(255,255,255,0.03)", borderRadius: "50%" }}
+            />
+
+            <div
+              className="inline-block rounded-lg mb-7"
+              style={{ background: "rgba(37,99,235,0.15)", border: "1px solid rgba(37,99,235,0.25)", padding: "6px 14px", fontSize: 10, fontWeight: 700, letterSpacing: ".2em", textTransform: "uppercase", color: "#93C5FD" }}
+            >
+              Agent Hub
+            </div>
+
+            <h3
+              className="serif"
+              style={{ fontSize: 46, fontWeight: 600, color: "#fff", lineHeight: 1.05, marginBottom: 20 }}
+            >
+              Agent<br />Workspace
+            </h3>
+            <p style={{ fontSize: 15, color: "rgba(255,255,255,0.45)", lineHeight: 1.8, marginBottom: 40 }}>
+              Full admin access to manage clients, upload documents, view family trees, send birthday and anniversary reminders, and track all activity in one powerful place.
+            </p>
+
+            <div className="flex gap-2.5 flex-wrap mb-11">
+              {AGENT_FEATURES.map((f) => (
+                <span
+                  key={f}
+                  style={{ fontSize: 11, fontWeight: 600, padding: "6px 14px", background: "rgba(255,255,255,0.06)", border: "0.5px solid rgba(255,255,255,0.1)", borderRadius: 20, color: "rgba(255,255,255,0.4)", letterSpacing: ".05em" }}
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
+
+            <Link
+              href="/login"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg no-underline transition-colors"
+              style={{ padding: "14px 28px", fontSize: 12, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase" }}
+            >
+              Enter Hub <ArrowIcon size={14} />
             </Link>
           </div>
 
-          {/* Mobile menu btn */}
-          <button onClick={() => setMobileMenuOpen(!mobileMenuOpen)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', padding: 8 }} className="md:hidden">
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d={mobileMenuOpen ? "M6 18L18 6M6 6l12 12" : "M4 6h16M4 12h16M4 18h16"} />
-            </svg>
-          </button>
-        </div>
-
-        {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <div style={{ background: '#141414', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '20px 40px 28px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <a href="#about" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Our Story</a>
-            <a href="#services" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Services</a>
-            <a href="#why-us" className="nav-link" onClick={() => setMobileMenuOpen(false)}>Why Us</a>
-            <Link href="/client-login" className="btn-primary" style={{ marginTop: 8, justifyContent: 'center' }} onClick={() => setMobileMenuOpen(false)}>Client Login</Link>
-          </div>
-        )}
-      </nav>
-
-      {/* ─── HERO ─── */}
-      <section ref={heroRef} style={{ position: 'relative', minHeight: '100vh', display: 'flex', alignItems: 'flex-end', overflow: 'hidden', background: '#060606' }}>
-        {/* Background image */}
-        {slides.map((s, i) => (
-          <div key={i} style={{
-            position: 'absolute', inset: 0,
-            opacity: i === currentSlide ? 1 : 0,
-            transition: 'opacity 1.2s ease',
-          }}>
-            <Image src={s.image} alt={s.title} fill className="object-cover image-reveal" style={{ opacity: 0.35 }} priority={i === 0} />
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, #0A0A0A 20%, rgba(10,10,10,0.5) 60%, transparent)' }} />
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to right, rgba(10,10,10,0.8) 30%, transparent)' }} />
-          </div>
-        ))}
-
-        {/* Hero content */}
-        <div style={{ position: 'relative', zIndex: 10, maxWidth: 1400, margin: '0 auto', padding: '0 40px 100px', width: '100%' }}>
-          <div style={{ maxWidth: 780 }}>
-            <div key={`label-${currentSlide}`} className="text-reveal" style={{ marginBottom: 24 }}>
-              <span className="section-label">{slide.subtitle}</span>
+          {/* Client portal */}
+          <div
+            className="portal-hover rounded-[20px]"
+            style={{ background: "#fff", border: "0.5px solid #E2E8F0", padding: "72px 60px" }}
+          >
+            <div
+              className="inline-block rounded-lg mb-7"
+              style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", padding: "6px 14px", fontSize: 10, fontWeight: 700, letterSpacing: ".2em", textTransform: "uppercase", color: "#1D4ED8" }}
+            >
+              Client Portal
             </div>
 
-            <h1 key={`title-${currentSlide}`} className="playfair text-reveal" style={{
-              fontSize: 'clamp(52px, 8vw, 110px)',
-              fontWeight: 400,
-              lineHeight: 1.0,
-              color: 'white',
-              marginBottom: 32,
-              whiteSpace: 'pre-line',
-            }}>
-              {slide.title}
-            </h1>
-
-            <p key={`desc-${currentSlide}`} className="text-reveal" style={{
-              fontSize: 17,
-              color: 'rgba(255,255,255,0.55)',
-              lineHeight: 1.7,
-              maxWidth: 520,
-              marginBottom: 48,
-              fontWeight: 300,
-            }}>
-              {slide.description}
+            <h3
+              className="serif"
+              style={{ fontSize: 46, fontWeight: 600, color: "#0F172A", lineHeight: 1.05, marginBottom: 20 }}
+            >
+              Client<br />Secure View
+            </h3>
+            <p style={{ fontSize: 15, color: "#64748B", lineHeight: 1.8, marginBottom: 40 }}>
+              Read-only access to view your complete insurance profile, download policy documents, and check family member records — anytime, from any device.
             </p>
 
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <Link href="/client-login" className="btn-primary">
-                Get Started
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-              </Link>
-              <button className="btn-outline">View Products</button>
-            </div>
-          </div>
-
-          {/* Slide indicators */}
-          <div style={{ position: 'absolute', bottom: 100, right: 40, display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
-            {slides.map((_, i) => (
-              <button key={i} onClick={() => setCurrentSlide(i)} style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                display: 'flex', alignItems: 'center', gap: 10,
-              }}>
-                <span style={{ fontSize: 10, color: i === currentSlide ? 'rgba(255,255,255,0.5)' : 'transparent', fontWeight: 700, letterSpacing: '0.2em' }}>0{i + 1}</span>
-                <div style={{
-                  height: 1,
-                  width: i === currentSlide ? 48 : 16,
-                  background: i === currentSlide ? '#C9A84C' : 'rgba(255,255,255,0.2)',
-                  transition: 'all 0.4s ease',
-                }} />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Scroll indicator */}
-        <div style={{ position: 'absolute', bottom: 40, left: '50%', transform: 'translateX(-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, zIndex: 10 }}>
-          <div style={{ width: 1, height: 48, background: 'linear-gradient(to bottom, transparent, rgba(255,255,255,0.3))', animation: 'fadeIn 2s ease infinite alternate' }} />
-          <span style={{ fontSize: 9, letterSpacing: '0.3em', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', fontWeight: 700 }}>Scroll</span>
-        </div>
-      </section>
-
-      {/* ─── STATS ─── */}
-      <section style={{ padding: '80px 40px', maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
-          {stats.map((stat, i) => (
-            <div key={i} className="stat-card" style={{ padding: '40px 32px' }}>
-              <div style={{ fontSize: 11, color: '#C9A84C', letterSpacing: '0.3em', marginBottom: 16, fontWeight: 800, textTransform: 'uppercase' }}>{stat.icon} {stat.label}</div>
-              <div className="playfair" style={{ fontSize: 48, fontWeight: 700, color: 'white', lineHeight: 1 }}>{stat.value}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ─── QUICK ACTIONS ─── */}
-      <section style={{ padding: '0 40px 100px', maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 2 }}>
-          {[
-            { title: "Policy Download", icon: "↓", desc: "Access your digital copies instantly" },
-            { title: "Instant Renewal", icon: "↻", desc: "Renew your policy in under 2 minutes" },
-            { title: "Claims Status", icon: "◎", desc: "Track your settlement in real time" },
-            { title: "Expert Help", icon: "⟶", desc: "Talk directly to Sampath Kumar" },
-          ].map((action, i) => (
-            <div key={i} className="quick-action">
-              <div style={{ fontSize: 28, color: '#C9A84C', marginBottom: 20, fontWeight: 300 }}>{action.icon}</div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: 'white', marginBottom: 8, letterSpacing: '0.05em' }}>{action.title}</div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.5 }}>{action.desc}</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* ─── SERVICES ─── */}
-      <section id="services" style={{ padding: '100px 40px', maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'start' }} className="lg:grid-cols-2 grid-cols-1">
-          <div>
-            <div className="section-label" style={{ marginBottom: 20 }}>What We Offer</div>
-            <h2 className="playfair" style={{ fontSize: 'clamp(36px, 5vw, 64px)', fontWeight: 400, color: 'white', lineHeight: 1.1, marginBottom: 24 }}>
-              Everything you<br />need, just a<br /><em>click away.</em>
-            </h2>
-            <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.4)', lineHeight: 1.8, fontWeight: 300 }}>
-              Comprehensive insurance solutions tailored to protect what you value most — your health, your family, and your future.
-            </p>
-          </div>
-          <div>
-            {services.map((s, i) => (
-              <div key={i} className="service-item" style={{ padding: '28px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: 11, color: '#C9A84C', letterSpacing: '0.3em', marginBottom: 6, fontWeight: 800, textTransform: 'uppercase' }}>{String(i + 1).padStart(2, '0')}</div>
-                  <div style={{ fontSize: 17, fontWeight: 600, color: 'white', marginBottom: 4 }}>{s.title}</div>
-                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>{s.desc}</div>
-                </div>
-                <div className="service-arrow" style={{ fontSize: 20, color: 'rgba(255,255,255,0.2)', flexShrink: 0, marginLeft: 24 }}>↗</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* ─── PORTALS ─── */}
-      <section style={{ padding: '100px 40px', background: '#0D0D0D' }}>
-        <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-          <div style={{ textAlign: 'center', marginBottom: 64 }}>
-            <div className="section-label" style={{ marginBottom: 16 }}>Dedicated Gateways</div>
-            <h2 className="playfair" style={{ fontSize: 'clamp(36px, 5vw, 60px)', fontWeight: 400, color: 'white' }}>Two portals. One mission.</h2>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 2 }}>
-            {/* Agent Portal */}
-            <div className="portal-card" style={{ padding: '56px 48px' }}>
-              <div style={{ fontSize: 11, color: '#C9A84C', letterSpacing: '0.35em', marginBottom: 32, fontWeight: 800, textTransform: 'uppercase' }}>Sampath Kumar's Hub</div>
-              <h3 className="playfair" style={{ fontSize: 42, fontWeight: 700, color: 'white', marginBottom: 20, lineHeight: 1.1 }}>Agent<br />Workspace</h3>
-              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', lineHeight: 1.8, marginBottom: 40 }}>
-                Full administrative access to manage client profiles, family trees, and automated document storage workflows.
-              </p>
-              <Link href="/login?role=agent" className="btn-primary">
-                Enter Hub
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-              </Link>
-              <div style={{ position: 'absolute', bottom: 32, right: 32, opacity: 0.04, fontSize: 120 }}>⊞</div>
-            </div>
-
-            {/* Client Portal */}
-            <div className="portal-card" style={{ padding: '56px 48px', background: 'linear-gradient(135deg, #141414 0%, #1a1508 100%)' }}>
-              <div style={{ fontSize: 11, color: '#C9A84C', letterSpacing: '0.35em', marginBottom: 32, fontWeight: 800, textTransform: 'uppercase' }}>Customer Portal</div>
-              <h3 className="playfair" style={{ fontSize: 42, fontWeight: 700, color: 'white', marginBottom: 20, lineHeight: 1.1 }}>Client<br />Secure View</h3>
-              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.4)', lineHeight: 1.8, marginBottom: 40 }}>
-                Read-only access for policy holders to safely view profiles and download their personal documents anytime.
-              </p>
-              <Link href="/client-login" className="btn-primary">
-                Client Access
-                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                </svg>
-              </Link>
-              <div style={{ position: 'absolute', bottom: 32, right: 32, opacity: 0.04, fontSize: 120 }}>⊙</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── WHY US ─── */}
-      <section id="why-us" style={{ padding: '120px 40px', maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 100, alignItems: 'center' }} className="lg:grid-cols-2 grid-cols-1">
-          <div style={{ position: 'relative' }}>
-            <div style={{ aspectRatio: '4/5', position: 'relative', overflow: 'hidden' }}>
-              <Image src="https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=1000" alt="Our Team" fill className="object-cover" />
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(10,10,10,0.6) 0%, transparent 50%)' }} />
-            </div>
-            <div style={{
-              position: 'absolute', bottom: -24, right: -24,
-              background: '#C9A84C', padding: '32px 36px',
-            }}>
-              <div className="playfair" style={{ fontSize: 52, fontWeight: 700, color: '#0A0A0A', lineHeight: 1 }}>15+</div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.25em', textTransform: 'uppercase', color: 'rgba(10,10,10,0.6)', marginTop: 6 }}>Years of Service</div>
-            </div>
-          </div>
-
-          <div>
-            <div className="section-label" style={{ marginBottom: 20 }}>Why Maruthi Insure</div>
-            <h2 className="playfair" style={{ fontSize: 'clamp(36px, 4vw, 56px)', fontWeight: 400, color: 'white', lineHeight: 1.1, marginBottom: 48 }}>
-              Heritage of trust,<br /><em>powered by technology.</em>
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 32 }}>
-              {[
-                { title: "Personalized Care", desc: "You are not just a policy number. We know our clients by name." },
-                { title: "Rapid Settlement", desc: "Our claims process is optimized for speed and transparency." },
-                { title: "Digital-First", desc: "Manage everything from your phone. No more paper piles." },
-                { title: "Expert Advice", desc: "Decades of experience to guide your family's future." },
-              ].map((item, i) => (
-                <div key={i}>
-                  <div style={{ width: 24, height: 1, background: '#C9A84C', marginBottom: 16 }} />
-                  <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'white', marginBottom: 8 }}>{item.title}</div>
-                  <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>{item.desc}</div>
-                </div>
+            <div className="flex gap-2.5 flex-wrap mb-11">
+              {CLIENT_FEATURES.map((f) => (
+                <span
+                  key={f}
+                  style={{ fontSize: 11, fontWeight: 600, padding: "6px 14px", background: "#EFF6FF", border: "0.5px solid #BFDBFE", borderRadius: 20, color: "#1D4ED8", letterSpacing: ".05em" }}
+                >
+                  {f}
+                </span>
               ))}
             </div>
+
+            <Link
+              href="/client-login"
+              className="inline-flex items-center gap-2 text-white rounded-lg no-underline transition-colors"
+              style={{ padding: "14px 28px", fontSize: 12, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase", background: "#0B1F3A" }}
+              onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.background = "#162d52")}
+              onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.background = "#0B1F3A")}
+            >
+              Client Login <ArrowIcon size={14} />
+            </Link>
           </div>
         </div>
       </section>
 
-      {/* ─── FOUNDER ─── */}
-      <section id="about" style={{ padding: '120px 40px', background: '#0D0D0D' }}>
-        <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 100, alignItems: 'center' }} className="lg:grid-cols-2 grid-cols-1">
+      {/* ════════════════════════════════════════════════════
+          WHY US
+      ════════════════════════════════════════════════════ */}
+      <div
+        id="why-us"
+        style={{ background: "#fff", borderTop: "0.5px solid #E2E8F0", borderBottom: "0.5px solid #E2E8F0" }}
+      >
+        <div className="max-w-[1280px] mx-auto px-16 pt-20 pb-12">
+          <SectionTag>Why Choose Us</SectionTag>
+          <h2
+            className="serif"
+            style={{ fontSize: "clamp(36px, 4.5vw, 62px)", fontWeight: 600, color: "#0F172A", lineHeight: 1.05 }}
+          >
+            Heritage of trust,<br />
+            <em style={{ color: "#2563EB" }}>powered by technology.</em>
+          </h2>
+        </div>
+
+        <div className="max-w-[1280px] mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+          {WHY_ITEMS.map((w, i) => (
+            <div
+              key={w.title}
+              className="why-card-hover"
+              style={{
+                padding: "72px 48px",
+                borderRight: i < WHY_ITEMS.length - 1 ? "0.5px solid #E2E8F0" : "none",
+                background: hoveredWhy === i ? "#0B1F3A" : "#fff",
+                cursor: "default",
+              }}
+              onMouseEnter={() => setHoveredWhy(i)}
+              onMouseLeave={() => setHoveredWhy(null)}
+            >
+              <div
+                className="why-icon flex items-center justify-center rounded-[14px] mb-6 transition-all"
+                style={{ width: 52, height: 52, fontSize: 24, background: "#EFF6FF" }}
+              >
+                {w.icon}
+              </div>
+              <div
+                className="why-title transition-colors"
+                style={{ fontSize: 14, fontWeight: 800, color: "#0F172A", marginBottom: 10, textTransform: "uppercase", letterSpacing: ".06em" }}
+              >
+                {w.title}
+              </div>
+              <div
+                className="why-body transition-colors"
+                style={{ fontSize: 14, color: "#64748B", lineHeight: 1.75 }}
+              >
+                {w.body}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ height: 72 }} />
+      </div>
+
+      {/* ════════════════════════════════════════════════════
+          FOUNDER
+      ════════════════════════════════════════════════════ */}
+      <section
+        id="about"
+        className="max-w-[1280px] mx-auto px-16 py-28 grid grid-cols-1 lg:grid-cols-2 gap-24 lg:gap-32 items-center"
+      >
+        {/* Image placeholder */}
+        <div
+          className="relative overflow-hidden flex items-center justify-center rounded-[6px]"
+          style={{ aspectRatio: "4/5", background: "#0B1F3A" }}
+        >
+          <span className="serif" style={{ fontSize: 120, fontWeight: 600, color: "rgba(255,255,255,0.07)" }}>
+            SK
+          </span>
+          {/* Badge */}
+          <div
+            className="absolute rounded-[4px]"
+            style={{ bottom: 32, left: -16, background: "#2563EB", padding: "18px 24px", color: "#fff" }}
+          >
+            <div className="serif" style={{ fontSize: 36, fontWeight: 700, lineHeight: 1 }}>15+</div>
+            <div style={{ fontSize: 9, fontWeight: 800, letterSpacing: ".2em", textTransform: "uppercase", color: "rgba(255,255,255,0.65)", marginTop: 4 }}>
+              Years of Service
+            </div>
+          </div>
+        </div>
+
+        {/* Text */}
+        <div>
+          <SectionTag>Our Founder</SectionTag>
+          <div style={{ width: 40, height: 2, background: "#2563EB", marginBottom: 36 }} />
+
+          <blockquote
+            className="serif"
+            style={{ fontSize: "clamp(24px, 3vw, 40px)", color: "#0F172A", lineHeight: 1.35, marginBottom: 28 }}
+          >
+            "Your family's peace of mind is my only priority."
+          </blockquote>
+
+          <p style={{ fontSize: 16, color: "#64748B", lineHeight: 1.9, marginBottom: 48 }}>
+            Over 15 years ago, I started Maruthi Insure Care with a simple mission — to be the most trusted insurance advisor in the community. Today, our digital platform scales that promise, but the core belief remains unchanged: every family deserves real, personal care.
+          </p>
+
+          <div
+            className="flex items-center gap-5 pt-8"
+            style={{ borderTop: "0.5px solid #E2E8F0" }}
+          >
+            <div
+              className="flex items-center justify-center rounded-full shrink-0"
+              style={{ width: 52, height: 52, background: "#0B1F3A" }}
+            >
+              <span className="serif" style={{ fontSize: 18, color: "rgba(255,255,255,0.6)" }}>SK</span>
+            </div>
             <div>
-              <div className="section-label" style={{ marginBottom: 32 }}>A Personal Message</div>
-              <blockquote className="playfair" style={{ fontSize: 'clamp(28px, 3.5vw, 44px)', fontStyle: 'italic', fontWeight: 400, color: 'white', lineHeight: 1.3, marginBottom: 40 }}>
-                "Your family's peace of mind is my only priority."
-              </blockquote>
-              <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.45)', lineHeight: 1.9, fontWeight: 300, marginBottom: 48 }}>
-                Over 15 years ago, I started Maruthi Insure Care with a simple mission: to be the most trusted name in insurance for my neighborhood. Today, technology helps us scale that promise, but the core value remains — real care for real people.
-              </p>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div style={{
-                  width: 56, height: 56,
-                  background: '#C9A84C',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontFamily: 'Playfair Display, serif', fontSize: 20, fontWeight: 700, color: '#0A0A0A',
-                }}>SK</div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'white', letterSpacing: '0.1em', textTransform: 'uppercase' }}>Sampath Kumar R</div>
-                  <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: '0.15em', textTransform: 'uppercase', marginTop: 2 }}>Principal Consultant & Founder</div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: "#0F172A", textTransform: "uppercase", letterSpacing: ".07em" }}>
+                Sampath Kumar R
+              </div>
+              <div style={{ fontSize: 11, color: "#64748B", letterSpacing: ".12em", textTransform: "uppercase", marginTop: 3 }}>
+                Principal Consultant &amp; Founder
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════
+          TESTIMONIAL
+      ════════════════════════════════════════════════════ */}
+      <section className="max-w-[1280px] mx-auto px-16 pb-28">
+        <div
+          className="relative overflow-hidden rounded-[20px]"
+          style={{ background: "#fff", border: "0.5px solid #E2E8F0", padding: "80px 72px" }}
+        >
+          {/* Big quote mark */}
+          <div
+            className="serif absolute pointer-events-none select-none"
+            style={{ top: 10, left: 48, fontSize: 220, color: "#F1F5F9", lineHeight: 1 }}
+          >
+            "
+          </div>
+
+          <div style={{ position: "relative" }}>
+            <SectionTag>Client Story</SectionTag>
+            <blockquote
+              className="serif"
+              style={{ fontSize: "clamp(22px, 2.8vw, 36px)", color: "#0F172A", lineHeight: 1.5, marginBottom: 40, maxWidth: 700 }}
+            >
+              When my father was hospitalised, Sampath sir personally followed up with the hospital and the insurance company. The entire claim was settled in 5 days. I never felt alone.
+            </blockquote>
+
+            <div className="flex items-center gap-4">
+              <div
+                className="flex items-center justify-center rounded-full shrink-0 text-white font-bold text-[17px]"
+                style={{ width: 48, height: 48, background: "#0B1F3A" }}
+              >
+                R
+              </div>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#0F172A" }}>Rajesh Sharma</div>
+                <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>Client since 2019 · Health Insurance</div>
+              </div>
+              <div className="ml-auto flex gap-1" style={{ color: "#2563EB", fontSize: 18 }}>
+                {"★★★★★".split("").map((s, i) => <span key={i}>{s}</span>)}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════
+          CONTACT
+      ════════════════════════════════════════════════════ */}
+      <section id="contact" className="max-w-[1280px] mx-auto px-16 pb-28">
+        <div
+          className="relative overflow-hidden rounded-[24px] flex justify-between items-center flex-wrap gap-10"
+          style={{ background: "#0B1F3A", padding: "80px 72px" }}
+        >
+          <div
+            className="absolute pointer-events-none"
+            style={{ top: -120, right: -80, width: 400, height: 400, background: "radial-gradient(circle, rgba(37,99,235,0.15) 0%, transparent 70%)" }}
+          />
+
+          <div style={{ position: "relative" }}>
+            <SectionTag>Get In Touch</SectionTag>
+            <h2
+              className="serif"
+              style={{ fontSize: "clamp(28px, 3.5vw, 48px)", fontWeight: 600, color: "#fff", lineHeight: 1.1 }}
+            >
+              Have a question?<br />
+              <em>Let's talk.</em>
+            </h2>
+          </div>
+
+          <div className="flex gap-4 flex-wrap" style={{ position: "relative" }}>
+            <a
+              href="tel:+919800000000"
+              className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg no-underline transition-all hover:-translate-y-px"
+              style={{ padding: "16px 30px", fontSize: 12, fontWeight: 800, letterSpacing: ".12em", textTransform: "uppercase" }}
+            >
+              📞 Call Now
+            </a>
+            <a
+              href="https://wa.me/919800000000"
+              className="inline-flex items-center gap-2 text-white/65 rounded-lg no-underline transition-all"
+              style={{ padding: "15px 28px", fontSize: 12, fontWeight: 700, letterSpacing: ".12em", textTransform: "uppercase", border: "1px solid rgba(255,255,255,0.15)" }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.4)";
+                (e.currentTarget as HTMLElement).style.color = "#fff";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.15)";
+                (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.65)";
+              }}
+            >
+              💬 WhatsApp
+            </a>
+          </div>
+        </div>
+      </section>
+
+      {/* ════════════════════════════════════════════════════
+          FOOTER
+      ════════════════════════════════════════════════════ */}
+      <footer style={{ background: "#060F1E", padding: "80px 64px 40px" }}>
+        <div className="max-w-[1280px] mx-auto">
+          <div
+            className="grid gap-16 mb-16"
+            style={{ gridTemplateColumns: "2.5fr 1fr 1fr 1fr" }}
+          >
+            {/* Brand */}
+            <div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-9 h-9 bg-blue-600 rounded-[8px] flex items-center justify-center text-white font-black text-[12px]">
+                  MIC
                 </div>
+                <span style={{ fontSize: 15, fontWeight: 700, color: "#fff" }}>Maruthi Insure Care</span>
               </div>
-            </div>
-            <div style={{ position: 'relative' }}>
-              <div style={{ aspectRatio: '1/1', borderRadius: '50%', overflow: 'hidden', border: '1px solid rgba(201,168,76,0.2)', position: 'relative' }}>
-                <Image src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=800" alt="Sampath Kumar" fill className="object-cover" />
-              </div>
-              <div style={{ position: 'absolute', top: '10%', right: '-5%', width: '40%', aspectRatio: '1/1', border: '1px solid rgba(201,168,76,0.15)', borderRadius: '50%', pointerEvents: 'none' }} />
-              <div style={{ position: 'absolute', top: '20%', right: '5%', width: '20%', aspectRatio: '1/1', border: '1px solid rgba(201,168,76,0.1)', borderRadius: '50%', pointerEvents: 'none' }} />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── FOOTER ─── */}
-      <footer style={{ background: '#060606', borderTop: '1px solid rgba(255,255,255,0.05)', padding: '80px 40px 48px' }}>
-        <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 64, paddingBottom: 64, borderBottom: '1px solid rgba(255,255,255,0.06)', marginBottom: 40 }} className="lg:grid-cols-3 grid-cols-1">
-            <div>
-              <div className="playfair" style={{ fontSize: 24, fontWeight: 700, color: 'white', marginBottom: 16 }}>Maruthi Insure Care</div>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', lineHeight: 1.8, maxWidth: 320, marginBottom: 32 }}>
-                Dedicated to providing comprehensive insurance solutions with a personal touch. Securing your future, one policy at a time.
+              <p style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", lineHeight: 1.8, maxWidth: 280, marginBottom: 28 }}>
+                Comprehensive insurance with a personal touch — securing your future, one family at a time.
               </p>
-              <div style={{ display: 'flex', gap: 12 }}>
-                {['◈', '◉', '◎', '◍'].map((icon, i) => (
-                  <div key={i} style={{
-                    width: 40, height: 40, border: '1px solid rgba(255,255,255,0.08)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: 'rgba(255,255,255,0.3)', cursor: 'pointer', fontSize: 16,
-                    transition: 'all 0.2s',
-                  }}>{icon}</div>
+              <div className="flex gap-3 flex-wrap">
+                {[{ icon: "▶", label: "Google Play" }, { icon: "🍎", label: "App Store" }].map((a) => (
+                  <a
+                    key={a.label}
+                    href="#"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", background: "rgba(255,255,255,0.04)", border: "0.5px solid rgba(255,255,255,0.07)", borderRadius: 8, color: "rgba(255,255,255,0.35)", fontSize: 12, fontWeight: 600, textDecoration: "none", transition: "color .2s" }}
+                    onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.65)")}
+                    onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.35)")}
+                  >
+                    {a.icon} {a.label}
+                  </a>
                 ))}
               </div>
             </div>
+
+            {/* Products */}
             <div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.3em', textTransform: 'uppercase', color: '#C9A84C', marginBottom: 28 }}>Services</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                {["Health Insurance", "Life Insurance", "Vehicle Insurance", "Wealth Creation"].map(s => (
-                  <a key={s} href="#" className="footer-link">{s}</a>
-                ))}
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".25em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 22 }}>
+                Products
               </div>
+              {["Health Insurance", "Life Insurance", "Vehicle Insurance", "Wealth Creation", "Home & Travel"].map((l) => (
+                <a key={l} href="#products" className="footer-link">{l}</a>
+              ))}
             </div>
+
+            {/* Portals */}
             <div>
-              <div style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.3em', textTransform: 'uppercase', color: '#C9A84C', marginBottom: 28 }}>Contact</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', lineHeight: 1.6 }}>Bengaluru, Karnataka<br />India</div>
-                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>+91 98XXX XXXXX</div>
-                <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)' }}>sampath@maruthiinsure.care</div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".25em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 22 }}>
+                Portals
+              </div>
+              {[["Agent Login", "/login"], ["Client Login", "/client-login"], ["Document Vault", "/client-login"], ["Claims Tracker", "#"], ["Renewal Portal", "#"]].map(([l, h]) => (
+                <Link key={l} href={h} className="footer-link">{l}</Link>
+              ))}
+            </div>
+
+            {/* Contact */}
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".25em", textTransform: "uppercase", color: "rgba(255,255,255,0.35)", marginBottom: 22 }}>
+                Contact
+              </div>
+              <div style={{ fontSize: 13, color: "rgba(255,255,255,0.3)", lineHeight: 2.1 }}>
+                <div>Bengaluru, Karnataka</div>
+                <div>India — 560001</div>
+                <div style={{ marginTop: 8 }}>+91 98XXX XXXXX</div>
+                <div>sampath@maruthiinsure.care</div>
               </div>
             </div>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.15em', textTransform: 'uppercase' }}>© 2026 Maruthi Insure Care. All rights reserved.</div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.2)', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-              Designed by <a href="https://auxacode.com" style={{ color: '#C9A84C', textDecoration: 'none' }}>Auxacode Technologies</a>
+
+          {/* Bottom bar */}
+          <div
+            className="flex justify-between items-center flex-wrap gap-3 pt-7"
+            style={{ borderTop: "0.5px solid rgba(255,255,255,0.05)" }}
+          >
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", letterSpacing: ".08em", textTransform: "uppercase" }}>
+              © 2026 Maruthi Insure Care. All rights reserved.
+            </div>
+            <div style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", letterSpacing: ".08em", textTransform: "uppercase" }}>
+              Built by{" "}
+              <a href="https://auxacode.com" style={{ color: "rgba(37,99,235,0.6)", textDecoration: "none" }}>
+                Auxacode Technologies
+              </a>
             </div>
           </div>
         </div>
       </footer>
     </div>
   );
-}
+}   
