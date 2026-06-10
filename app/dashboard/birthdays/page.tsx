@@ -386,39 +386,104 @@ export default function BirthdaysPage() {
     canvas.toBlob(b => b ? resolve(b) : reject("Blob null"), "image/png", 0.97);
   });
 
-  const handleShare = async () => {
-    if (!selectedPerson) return;
-    setGenerating(true); setShareStatus("idle");
-    try {
-      const blob = await generateCardBlob();
-      const prefix = activeTab==="birthdays"?"birthday":"anniversary";
-      const file = new File([blob],`${prefix}-${selectedPerson.name.replace(/\s+/g,"-")}.png`,{type:"image/png"});
-      const whatsappText = `${selectedTemplate.tamilWish}\n\n${message}\n\n— ${senderName}\nMaruthi Insure Care`;
-      const rawPhone = selectedPerson.phone?.replace(/\D/g,"")||"";
-      const phone = rawPhone.startsWith("91")?rawPhone:rawPhone?`91${rawPhone}`:"";
+ const handleShare = async () => {
+  if (!selectedPerson) return;
 
-      if (navigator.canShare&&navigator.canShare({files:[file]})) {
-        await navigator.share({files:[file],text:whatsappText,title:`Wishes for ${selectedPerson.name}`});
-        setShareStatus("success");
-      } else {
-        const url=URL.createObjectURL(blob);
-        const a=document.createElement("a"); a.href=url; a.download=file.name; a.click();
-        URL.revokeObjectURL(url);
-        await new Promise(r=>setTimeout(r,600));
-        console.log("Phone:", selectedPerson.phone);
-        console.log("WhatsApp URL:", `https://wa.me/${phone}?text=${encodeURIComponent(whatsappText)}`);
-       window.location.href =
-  `https://wa.me/${phone}?text=${encodeURIComponent(whatsappText)}`;
-        setShareStatus("success");
-      }
-} catch (err) {
-  console.error("WhatsApp Share Error:", err);
-  alert(JSON.stringify(err));
-  setShareStatus("error");
-} finally {
-  setGenerating(false);
-}
-  };
+  setGenerating(true);
+  setShareStatus("idle");
+
+  try {
+    // Generate card
+    const blob = await generateCardBlob();
+
+    const prefix =
+      activeTab === "birthdays" ? "birthday" : "anniversary";
+
+    const fileName = `${prefix}-${selectedPerson.name
+      .replace(/\s+/g, "-")
+      .toLowerCase()}.png`;
+
+    const file = new File([blob], fileName, {
+      type: "image/png",
+    });
+
+    // WhatsApp message
+    const whatsappText = [
+      selectedTemplate.tamilWish,
+      "",
+      message,
+      "",
+      `— ${senderName}`,
+      "Maruthi Insure Care",
+    ].join("\n");
+
+    // Clean phone number
+    const phone = (selectedPerson.phone || "")
+      .replace(/\D/g, "")
+      .replace(/^0+/, "");
+
+    const whatsappNumber =
+      phone.length === 10
+        ? `91${phone}`
+        : phone;
+
+    const whatsappUrl = whatsappNumber
+      ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
+          whatsappText
+        )}`
+      : `https://wa.me/?text=${encodeURIComponent(
+          whatsappText
+        )}`;
+
+    console.log("WhatsApp Number:", whatsappNumber);
+    console.log("WhatsApp URL:", whatsappUrl);
+
+    // Mobile Native Share
+    if (
+      navigator.share &&
+      navigator.canShare &&
+      navigator.canShare({ files: [file] })
+    ) {
+      await navigator.share({
+        files: [file],
+        title: `${activeTab === "birthdays" ? "Birthday" : "Anniversary"} Wishes`,
+        text: whatsappText,
+      });
+
+      setShareStatus("success");
+      return;
+    }
+
+    // Desktop fallback
+    const imageUrl = URL.createObjectURL(blob);
+
+    const downloadLink = document.createElement("a");
+    downloadLink.href = imageUrl;
+    downloadLink.download = fileName;
+    document.body.appendChild(downloadLink);
+    downloadLink.click();
+    document.body.removeChild(downloadLink);
+
+    setTimeout(() => {
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      URL.revokeObjectURL(imageUrl);
+    }, 500);
+
+    setShareStatus("success");
+  } catch (error) {
+    console.error("WhatsApp Share Error:", error);
+
+    setShareStatus("error");
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : "Failed to generate or share greeting card."
+    );
+  } finally {
+    setGenerating(false);
+  }
+};
 
   const handleDownload = async () => {
     if (!selectedPerson) return;
@@ -836,7 +901,7 @@ export default function BirthdaysPage() {
           width: 100%;
           border-radius: 24px 24px 0 0;
           max-height: 96vh;
-          overflow: hidden;
+          overflow: auto;
           display: flex;
           flex-direction: column;
           animation: slideUp .28s cubic-bezier(.34,1.4,.64,1);
@@ -1062,15 +1127,23 @@ export default function BirthdaysPage() {
           scrollbar-color: #e2e8f0 transparent;
           padding-right: 2px;
         }
-        @media (max-width: 767px) {
-          .template-grid {
-            grid-template-columns: unset;
-            display: flex;
-            overflow-x: auto;
-            overflow-y: hidden;
-            max-height: none;
-          }
-        }
+       @media (max-width: 767px) {
+  .template-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+
+    max-height: 260px;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    padding-right: 4px;
+  }
+
+  .template-btn {
+    min-width: unset;
+  }
+}
         .template-btn {
           padding: 9px 7px;
           border-radius: 12px;
