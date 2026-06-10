@@ -405,11 +405,19 @@ export default function BirthdaysPage() {
         const a=document.createElement("a"); a.href=url; a.download=file.name; a.click();
         URL.revokeObjectURL(url);
         await new Promise(r=>setTimeout(r,600));
-        window.open(phone?`https://wa.me/${phone}?text=${encodeURIComponent(whatsappText)}`:`https://wa.me/?text=${encodeURIComponent(whatsappText)}`,"_blank");
+        console.log("Phone:", selectedPerson.phone);
+        console.log("WhatsApp URL:", `https://wa.me/${phone}?text=${encodeURIComponent(whatsappText)}`);
+       window.location.href =
+  `https://wa.me/${phone}?text=${encodeURIComponent(whatsappText)}`;
         setShareStatus("success");
       }
-    } catch(err:any) { if(err?.name!=="AbortError") setShareStatus("error"); }
-    finally { setGenerating(false); }
+} catch (err) {
+  console.error("WhatsApp Share Error:", err);
+  alert(JSON.stringify(err));
+  setShareStatus("error");
+} finally {
+  setGenerating(false);
+}
   };
 
   const handleDownload = async () => {

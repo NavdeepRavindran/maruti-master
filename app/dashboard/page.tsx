@@ -104,6 +104,7 @@ export default function DashboardPage() {
     { label: "Documents",          value: stats.totalDocuments,     icon: <IC.Folder />, sub: "Stored files",      ib: "bg-violet-50 text-violet-600",bb: "bg-violet-50 text-violet-600 ring-1 ring-violet-100" },
   ];
 
+  
   const actions = [
     { label: "Add Client",     icon: <IC.UserPlus />, href: "/dashboard/clients?action=add", h: "hover:bg-blue-600   hover:border-blue-600   hover:text-white" },
     { label: "Upload Policy",  icon: <IC.Upload />,   href: "/dashboard/documents",           h: "hover:bg-violet-600 hover:border-violet-600 hover:text-white" },
