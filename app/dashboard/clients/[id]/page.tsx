@@ -26,7 +26,7 @@ interface ClientData {
   family_count?: number;
   document_count?: number;
   clientloginid?: string;
-  temporarypassword?: string;
+  plain_password?: string;
   profile_pic?: string;
 }
 
@@ -747,7 +747,7 @@ export default function ClientProfilePage({
                 <div className="flex items-center gap-2">
                   <input
                     readOnly
-                    value={client.clientloginid || ""}
+                    value={client.plain_password || ""}
                     className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-bold text-slate-700 outline-none"
                   />
                   <button

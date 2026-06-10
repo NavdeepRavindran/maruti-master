@@ -93,9 +93,18 @@ export async function POST(request: Request) {
     const rawBody = await request.json();
     const validatedData = clientSchema.parse(rawBody);
 
-    const { data: seqData, error: seqError } = await supabaseAdmin.rpc("get_next_client_id");
-    if (seqError) throw new Error("Failed to generate Client ID: " + seqError.message);
+const { data: existingClient } = await supabaseAdmin
+  .from("clients")
+  .select("id")
+  .eq("phone", validatedData.phone)
+  .maybeSingle();
 
+if (existingClient) {
+  return NextResponse.json(
+    { error: "Mobile number already exists" },
+    { status: 400 }
+  );
+}
     const temporaryPassword = crypto.randomUUID().replace(/-/g, "").substring(0, 8).toUpperCase();
     const hashedPassword = bcrypt.hashSync(temporaryPassword, 10);
 
@@ -120,8 +129,9 @@ export async function POST(request: Request) {
         profile_pic: validatedData.profilePic || null, // ← ADDED: saves photo on create
         status: "Active",
         agent_id: validatedData.agent_id || null,
-        clientloginid: seqData,
+        clientloginid: validatedData.phone,
         temporarypassword: hashedPassword,
+        plain_password: temporaryPassword,
       })
       .select()
       .single();
@@ -132,15 +142,15 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      {
-        client: {
-          ...data,
-          clientLoginId: seqData,
-          temporaryPassword,
-        },
-      },
-      { status: 201 }
-    );
+  {
+    client: {
+      ...data,
+      clientLoginId: validatedData.phone,
+      temporaryPassword,
+    },
+  },
+  { status: 201 }
+);
   } catch (err: any) {
     if (err?.name === "ZodError") {
       return NextResponse.json({ error: "Validation failed", details: err.flatten() }, { status: 400 });
