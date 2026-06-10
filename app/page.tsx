@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import InstallButton from "@/components/InstallButton";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
@@ -45,6 +46,7 @@ export default function LoginPage() {
   }, []);
 
   return (
+    
     <div
       style={{
         fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -56,6 +58,7 @@ export default function LoginPage() {
         overflow: "hidden",
       }}
     >
+    <InstallButton />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Lora:ital,wght@0,600;1,600&display=swap');
 
@@ -152,6 +155,8 @@ export default function LoginPage() {
         }
       `}</style>
 
+      
+
       {/* Decorative layers */}
       <div className="mic-grid" aria-hidden="true" />
       <div className="mic-glow" aria-hidden="true" />
@@ -170,6 +175,7 @@ export default function LoginPage() {
           borderBottom: "0.5px solid rgba(255,255,255,0.07)",
         }}
       >
+        
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <div
             style={{
@@ -463,18 +469,6 @@ export default function LoginPage() {
         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", letterSpacing: "0.06em" }}>
           © 2026 Maruthi Insure Care · Bengaluru, Karnataka
         </span>
-
-        <div style={{ display: "flex", gap: 20 }}>
-          {[
-            ["Privacy", "#"],
-            ["Terms", "#"],
-            ["Support", "#"],
-          ].map(([label, href]) => (
-            <a key={label} href={href} className="mic-footer-link">
-              {label}
-            </a>
-          ))}
-        </div>
 
         <span style={{ fontSize: 11, color: "rgba(255,255,255,0.2)", letterSpacing: "0.06em" }}>
           Built by{" "}
