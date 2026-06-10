@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import InstallButton from "@/components/InstallButton";
+import InstallButton from "../app/components/InstallButton";
 
 // ── Icons ─────────────────────────────────────────────────────────────────────
 
