@@ -206,280 +206,171 @@ export default function BirthdaysPage() {
   };
 
   // ── Canvas generation ────────────────────────────────────────────────────
-  const generateCardBlob = (): Promise<Blob> => new Promise(async (resolve, reject) => {
-    if (!selectedPerson) return reject("No person");
-    const tpl = selectedTemplate;
-    const years = getYears(selectedPerson.date_of_birth);
-    const W = 1080, H = 1440;
-    const canvas = document.createElement("canvas");
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext("2d")!;
+ const generateCardBlob = (): Promise<Blob> => new Promise(async (resolve, reject) => {
+  if (!selectedPerson) return reject("No person");
+  const tpl = selectedTemplate;
+  const years = getYears(selectedPerson.date_of_birth);
+  const W = 1080, H = 1440;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d")!;
 
-    // ── Background
-    const bg = ctx.createLinearGradient(0,0,W,H);
-    bg.addColorStop(0,tpl.bg1); bg.addColorStop(0.5,tpl.bg2); bg.addColorStop(1,tpl.bg3);
-    ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
+  const bg = ctx.createLinearGradient(0,0,W,H);
+  bg.addColorStop(0,tpl.bg1); bg.addColorStop(0.5,tpl.bg2); bg.addColorStop(1,tpl.bg3);
+  ctx.fillStyle=bg; ctx.fillRect(0,0,W,H);
 
-    // ── Ambient glows
-    const g1=ctx.createRadialGradient(W*.15,H*.1,0,W*.15,H*.1,360);
-    g1.addColorStop(0,tpl.accent+"22"); g1.addColorStop(1,"transparent");
-    ctx.fillStyle=g1; ctx.fillRect(0,0,W,H);
-    const g2=ctx.createRadialGradient(W*.85,H*.9,0,W*.85,H*.9,300);
-    g2.addColorStop(0,tpl.accent+"18"); g2.addColorStop(1,"transparent");
-    ctx.fillStyle=g2; ctx.fillRect(0,0,W,H);
+  const g1=ctx.createRadialGradient(W*.15,H*.08,0,W*.15,H*.08,400);
+  g1.addColorStop(0,tpl.accent+"1a"); g1.addColorStop(1,"transparent");
+  ctx.fillStyle=g1; ctx.fillRect(0,0,W,H);
 
-    // ── Border system
-    const M=36;
-    ctx.strokeStyle=tpl.accent; ctx.lineWidth=3;
-    ctx.strokeRect(M,M,W-M*2,H-M*2);
-    ctx.strokeStyle=tpl.accent+"44"; ctx.lineWidth=1;
-    ctx.strokeRect(M+14,M+14,W-(M+14)*2,H-(M+14)*2);
+  const M=44;
+  ctx.strokeStyle=tpl.accent; ctx.lineWidth=3; ctx.strokeRect(M,M,W-M*2,H-M*2);
+  ctx.strokeStyle=tpl.accent+"44"; ctx.lineWidth=1; ctx.strokeRect(M+18,M+18,W-(M+18)*2,H-(M+18)*2);
 
-    // ── Corner flowers
-    const CO=M+4;
-    drawFlower(ctx,CO+16,CO+16,tpl.accent,tpl.accentLight);
-    drawFlower(ctx,W-CO-16,CO+16,tpl.accent,tpl.accentLight);
-    drawFlower(ctx,CO+16,H-CO-16,tpl.accent,tpl.accentLight);
-    drawFlower(ctx,W-CO-16,H-CO-16,tpl.accent,tpl.accentLight);
+  drawFlower(ctx,M+20,M+20,tpl.accent,tpl.accentLight);
+  drawFlower(ctx,W-M-20,M+20,tpl.accent,tpl.accentLight);
+  drawFlower(ctx,M+20,H-M-20,tpl.accent,tpl.accentLight);
+  drawFlower(ctx,W-M-20,H-M-20,tpl.accent,tpl.accentLight);
 
-    // ── Top ornament band
-    const bY=M+30;
-    ctx.fillStyle=tpl.accent+"1a"; ctx.fillRect(M+16,bY,W-(M+16)*2,76);
-    ctx.strokeStyle=tpl.accent+"44"; ctx.lineWidth=1;
-    ctx.strokeRect(M+16,bY,W-(M+16)*2,76);
-    ctx.font="bold 34px serif"; ctx.fillStyle=tpl.accent; ctx.textAlign="center";
-    ctx.fillText(tpl.kolam, W/2, bY+48);
+  const bY=M+34;
+  ctx.fillStyle=tpl.accent+"1a"; ctx.fillRect(M+20,bY,W-(M+20)*2,78);
+  ctx.font="bold 34px serif"; ctx.fillStyle=tpl.accent; ctx.textAlign="center";
+  ctx.fillText(tpl.kolam, W/2, bY+52);
 
-    // ── Large emoji
-    ctx.font="130px serif"; ctx.textAlign="center";
-    ctx.fillText(tpl.emoji, W/2, 272);
+  ctx.font="100px serif"; ctx.textAlign="center";
+  ctx.fillText(tpl.emoji, W/2, bY+190);
 
-    // ── Tamil heading
-    ctx.font="bold 56px 'Noto Sans Tamil',serif";
-    ctx.fillStyle=tpl.accent; ctx.textAlign="center";
-    ctx.fillText(tpl.tamilWish, W/2, 356);
-    ctx.font="32px 'Noto Sans Tamil',serif";
-    ctx.fillStyle=tpl.textSub;
-    wrapText(ctx, tpl.tamilSub, W/2, 404, W-200, 46);
+  // ── Tamil wish — auto-scale to never overflow
+  ctx.save();
+  ctx.font="bold 48px 'Noto Sans Tamil',serif";
+  ctx.fillStyle=tpl.accent; ctx.textAlign="center";
+  const tamilW = ctx.measureText(tpl.tamilWish).width;
+  if (tamilW > W-120) ctx.font=`bold ${Math.floor(48*(W-120)/tamilW)}px 'Noto Sans Tamil',serif`;
+  ctx.fillText(tpl.tamilWish, W/2, bY+278);
+  ctx.restore();
 
-    drawDivider(ctx, W/2, 476, 400, tpl.accent);
+  ctx.font="28px 'Noto Sans Tamil',serif";
+  ctx.fillStyle=tpl.textSub; ctx.textAlign="center";
+  wrapText(ctx, tpl.tamilSub, W/2, bY+326, W-200, 42);
 
-    ctx.font="italic 34px Georgia,serif"; ctx.fillStyle=tpl.textSub; ctx.textAlign="center";
-    ctx.fillText(activeTab==="birthdays"?"✦  Heartfelt Birthday Wishes to  ✦":"✦  Heartfelt Anniversary Wishes to  ✦", W/2, 546);
+  drawDivider(ctx, W/2, bY+410, 360, tpl.accent);
+  ctx.font="italic 30px Georgia,serif"; ctx.fillStyle=tpl.textSub; ctx.textAlign="center";
+  ctx.fillText(
+    activeTab==="birthdays"?"✦  Birthday Wishes to  ✦":"✦  Anniversary Wishes to  ✦",
+    W/2, bY+452
+  );
 
-    // ── Photo  (centered) ────────────────────────────────────────────────────
-    const photoR = 130;           // circle radius
-    const photoX = W / 2;         // horizontally centered
-    const photoY = 680;           // circle center Y
+  // ── PROFILE ROW: photo LEFT, name+years RIGHT
+  const rowTop = bY+490;
+  const photoR = 110;
+  const photoX = M+90+photoR;
+  const photoY = rowTop+photoR+10;
 
-    // Draw clipped circle
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(photoX, photoY, photoR, 0, Math.PI * 2);
-    ctx.clip();
+  ctx.save();
+  ctx.beginPath(); ctx.arc(photoX,photoY,photoR,0,Math.PI*2); ctx.clip();
+  if (clientPhoto) {
+    await new Promise<void>(res=>{
+      const img=new Image();
+      img.onload=()=>{ ctx.drawImage(img,photoX-photoR,photoY-photoR,photoR*2,photoR*2); res(); };
+      img.onerror=()=>res();
+      img.src=clientPhoto;
+    });
+  } else {
+    const ig=ctx.createLinearGradient(photoX-photoR,photoY-photoR,photoX+photoR,photoY+photoR);
+    ig.addColorStop(0,tpl.accent+"cc"); ig.addColorStop(1,tpl.bg2);
+    ctx.fillStyle=ig; ctx.fillRect(photoX-photoR,photoY-photoR,photoR*2,photoR*2);
+    ctx.font=`bold 90px Georgia,serif`; ctx.fillStyle=tpl.textMain; ctx.textAlign="center";
+    ctx.fillText(selectedPerson.name.charAt(0).toUpperCase(), photoX, photoY+32);
+  }
+  ctx.restore();
 
-    if (clientPhoto) {
-      await new Promise<void>(res => {
-        const img = new Image();
-        img.onload = () => {
-          // cover-fit: scale to fill the circle square
-          const size = photoR * 2;
-          ctx.drawImage(img, photoX - photoR, photoY - photoR, size, size);
-          res();
-        };
-        img.onerror = () => res();
-        img.src = clientPhoto;
-      });
-    } else {
-      // Initials fallback
-      const ig = ctx.createLinearGradient(photoX - photoR, photoY - photoR, photoX + photoR, photoY + photoR);
-      ig.addColorStop(0, tpl.accent + "cc");
-      ig.addColorStop(1, tpl.bg2);
-      ctx.fillStyle = ig;
-      ctx.fillRect(photoX - photoR, photoY - photoR, photoR * 2, photoR * 2);
-      ctx.font = `bold 110px Georgia,serif`;
-      ctx.fillStyle = tpl.textMain;
-      ctx.textAlign = "center";
-      ctx.fillText(selectedPerson.name.charAt(0).toUpperCase(), photoX, photoY + 38);
-    }
-    ctx.restore();
-
-    // Ring layers — outermost first, innermost last
-    ctx.beginPath(); ctx.arc(photoX, photoY, photoR + 22, 0, Math.PI * 2);
-    ctx.strokeStyle = tpl.accent + "18"; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.beginPath(); ctx.arc(photoX, photoY, photoR + 12, 0, Math.PI * 2);
-    ctx.strokeStyle = tpl.accent + "44"; ctx.lineWidth = 2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(photoX, photoY, photoR + 4,  0, Math.PI * 2);
-    ctx.strokeStyle = tpl.accent + "cc"; ctx.lineWidth = 5; ctx.stroke();
-
-    // ── Name  (centered, below photo) ────────────────────────────────────────
-    const nameY  = photoY + photoR + 70;   // first text baseline
-    const nameFs = selectedPerson.name.length > 18 ? 62
-                 : selectedPerson.name.length > 12 ? 74
-                 : 88;
-    ctx.font = `bold ${nameFs}px Georgia,serif`;
-    ctx.fillStyle   = tpl.textMain;
-    ctx.textAlign   = "center";
-    ctx.shadowColor = tpl.accent;
-    ctx.shadowBlur  = 22;
-    // measure to decide single vs wrapped line
-    const nameW = ctx.measureText(selectedPerson.name).width;
-    if (nameW <= W - 160) {
-      ctx.fillText(selectedPerson.name, W / 2, nameY);
-    } else {
-      // split at last space before midpoint
-      const words = selectedPerson.name.split(" ");
-      const mid   = Math.ceil(words.length / 2);
-      const line1 = words.slice(0, mid).join(" ");
-      const line2 = words.slice(mid).join(" ");
-      ctx.fillText(line1, W / 2, nameY);
-      ctx.fillText(line2, W / 2, nameY + nameFs * 1.15);
-    }
-    ctx.shadowBlur = 0;
-
-    // ── Years pill  (centered, below name) ────────────────────────────────────
-    const pillText = activeTab === "birthdays"
-      ? `🎂  Turning ${years} Years of Grace`
-      : `💍  ${years} Years of Togetherness`;
-    const pillY  = nameY + (nameW > W - 160 ? nameFs * 2.3 : nameFs * 1.2) + 18;
-    const pW     = 500; const pH = 58;
-    const pX     = W / 2 - pW / 2;
-    ctx.fillStyle   = tpl.accent + "20";
-    roundRect(ctx, pX, pillY, pW, pH, 29); ctx.fill();
-    ctx.strokeStyle = tpl.accent + "55"; ctx.lineWidth = 1.5;
-    roundRect(ctx, pX, pillY, pW, pH, 29); ctx.stroke();
-    ctx.font      = `500 28px Georgia,serif`;
-    ctx.fillStyle = tpl.accent;
-    ctx.textAlign = "center";
-    ctx.fillText(pillText, W / 2, pillY + 37);
-
-    // ── Dynamic divider Y — sits just below the pill ──────────────────────────
-    const divY1 = pillY + pH + 40;
-
-    // ── Divider + message ─────────────────────────────────────────────────
-    drawDivider(ctx, W/2, 854, 360, tpl.accent);
-
-    const mX=80, mY=882, mW=W-160, mH=220;
-    ctx.fillStyle="rgba(255,255,255,0.035)";
-    roundRect(ctx,mX,mY,mW,mH,20); ctx.fill();
-    ctx.strokeStyle=tpl.borderGold+"44"; ctx.lineWidth=1.5;
-    roundRect(ctx,mX,mY,mW,mH,20); ctx.stroke();
-    ctx.font="italic 33px Georgia,serif"; ctx.fillStyle=tpl.textMain; ctx.textAlign="center";
-    wrapText(ctx, `"${message}"`, W/2, mY+56, mW-80, 50);
-
-    drawDivider(ctx, W/2, 1142, 340, tpl.accent);
-
-    // ── Sender
-    ctx.font="bold 46px Georgia,serif"; ctx.fillStyle=tpl.accent; ctx.textAlign="center";
-    ctx.fillText(senderName, W/2, 1210);
-    ctx.font="400 30px Georgia,serif"; ctx.fillStyle=tpl.textSub;
-    ctx.fillText("Maruthi Insure Care", W/2, 1254);
-
-    // ── Bottom band
-    const bbY=H-M-30-76;
-    ctx.fillStyle=tpl.accent+"1a"; ctx.fillRect(M+16,bbY,W-(M+16)*2,76);
-    ctx.strokeStyle=tpl.accent+"44"; ctx.lineWidth=1;
-    ctx.strokeRect(M+16,bbY,W-(M+16)*2,76);
-    ctx.font="300 24px Georgia,serif"; ctx.fillStyle=tpl.accent+"99"; ctx.textAlign="center";
-    ctx.fillText("❁  Heritage of Trust Since 2011  ❁", W/2, bbY+48);
-
-    canvas.toBlob(b => b ? resolve(b) : reject("Blob null"), "image/png", 0.97);
+  [photoR+20, photoR+10, photoR+3].forEach((r,i)=>{
+    ctx.beginPath(); ctx.arc(photoX,photoY,r,0,Math.PI*2);
+    ctx.strokeStyle=tpl.accent+(["18","44","cc"][i]); ctx.lineWidth=[1.5,2,5][i]; ctx.stroke();
   });
+
+  const textX = photoX+photoR+60;
+  const textMaxW = W-textX-M-40;
+  const textCX = textX+textMaxW/2;
+
+  const nameStr = selectedPerson.name;
+  const nfs = nameStr.length>18?52:nameStr.length>12?64:76;
+  ctx.font=`bold ${nfs}px Georgia,serif`;
+  ctx.fillStyle=tpl.textMain; ctx.textAlign="center";
+  ctx.shadowColor=tpl.accent; ctx.shadowBlur=16;
+  if (ctx.measureText(nameStr).width <= textMaxW) {
+    ctx.fillText(nameStr, textCX, photoY-20);
+  } else {
+    const words=nameStr.split(" "), mid=Math.ceil(words.length/2);
+    ctx.fillText(words.slice(0,mid).join(" "), textCX, photoY-44);
+    ctx.fillText(words.slice(mid).join(" "), textCX, photoY-44+nfs*1.2);
+  }
+  ctx.shadowBlur=0;
+
+  const pillTxt = activeTab==="birthdays"?`🎂  Turning ${years} Years`:`💍  ${years} Years Together`;
+  const pW=Math.min(textMaxW,360), pH=50, pX=textCX-pW/2, pY=photoY+28;
+  ctx.fillStyle=tpl.accent+"20"; roundRect(ctx,pX,pY,pW,pH,25); ctx.fill();
+  ctx.strokeStyle=tpl.accent+"55"; ctx.lineWidth=1.5; roundRect(ctx,pX,pY,pW,pH,25); ctx.stroke();
+  ctx.font="500 24px Georgia,serif"; ctx.fillStyle=tpl.accent; ctx.textAlign="center";
+  ctx.fillText(pillTxt, textCX, pY+32);
+
+  const msgTopY = photoY+photoR+55;
+  drawDivider(ctx, W/2, msgTopY, 340, tpl.accent);
+  const mX=90, mY=msgTopY+28, mW=W-180, mH=190;
+  ctx.fillStyle="rgba(255,255,255,0.03)"; roundRect(ctx,mX,mY,mW,mH,18); ctx.fill();
+  ctx.strokeStyle=tpl.borderGold+"44"; ctx.lineWidth=1.5; roundRect(ctx,mX,mY,mW,mH,18); ctx.stroke();
+  ctx.font="italic 30px Georgia,serif"; ctx.fillStyle=tpl.textMain; ctx.textAlign="center";
+  wrapText(ctx,`"${message}"`,W/2,mY+48,mW-80,46);
+
+  const sendY = mY+mH+55;
+  drawDivider(ctx, W/2, sendY, 320, tpl.accent);
+  ctx.font="bold 42px Georgia,serif"; ctx.fillStyle=tpl.accent; ctx.textAlign="center";
+  ctx.fillText(senderName, W/2, sendY+66);
+  ctx.font="400 26px Georgia,serif"; ctx.fillStyle=tpl.textSub;
+  ctx.fillText("Maruthi Insure Care", W/2, sendY+104);
+
+  const bbY=H-M-34-76;
+  ctx.fillStyle=tpl.accent+"1a"; ctx.fillRect(M+20,bbY,W-(M+20)*2,76);
+  ctx.font="300 20px Georgia,serif"; ctx.fillStyle=tpl.accent+"88"; ctx.textAlign="center";
+  ctx.fillText("❁  Heritage of Trust Since 2011  ❁", W/2, bbY+47);
+
+  canvas.toBlob(b=>b?resolve(b):reject("Blob null"),"image/png",0.97);
+});
 
  const handleShare = async () => {
   if (!selectedPerson) return;
-
-  setGenerating(true);
-  setShareStatus("idle");
-
+  setGenerating(true); setShareStatus("idle");
   try {
-    // Generate card
     const blob = await generateCardBlob();
+    const prefix = activeTab==="birthdays"?"birthday":"anniversary";
+    const fileName = `${prefix}-${selectedPerson.name.replace(/\s+/g,"-").toLowerCase()}.png`;
 
-    const prefix =
-      activeTab === "birthdays" ? "birthday" : "anniversary";
-
-    const fileName = `${prefix}-${selectedPerson.name
-      .replace(/\s+/g, "-")
-      .toLowerCase()}.png`;
-
-    const file = new File([blob], fileName, {
-      type: "image/png",
-    });
-
-    // WhatsApp message
-    const whatsappText = [
-      selectedTemplate.tamilWish,
-      "",
-      message,
-      "",
-      `— ${senderName}`,
-      "Maruthi Insure Care",
+    const waText = [
+      selectedTemplate.tamilWish,"",message,"",`— ${senderName}`,"Maruthi Insure Care"
     ].join("\n");
 
-    // Clean phone number
-    const phone = (selectedPerson.phone || "")
-      .replace(/\D/g, "")
-      .replace(/^0+/, "");
+    const raw = (selectedPerson.phone||"").replace(/\D/g,"").replace(/^0+/,"");
+    const waNumber = raw.length===10 ? `91${raw}` : raw;
+    const waUrl = waNumber
+      ? `https://wa.me/${waNumber}?text=${encodeURIComponent(waText)}`
+      : `https://wa.me/?text=${encodeURIComponent(waText)}`;
 
-    const whatsappNumber =
-      phone.length === 10
-        ? `91${phone}`
-        : phone;
+    // Download image
+    const objectUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href=objectUrl; a.download=fileName;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
 
-    const whatsappUrl = whatsappNumber
-      ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(
-          whatsappText
-        )}`
-      : `https://wa.me/?text=${encodeURIComponent(
-          whatsappText
-        )}`;
-
-    console.log("WhatsApp Number:", whatsappNumber);
-    console.log("WhatsApp URL:", whatsappUrl);
-
-    // Mobile Native Share
-    if (
-      navigator.share &&
-      navigator.canShare &&
-      navigator.canShare({ files: [file] })
-    ) {
-      await navigator.share({
-        files: [file],
-        title: `${activeTab === "birthdays" ? "Birthday" : "Anniversary"} Wishes`,
-        text: whatsappText,
-      });
-
-      setShareStatus("success");
-      return;
-    }
-
-    // Desktop fallback
-    const imageUrl = URL.createObjectURL(blob);
-
-    const downloadLink = document.createElement("a");
-    downloadLink.href = imageUrl;
-    downloadLink.download = fileName;
-    document.body.appendChild(downloadLink);
-    downloadLink.click();
-    document.body.removeChild(downloadLink);
-
-    setTimeout(() => {
-      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-      URL.revokeObjectURL(imageUrl);
-    }, 500);
+    // Open WhatsApp to the specific number
+    setTimeout(()=>{
+      window.open(waUrl,"_blank","noopener,noreferrer");
+      URL.revokeObjectURL(objectUrl);
+    }, 700);
 
     setShareStatus("success");
-  } catch (error) {
-    console.error("WhatsApp Share Error:", error);
-
+  } catch(err:any) {
+    console.error("Share error:",err);
     setShareStatus("error");
-
-    alert(
-      error instanceof Error
-        ? error.message
-        : "Failed to generate or share greeting card."
-    );
   } finally {
     setGenerating(false);
   }
@@ -1777,36 +1668,54 @@ export default function BirthdaysPage() {
                     ✦ {activeTab==="birthdays"?"Birthday":"Anniversary"} Wishes to ✦
                   </div>
 
-                  {/* ── Photo + Name row ── */}
-                  <div className="card-profile-row">
-                    {clientPhoto ? (
-                      <img
-                        src={clientPhoto}
-                        alt={selectedPerson.name}
-                        className="card-photo"
-                        style={{border:`2.5px solid ${selectedTemplate.accent}99`}}
-                      />
-                    ) : (
-                      <div
-                        className="card-initials"
-                        style={{
-                          background:`linear-gradient(135deg,${selectedTemplate.accent}88,${selectedTemplate.bg2})`,
-                          border:`2px solid ${selectedTemplate.accent}66`,
-                          color:selectedTemplate.textMain,
-                        }}
-                      >
-                        {selectedPerson.name.charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <div className="card-name-block" style={{color:selectedTemplate.textMain}}>
-                      <div className="card-name">{selectedPerson.name}</div>
-                      <div className="card-years" style={{color:selectedTemplate.textSub}}>
-                        {activeTab==="birthdays"
-                          ?`Turning ${getYears(selectedPerson.date_of_birth)} years`
-                          :`${getYears(selectedPerson.date_of_birth)} years together`}
-                      </div>
-                    </div>
-                  </div>
+                  {/* ── Photo LEFT + Name RIGHT ── */}
+<div style={{display:"flex",alignItems:"center",gap:10,width:"100%",margin:"4px 0 2px"}}>
+  {clientPhoto ? (
+    <img
+      src={clientPhoto}
+      alt={selectedPerson.name}
+      className="card-photo"
+      style={{border:`2.5px solid ${selectedTemplate.accent}99`,flexShrink:0}}
+    />
+  ) : (
+    <div
+      className="card-initials"
+      style={{
+        background:`linear-gradient(135deg,${selectedTemplate.accent}88,${selectedTemplate.bg2})`,
+        border:`2px solid ${selectedTemplate.accent}66`,
+        color:selectedTemplate.textMain,
+        flexShrink:0,
+      }}
+    >
+      {selectedPerson.name.charAt(0).toUpperCase()}
+    </div>
+  )}
+  <div style={{display:"flex",flexDirection:"column",minWidth:0,flex:1,textAlign:"left"}}>
+    <div className="card-name" style={{color:selectedTemplate.textMain}}>
+      {selectedPerson.name}
+    </div>
+    <div className="card-years" style={{color:selectedTemplate.textSub,marginTop:2}}>
+      {activeTab==="birthdays"
+        ?`Turning ${getYears(selectedPerson.date_of_birth)} years`
+        :`${getYears(selectedPerson.date_of_birth)} years together`}
+    </div>
+    <div style={{
+      marginTop:5,
+      padding:"2px 8px",
+      borderRadius:999,
+      background:selectedTemplate.accent+"22",
+      border:`1px solid ${selectedTemplate.accent}44`,
+      fontSize:8,
+      fontWeight:700,
+      color:selectedTemplate.accent,
+      width:"fit-content",
+    }}>
+      {activeTab==="birthdays"
+        ?`🎂 Turning ${getYears(selectedPerson.date_of_birth)}`
+        :`💍 ${getYears(selectedPerson.date_of_birth)} yrs`}
+    </div>
+  </div>
+</div>
 
                   <div className="card-divider" style={{background:selectedTemplate.previewAccent}}/>
 
