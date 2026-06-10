@@ -484,9 +484,15 @@ export default function ClientProfilePage({
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl sm:text-3xl font-black text-slate-900 leading-tight">
-                    {fullName}
-                  </h1>
+<div>
+  <h1 className="text-3xl sm:text-4xl font-black text-slate-900 uppercase leading-none">
+    {client.surname}
+  </h1>
+
+  <p className="mt-1 text-sm sm:text-base font-semibold text-slate-500">
+    {client.name}
+  </p>
+</div>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
                     <span
                       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
