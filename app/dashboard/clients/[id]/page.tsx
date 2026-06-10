@@ -358,13 +358,20 @@ export default function ClientProfilePage({
     }
   }
 
-  async function deleteDocument(did: string) {
-    if (!confirm("Delete this document?")) return;
-    try {
-      await fetch(`/api/documents/${did}`, { method: "DELETE" });
-      fetchClient();
-    } catch {}
+async function deleteDocument(did: string) {
+  if (!confirm("Delete this document?")) return;
+  try {
+    const res = await fetch(`/api/documents/${did}`, { method: "DELETE" });
+    if (!res.ok) {
+      const e = await res.json();
+      alert("Delete failed: " + (e.error || res.status));
+      return;
+    }
+    fetchClient();
+  } catch (e: any) {
+    alert("Delete failed: " + e.message);
   }
+}
 
   if (loading)
     return (
@@ -995,7 +1002,7 @@ export default function ClientProfilePage({
                         {formatDate(doc.created_at)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                   <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
                       <a
                         href={
                           doc.file_url && doc.file_url.length > 5
