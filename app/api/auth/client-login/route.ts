@@ -22,7 +22,7 @@ export async function POST(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("clients")
-      .select("id, temporarypassword")
+      .select("id, plain_password")
       .eq("clientloginid", loginId)
       .single();
 
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     }
 
     let passwordMatches = false;
-    const storedPassword = data.temporarypassword;
+    const storedPassword = data.plain_password;
 
     if (
       storedPassword.startsWith("$2a$") ||

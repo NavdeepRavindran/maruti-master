@@ -229,7 +229,7 @@ export default function ClientProfilePage({
       if (data.client) {
         setClient({
           ...client,
-          temporarypassword: data.client.temporaryPassword,
+           plain_password: data.client.temporaryPassword,
         });
         alert("Password regenerated.");
       }
@@ -245,7 +245,7 @@ export default function ClientProfilePage({
   }
   function copyAllCredentials() {
     if (!client) return;
-    const text = `Client Portal Access\n\nLogin ID: ${client.clientloginid || "N/A"}\nPassword: ${client.temporarypassword || "N/A"}\nPortal URL: ${window.location.origin}/client-login`;
+    const text = `Client Portal Access\n\nLogin ID: ${client.clientloginid || "N/A"}\nPassword: ${client.plain_password || "N/A"}\nPortal URL: ${window.location.origin}/client-login`;
     copyToClipboard(text, "All credentials copied!");
   }
 
@@ -747,7 +747,7 @@ export default function ClientProfilePage({
                 <div className="flex items-center gap-2">
                   <input
                     readOnly
-                    value={client.plain_password || ""}
+                      value={client.phone || ""}
                     className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-bold text-slate-700 outline-none"
                   />
                   <button
@@ -782,7 +782,7 @@ export default function ClientProfilePage({
                     <input
                       type={showPassword ? "text" : "password"}
                       readOnly
-                      value={client.temporarypassword || ""}
+                      value={client.plain_password || ""}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-9 py-2.5 text-[13px] font-bold text-slate-700 outline-none tracking-widest"
                     />
                     <button
@@ -824,7 +824,7 @@ export default function ClientProfilePage({
                   <button
                     onClick={() =>
                       copyToClipboard(
-                        client.temporarypassword || "",
+                        client.plain_password || "",
                         "Password copied!",
                       )
                     }
