@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { supabase } from "@/lib/supabaseClient";
 
 interface UserData { name?: string; email?: string; role?: string; }
 interface DashboardStats { totalClients: number; totalDocuments: number; upcomingBirthdays: number; todayBirthdays: number; todayAnniversaries: number; upcomingAnniversaries: number; }
@@ -65,6 +67,7 @@ const Skeleton = ({ className }: { className: string }) => (
 );
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const [stats, setStats] = useState<DashboardStats>({ totalClients: 0, totalDocuments: 0, upcomingBirthdays: 0, todayBirthdays: 0, todayAnniversaries: 0, upcomingAnniversaries: 0 });
   const [birthdays, setBirthdays] = useState<BirthdayItem[]>([]);
@@ -73,22 +76,69 @@ export default function DashboardPage() {
 
   const todayQuote = QUOTES[new Date().getDate() % QUOTES.length];
 
+  // ✅ FIX: useEffect now awaits the live Supabase session before fetching any data.
+  // Previously this read localStorage directly and called fetchDashboardData() with no
+  // auth token, causing the APIs to return empty data on first load.
   useEffect(() => {
-    const raw = window.localStorage.getItem("supabase_user");
-    if (raw) { try { setUser(JSON.parse(raw)); } catch { setUser(null); } }
-    fetchDashboardData();
+    let ignore = false;
+
+    async function init() {
+      // 1. Get the confirmed live session from Supabase (reads from localStorage internally)
+      const { data: { session } } = await supabase.auth.getSession();
+
+      // 2. No session = not logged in → redirect to login
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      if (!ignore) {
+        // 3. Set user data from the verified session (not from raw localStorage)
+        setUser({
+          name: session.user.user_metadata?.name,
+          email: session.user.email,
+          role: session.user.user_metadata?.role,
+        });
+
+        // 4. Fetch dashboard data, passing the real access token
+        await fetchDashboardData(session.access_token);
+      }
+    }
+
+    init();
+
+    // Cleanup: prevents state updates if the component unmounts mid-fetch (React strict mode)
+    return () => { ignore = true; };
   }, []);
 
-  async function fetchDashboardData() {
+  // ✅ FIX: fetchDashboardData now accepts the access token and attaches it to every
+  // API call as an Authorization header. Previously all fetches had no auth header,
+  // which is why the backend returned empty data or 401s on first load.
+  async function fetchDashboardData(accessToken: string) {
+    const headers: HeadersInit = { Authorization: `Bearer ${accessToken}` };
     try {
       const [cR, dR, bR, aR] = await Promise.all([
-        fetch("/api/clients"), fetch("/api/documents"), fetch("/api/birthdays?range=week"), fetch("/api/anniversaries?range=week")
+        fetch("/api/clients",                  { headers }),
+        fetch("/api/documents",                { headers }),
+        fetch("/api/birthdays?range=week",     { headers }),
+        fetch("/api/anniversaries?range=week", { headers }),
       ]);
       const c = await cR.json(), d = await dR.json(), b = await bR.json(), a = await aR.json();
-      setStats({ totalClients: c.total || 0, totalDocuments: d.total || 0, upcomingBirthdays: b.stats?.thisWeek || 0, todayBirthdays: b.stats?.today || 0, todayAnniversaries: a.stats?.today || 0, upcomingAnniversaries: a.stats?.thisWeek || 0 });
+      setStats({
+        totalClients:        c.total          || 0,
+        totalDocuments:      d.total          || 0,
+        upcomingBirthdays:   b.stats?.thisWeek || 0,
+        todayBirthdays:      b.stats?.today    || 0,
+        todayAnniversaries:  a.stats?.today    || 0,
+        upcomingAnniversaries: a.stats?.thisWeek || 0,
+      });
       setBirthdays((b.birthdays || []).slice(0, 5));
       setRecentDocs((d.documents || []).slice(0, 5));
-    } catch { /* silent */ } finally { setLoading(false); }
+    } catch (err) {
+      console.error("Dashboard fetch failed:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const getGreeting = () => { const h = new Date().getHours(); return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"; };
@@ -100,11 +150,10 @@ export default function DashboardPage() {
   const getDocMeta = (t: string) => ({ PDF: { bg: "bg-red-50", text: "text-red-600", border: "border-red-100" }, IMG: { bg: "bg-amber-50", text: "text-amber-600", border: "border-amber-100" }, DOC: { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-100" }, DOCX: { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-100" }, XLS: { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-100" } }[t] ?? { bg: "bg-slate-50", text: "text-slate-500", border: "border-slate-200" });
 
   const statCards = [
-    { label: "Total Clients",      value: stats.totalClients,      icon: <IC.Users />,  sub: "Active profiles",   ib: "bg-blue-50 text-blue-600",   bb: "bg-blue-50 text-blue-600 ring-1 ring-blue-100" },
-    { label: "Documents",          value: stats.totalDocuments,     icon: <IC.Folder />, sub: "Stored files",      ib: "bg-violet-50 text-violet-600",bb: "bg-violet-50 text-violet-600 ring-1 ring-violet-100" },
+    { label: "Total Clients",  value: stats.totalClients,  icon: <IC.Users />,  sub: "Active profiles",  ib: "bg-blue-50 text-blue-600",    bb: "bg-blue-50 text-blue-600 ring-1 ring-blue-100" },
+    { label: "Documents",      value: stats.totalDocuments, icon: <IC.Folder />, sub: "Stored files",     ib: "bg-violet-50 text-violet-600", bb: "bg-violet-50 text-violet-600 ring-1 ring-violet-100" },
   ];
 
-  
   const actions = [
     { label: "Add Client",     icon: <IC.UserPlus />, href: "/dashboard/clients?action=add", h: "hover:bg-blue-600   hover:border-blue-600   hover:text-white" },
     { label: "Upload Policy",  icon: <IC.Upload />,   href: "/dashboard/documents",           h: "hover:bg-violet-600 hover:border-violet-600 hover:text-white" },
@@ -191,7 +240,7 @@ export default function DashboardPage() {
               </div>
             </div>
           ))}
-          
+
           {/* Card 3: Split Events */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col justify-center gap-3">
             {/* Row 1: Birthdays */}
@@ -245,7 +294,6 @@ export default function DashboardPage() {
 
           {/* Documents — 3 cols */}
           <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
@@ -261,14 +309,12 @@ export default function DashboardPage() {
               </Link>
             </div>
 
-            {/* Column labels — desktop */}
             <div className="hidden sm:grid grid-cols-12 px-6 py-2 bg-slate-50 border-b border-slate-100">
               {["Name", "Client", "Size", "Uploaded"].map((h, i) => (
                 <span key={h} className={`text-[10px] font-black uppercase tracking-widest text-slate-400 ${i === 0 ? "col-span-5" : i === 1 ? "col-span-3" : i === 2 ? "col-span-2 text-right" : "col-span-2 text-right"}`}>{h}</span>
               ))}
             </div>
 
-            {/* Rows */}
             <div className="divide-y divide-slate-50">
               {loading ? (
                 [1,2,3,4].map(i => (

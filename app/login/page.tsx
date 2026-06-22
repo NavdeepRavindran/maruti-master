@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,37 +18,35 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      // ✅ FIX: Use Supabase native sign-in instead of a custom /api/auth/login fetch.
+      // This automatically persists the session to localStorage (because persistSession: true
+      // is now set in supabaseClient.ts), so the dashboard can read it immediately on mount.
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        setMessage(data.error || "Login failed. Please check your credentials.");
+      if (error || !data.session) {
+        setMessage(error?.message ?? "Login failed. Please check your credentials.");
         setMessageType("error");
         setIsLoading(false);
         return;
       }
 
-      if (data.session) {
-        window.localStorage.setItem("supabase_session", JSON.stringify(data.session));
-      }
-      if (data.user) {
-        window.localStorage.setItem("supabase_user", JSON.stringify(data.user));
-      }
-
+      // ✅ FIX: No manual localStorage.setItem needed — Supabase handles that automatically.
+      // ✅ FIX: No setTimeout needed — navigate immediately. The session is already written
+      //         to localStorage before router.push fires, so the dashboard reads it on mount.
       setMessageType("success");
-      setMessage(`Welcome back, ${data.user?.name || data.user?.email || "user"}! Redirecting...`);
+      setMessage(
+        `Welcome back, ${
+          data.user?.user_metadata?.name || data.user?.email || "user"
+        }! Redirecting...`
+      );
 
-      setTimeout(() => {
-        router.push("/dashboard");
-      }, 1000);
-    } catch (error) {
-      console.error("Fetch error:", error);
-      setMessage("Connection error. The server might be offline or the API route is missing.");
+      router.push("/dashboard");
+    } catch (err) {
+      console.error("Login error:", err);
+      setMessage("Connection error. Please try again.");
       setMessageType("error");
       setIsLoading(false);
     }
@@ -60,7 +58,6 @@ export default function LoginPage() {
 
         {/* ── Left Panel ── */}
         <div className="hidden md:flex md:w-[52%] flex-col justify-between bg-[#0f1f3d] p-10 relative overflow-hidden">
-          {/* Decorative circles */}
           <div className="absolute w-80 h-80 rounded-full bg-[#1a3a6e] opacity-50 -top-20 -right-20 pointer-events-none" />
           <div className="absolute w-56 h-56 rounded-full bg-[#1a3a6e] opacity-40 -bottom-14 -left-10 pointer-events-none" />
 
@@ -87,7 +84,6 @@ export default function LoginPage() {
               Manage policies, track claims, and stay covered with our all-in-one intelligent insurance platform.
             </p>
 
-            {/* Stat cards */}
             <div className="grid grid-cols-3 gap-3">
               {[
                 { num: "50K+", label: "Policyholders" },
@@ -104,27 +100,6 @@ export default function LoginPage() {
               ))}
             </div>
           </div>
-
-          {/* Trust badges */}
-          {/* <div className="relative z-10 flex flex-wrap gap-2">
-            {[
-              { icon: "lock", label: "256-bit SSL" },
-              { icon: "certificate", label: "IRDAI licensed" },
-              { icon: "shield", label: "ISO 27001" },
-            ].map((b) => (
-              <span
-                key={b.label}
-                className="inline-flex items-center gap-1.5 bg-white/[0.07] border border-white/10 rounded-full px-3 py-1.5 text-[11px] text-[#93a8cc]"
-              >
-                <svg className="w-3 h-3 text-[#4f8ef7]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  {b.icon === "lock" && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />}
-                  {b.icon === "certificate" && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />}
-                  {b.icon === "shield" && <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.618 5.984A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />}
-                </svg>
-                {b.label}
-              </span>
-            ))}
-          </div> */}
         </div>
 
         {/* ── Right Panel: Form ── */}
@@ -202,7 +177,7 @@ export default function LoginPage() {
                 className="w-4 h-4 rounded border-slate-300 accent-[#4f8ef7]"
               />
               <label htmlFor="remember" className="text-sm text-slate-500">
-                Remember me 
+                Remember me
               </label>
             </div>
 
@@ -243,35 +218,6 @@ export default function LoginPage() {
               {message}
             </div>
           )}
-
-          {/* Divider
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-slate-200" />
-            <span className="text-xs text-slate-400">or continue with</span>
-            <div className="flex-1 h-px bg-slate-200" />
-          </div> */}
-
-          {/* Google SSO
-          <button
-            type="button"
-            className="w-full h-11 bg-slate-50 hover:bg-slate-100 active:scale-[0.99] border border-slate-200 rounded-lg text-sm font-medium text-slate-700 flex items-center justify-center gap-2.5 transition-all duration-200"
-          >
-            <svg className="w-4 h-4" viewBox="0 0 48 48">
-              <path fill="#FFC107" d="M43.6 20H24v8h11.3C33.7 33.1 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3 0 5.7 1.1 7.8 2.9L37.3 9.5C33.9 6.5 29.2 4.8 24 4.8 12.4 4.8 3 14.2 3 25.8s9.4 21 21 21c10.9 0 20.3-7.9 21.8-18.3.1-.8.2-1.6.2-2.5 0-2-.2-3.9-.4-5z"/>
-              <path fill="#FF3D00" d="m6.3 14.7 7 5.1C15 16.1 19.2 13 24 13c3 0 5.7 1.1 7.8 2.9l5.5-5.4C33.9 7.5 29.2 5.8 24 5.8 16.1 5.8 9.3 9.3 6.3 14.7z"/>
-              <path fill="#4CAF50" d="M24 46.8c5.1 0 9.8-1.7 13.3-4.4l-6.1-5.2C29.3 38.9 26.8 40 24 40c-5.2 0-9.6-3-11.3-7.1l-7 5.4C9.2 43.8 16 46.8 24 46.8z"/>
-              <path fill="#1976D2" d="M43.6 22H24v8h11.3c-.8 2.3-2.3 4.2-4.2 5.5l6.1 5.2C40.9 37.4 44 31.7 44 25.8c0-1.3-.2-2.6-.4-3.8z"/>
-            </svg>
-            Sign in with Google SSO
-          </button> */}
-
-          {/* Footer
-          <p className="text-center mt-6 text-sm text-slate-400">
-            New to Maruthi Insure?{" "}
-            <a href="#" className="text-[#4f8ef7] font-medium hover:underline">
-              Request admin access
-            </a>
-          </p> */}
 
           <p className="text-center mt-6 text-[10px] text-slate-300 uppercase tracking-widest">
             © 2026 Maruthi Insure Care · All Rights Reserved

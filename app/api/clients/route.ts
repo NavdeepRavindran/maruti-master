@@ -20,13 +20,31 @@ const clientSchema = z.object({
   pinCode: z.string().regex(/^\d{6}$/, "PIN Code must be 6 digits"),
   notes: z.string().optional(),
   agent_id: z.string().optional(),
-  profilePic: z.string().optional(), // ← ADDED: base64 data URL from frontend
+  profilePic: z.string().optional(),
 });
+
+// ── Auth helper ────────────────────────────────────────────────────────────
+// Validates the Bearer token sent by the dashboard and returns the Supabase user.
+// Returns null if the token is missing, invalid, or expired.
+async function getAuthUser(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "");
+  if (!token) return null;
+  const { data: { user }, error } = await supabaseAdmin!.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
 
 // GET /api/clients
 export async function GET(request: Request) {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: "Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
+  }
+
+  // ✅ FIX: Validate the session token before returning any data.
+  // Without this check, anyone could call /api/clients with no login.
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -44,7 +62,6 @@ export async function GET(request: Request) {
         family_members(count),
         documents(count)
       `)
-      // ↑ CHANGED: photo_url → profile_pic (matches the new DB column name)
       .order("created_at", { ascending: false });
 
     if (search) {
@@ -70,7 +87,7 @@ export async function GET(request: Request) {
       address: [c.address, c.city, c.state, c.pin_code].filter(Boolean).join(", "),
       status: c.status,
       clientLoginId: c.clientloginid,
-      profile_pic: c.profile_pic || null, // ← CHANGED: photo_url → profile_pic
+      profile_pic: c.profile_pic || null,
       created_at: c.created_at,
       family_count: c.family_members?.[0]?.count ?? 0,
       document_count: c.documents?.[0]?.count ?? 0,
@@ -89,22 +106,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
   }
 
+  // ✅ FIX: Only authenticated agents can create clients.
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  }
+
   try {
     const rawBody = await request.json();
     const validatedData = clientSchema.parse(rawBody);
 
-const { data: existingClient } = await supabaseAdmin
-  .from("clients")
-  .select("id")
-  .eq("phone", validatedData.phone)
-  .maybeSingle();
+    const { data: existingClient } = await supabaseAdmin
+      .from("clients")
+      .select("id")
+      .eq("phone", validatedData.phone)
+      .maybeSingle();
 
-if (existingClient) {
-  return NextResponse.json(
-    { error: "Mobile number already exists" },
-    { status: 400 }
-  );
-}
+    if (existingClient) {
+      return NextResponse.json(
+        { error: "Mobile number already exists" },
+        { status: 400 }
+      );
+    }
+
     const temporaryPassword = crypto.randomUUID().replace(/-/g, "").substring(0, 8).toUpperCase();
     const hashedPassword = bcrypt.hashSync(temporaryPassword, 10);
 
@@ -126,7 +150,7 @@ if (existingClient) {
         state: validatedData.state || null,
         pin_code: validatedData.pinCode || null,
         notes: validatedData.notes || null,
-        profile_pic: validatedData.profilePic || null, // ← ADDED: saves photo on create
+        profile_pic: validatedData.profilePic || null,
         status: "Active",
         agent_id: validatedData.agent_id || null,
         clientloginid: validatedData.phone,
@@ -142,15 +166,15 @@ if (existingClient) {
     }
 
     return NextResponse.json(
-  {
-    client: {
-      ...data,
-      clientLoginId: validatedData.phone,
-      temporaryPassword,
-    },
-  },
-  { status: 201 }
-);
+      {
+        client: {
+          ...data,
+          clientLoginId: validatedData.phone,
+          temporaryPassword,
+        },
+      },
+      { status: 201 }
+    );
   } catch (err: any) {
     if (err?.name === "ZodError") {
       return NextResponse.json({ error: "Validation failed", details: err.flatten() }, { status: 400 });

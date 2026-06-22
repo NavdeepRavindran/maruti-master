@@ -1,16 +1,31 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../lib/supabaseClient";
 
+// ── Auth helper ────────────────────────────────────────────────────────────
+async function getAuthUser(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "");
+  if (!token) return null;
+  const { data: { user }, error } = await supabaseAdmin!.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
+
 // GET /api/documents — List all documents (optionally filter by client_id)
 export async function GET(request: Request) {
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
+  }
+
+  // ✅ FIX: Validate the session token before returning any data.
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get("client_id");
   const familyMemberId = searchParams.get("family_member_id");
   const search = searchParams.get("search")?.toLowerCase() || "";
-
-  if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
-  }
 
   try {
     let query = supabaseAdmin
@@ -36,8 +51,18 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/documents — Upload a document via FormData to bypass RLS with Service Role
+// POST /api/documents — Upload a document via FormData
 export async function POST(request: Request) {
+  if (!supabaseAdmin) {
+    return NextResponse.json({ error: "Supabase admin not configured" }, { status: 500 });
+  }
+
+  // ✅ FIX: Only authenticated agents can upload documents.
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  }
+
   try {
     const formData = await request.formData().catch(() => null);
     if (!formData) return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
@@ -52,23 +77,19 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Client ID, name, category, and file are required." }, { status: 400 });
     }
 
-    if (!supabaseAdmin) {
-      return NextResponse.json({ error: "Supabase admin not configured" }, { status: 500 });
-    }
-
     // 1. Upload to storage
-    const fileExt = file.name.split('.').pop();
+    const fileExt = file.name.split(".").pop();
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `${client_id}/${fileName}`;
 
     const { error: uploadError } = await supabaseAdmin.storage
-      .from('documents')
+      .from("documents")
       .upload(filePath, file);
 
     if (uploadError) throw uploadError;
 
     const { data: signedData, error: signError } = await supabaseAdmin.storage
-      .from('documents')
+      .from("documents")
       .createSignedUrl(filePath, 315360000);
 
     if (signError) throw signError;

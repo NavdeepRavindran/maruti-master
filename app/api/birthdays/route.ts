@@ -23,13 +23,28 @@ interface BirthdayEntry {
   type: string;
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const range = searchParams.get("range") || "month";
+// ── Auth helper ────────────────────────────────────────────────────────────
+async function getAuthUser(request: Request) {
+  const token = request.headers.get("authorization")?.replace("Bearer ", "");
+  if (!token) return null;
+  const { data: { user }, error } = await supabaseAdmin!.auth.getUser(token);
+  if (error || !user) return null;
+  return user;
+}
 
+export async function GET(request: Request) {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
   }
+
+  // ✅ FIX: Validate the session token before returning any data.
+  const user = await getAuthUser(request);
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const range = searchParams.get("range") || "month";
 
   try {
     const { data: clients } = await supabaseAdmin
