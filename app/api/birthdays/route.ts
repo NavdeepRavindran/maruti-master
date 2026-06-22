@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "../../../lib/supabaseClient";
+import { supabaseAdmin, supabaseAuth } from "../../../lib/supabaseClient";
 
 function daysUntilBirthday(dob: string): number {
   const birth = new Date(dob);
@@ -27,7 +27,7 @@ interface BirthdayEntry {
 async function getAuthUser(request: Request) {
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  const { data: { user }, error } = await supabaseAdmin!.auth.getUser(token);
+  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
   if (error || !user) return null;
   return user;
 }
@@ -37,7 +37,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
   }
 
-  // ✅ FIX: Validate the session token before returning any data.
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });

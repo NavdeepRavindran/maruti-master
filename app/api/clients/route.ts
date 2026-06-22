@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "../../../lib/supabaseClient";
+import { supabaseAdmin, supabaseAuth } from "../../../lib/supabaseClient";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -24,12 +24,11 @@ const clientSchema = z.object({
 });
 
 // ── Auth helper ────────────────────────────────────────────────────────────
-// Validates the Bearer token sent by the dashboard and returns the Supabase user.
-// Returns null if the token is missing, invalid, or expired.
+// Uses supabaseAuth (anon key) to correctly verify user JWTs from the browser.
 async function getAuthUser(request: Request) {
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  const { data: { user }, error } = await supabaseAdmin!.auth.getUser(token);
+  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
   if (error || !user) return null;
   return user;
 }
@@ -40,8 +39,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
   }
 
-  // ✅ FIX: Validate the session token before returning any data.
-  // Without this check, anyone could call /api/clients with no login.
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
@@ -106,7 +103,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
   }
 
-  // ✅ FIX: Only authenticated agents can create clients.
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });

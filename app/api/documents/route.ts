@@ -1,22 +1,21 @@
 import { NextResponse } from "next/server";
-import { supabaseAdmin } from "../../../lib/supabaseClient";
+import { supabaseAdmin, supabaseAuth } from "../../../lib/supabaseClient";
 
 // ── Auth helper ────────────────────────────────────────────────────────────
 async function getAuthUser(request: Request) {
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  const { data: { user }, error } = await supabaseAdmin!.auth.getUser(token);
+  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
   if (error || !user) return null;
   return user;
 }
 
-// GET /api/documents — List all documents (optionally filter by client_id)
+// GET /api/documents
 export async function GET(request: Request) {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
   }
 
-  // ✅ FIX: Validate the session token before returning any data.
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
@@ -51,13 +50,12 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/documents — Upload a document via FormData
+// POST /api/documents
 export async function POST(request: Request) {
   if (!supabaseAdmin) {
     return NextResponse.json({ error: "Supabase admin not configured" }, { status: 500 });
   }
 
-  // ✅ FIX: Only authenticated agents can upload documents.
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
@@ -77,7 +75,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Client ID, name, category, and file are required." }, { status: 400 });
     }
 
-    // 1. Upload to storage
     const fileExt = file.name.split(".").pop();
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `${client_id}/${fileName}`;
@@ -95,7 +92,6 @@ export async function POST(request: Request) {
     if (signError) throw signError;
     const finalUrl = signedData?.signedUrl || "";
 
-    // 2. Insert into database
     const { data, error } = await supabaseAdmin
       .from("documents")
       .insert({
