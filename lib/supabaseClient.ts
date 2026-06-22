@@ -10,9 +10,9 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
+    persistSession: true,       // ✅ FIXED: saves session to localStorage so dashboard can read it
+    autoRefreshToken: true,     // ✅ FIXED: keeps session alive automatically
+    detectSessionInUrl: true,   // ✅ FIXED: handles OAuth/magic link callbacks
   },
 });
 
@@ -23,10 +23,10 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 export const supabaseAdmin: SupabaseClient | null = serviceRoleKey
   ? createClient(supabaseUrl, serviceRoleKey, {
       auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storageKey: 'mic-auth',
+        persistSession: false,    // Admin client is server-only, no need to persist
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        storageKey: "mic-auth",
       },
     })
   : null;

@@ -73,47 +73,40 @@ export default function DashboardPage() {
   const [birthdays, setBirthdays] = useState<BirthdayItem[]>([]);
   const [recentDocs, setRecentDocs] = useState<DocumentItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // ✅ KEY FIX: Start as null (unknown) not true/false.
+  // null = "we don't know yet", false = "definitely not authed" → redirect
+  const [authChecked, setAuthChecked] = useState<boolean | null>(null);
 
   const todayQuote = QUOTES[new Date().getDate() % QUOTES.length];
 
-  // ✅ FIX: useEffect now awaits the live Supabase session before fetching any data.
-  // Previously this read localStorage directly and called fetchDashboardData() with no
-  // auth token, causing the APIs to return empty data on first load.
   useEffect(() => {
-    let ignore = false;
+    // ✅ Use onAuthStateChange — this fires immediately with the current session
+    // state AND whenever auth changes. Much more reliable than getSession() alone.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (event === "SIGNED_OUT" || !session) {
+          // Definitely not logged in → redirect
+          setAuthChecked(false);
+          router.replace("/login");
+          return;
+        }
 
-    async function init() {
-      // 1. Get the confirmed live session from Supabase (reads from localStorage internally)
-      const { data: { session } } = await supabase.auth.getSession();
-
-      // 2. No session = not logged in → redirect to login
-      if (!session) {
-        router.push("/login");
-        return;
-      }
-
-      if (!ignore) {
-        // 3. Set user data from the verified session (not from raw localStorage)
+        // We have a valid session
+        setAuthChecked(true);
         setUser({
           name: session.user.user_metadata?.name,
           email: session.user.email,
           role: session.user.user_metadata?.role,
         });
 
-        // 4. Fetch dashboard data, passing the real access token
         await fetchDashboardData(session.access_token);
       }
-    }
+    );
 
-    init();
-
-    // Cleanup: prevents state updates if the component unmounts mid-fetch (React strict mode)
-    return () => { ignore = true; };
+    // Cleanup subscription on unmount
+    return () => subscription.unsubscribe();
   }, []);
 
-  // ✅ FIX: fetchDashboardData now accepts the access token and attaches it to every
-  // API call as an Authorization header. Previously all fetches had no auth header,
-  // which is why the backend returned empty data or 401s on first load.
   async function fetchDashboardData(accessToken: string) {
     const headers: HeadersInit = { Authorization: `Bearer ${accessToken}` };
     try {
@@ -125,12 +118,12 @@ export default function DashboardPage() {
       ]);
       const c = await cR.json(), d = await dR.json(), b = await bR.json(), a = await aR.json();
       setStats({
-        totalClients:        c.total          || 0,
-        totalDocuments:      d.total          || 0,
-        upcomingBirthdays:   b.stats?.thisWeek || 0,
-        todayBirthdays:      b.stats?.today    || 0,
-        todayAnniversaries:  a.stats?.today    || 0,
-        upcomingAnniversaries: a.stats?.thisWeek || 0,
+        totalClients:          c.total            || 0,
+        totalDocuments:        d.total            || 0,
+        upcomingBirthdays:     b.stats?.thisWeek  || 0,
+        todayBirthdays:        b.stats?.today     || 0,
+        todayAnniversaries:    a.stats?.today     || 0,
+        upcomingAnniversaries: a.stats?.thisWeek  || 0,
       });
       setBirthdays((b.birthdays || []).slice(0, 5));
       setRecentDocs((d.documents || []).slice(0, 5));
@@ -146,11 +139,10 @@ export default function DashboardPage() {
   const formatTime = (s: string) => { const h = Math.floor((Date.now() - new Date(s).getTime()) / 3600000); return h < 1 ? "Just now" : h < 24 ? `${h}h ago` : h < 48 ? "Yesterday" : `${Math.floor(h / 24)}d ago`; };
   const getNextBday = (d: string) => { const b = new Date(d), n = new Date(), ty = new Date(n.getFullYear(), b.getMonth(), b.getDate()); return (ty >= n ? ty : new Date(n.getFullYear() + 1, b.getMonth(), b.getDate())).toLocaleDateString("en-IN", { day: "numeric", month: "short" }); };
   const getAge = (d: string) => { const b = new Date(d), n = new Date(); let a = n.getFullYear() - b.getFullYear(); if (n.getMonth() < b.getMonth() || (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())) a--; return a + 1; };
-
   const getDocMeta = (t: string) => ({ PDF: { bg: "bg-red-50", text: "text-red-600", border: "border-red-100" }, IMG: { bg: "bg-amber-50", text: "text-amber-600", border: "border-amber-100" }, DOC: { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-100" }, DOCX: { bg: "bg-blue-50", text: "text-blue-600", border: "border-blue-100" }, XLS: { bg: "bg-emerald-50", text: "text-emerald-600", border: "border-emerald-100" } }[t] ?? { bg: "bg-slate-50", text: "text-slate-500", border: "border-slate-200" });
 
   const statCards = [
-    { label: "Total Clients",  value: stats.totalClients,  icon: <IC.Users />,  sub: "Active profiles",  ib: "bg-blue-50 text-blue-600",    bb: "bg-blue-50 text-blue-600 ring-1 ring-blue-100" },
+    { label: "Total Clients",  value: stats.totalClients,   icon: <IC.Users />,  sub: "Active profiles",  ib: "bg-blue-50 text-blue-600",    bb: "bg-blue-50 text-blue-600 ring-1 ring-blue-100" },
     { label: "Documents",      value: stats.totalDocuments, icon: <IC.Folder />, sub: "Stored files",     ib: "bg-violet-50 text-violet-600", bb: "bg-violet-50 text-violet-600 ring-1 ring-violet-100" },
   ];
 
@@ -160,6 +152,22 @@ export default function DashboardPage() {
     { label: "View Birthdays", icon: <IC.Calendar />, href: "/dashboard/birthdays",           h: "hover:bg-rose-600   hover:border-rose-600   hover:text-white" },
     { label: "All Clients",    icon: <IC.List />,     href: "/dashboard/clients",             h: "hover:bg-slate-800  hover:border-slate-800  hover:text-white" },
   ];
+
+  // ✅ Show a blank loading screen while auth state is being determined.
+  // This prevents the dashboard from flashing before redirect.
+  if (authChecked === null) {
+    return (
+      <div className="min-h-screen bg-[#f5f6fa] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <svg className="animate-spin h-8 w-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <p className="text-sm text-slate-400 font-medium">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#f5f6fa]">
@@ -200,8 +208,6 @@ export default function DashboardPage() {
 
         {/* Quote + Actions row */}
         <div className="grid lg:grid-cols-5 gap-4">
-
-          {/* Quote of the Day */}
           <div className="lg:col-span-3 relative bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl overflow-hidden px-6 py-5 flex items-start gap-4 shadow-sm">
             <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: "radial-gradient(ellipse at 10% 50%, rgba(96,165,250,0.12) 0%, transparent 60%), radial-gradient(ellipse at 90% 20%, rgba(129,140,248,0.10) 0%, transparent 60%)" }} />
             <div className="shrink-0 mt-0.5 w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center text-blue-300">
@@ -213,8 +219,6 @@ export default function DashboardPage() {
               <p className="text-xs text-slate-400 font-medium mt-2.5">— {todayQuote.author}</p>
             </div>
           </div>
-
-          {/* Quick Actions */}
           <div className="lg:col-span-2 grid grid-cols-2 gap-3">
             {actions.map(a => (
               <Link key={a.label} href={a.href}
@@ -243,7 +247,6 @@ export default function DashboardPage() {
 
           {/* Card 3: Split Events */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-col justify-center gap-3">
-            {/* Row 1: Birthdays */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 transition-colors hover:bg-slate-100/50">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-600 flex items-center justify-center shrink-0"><IC.Cake /></div>
@@ -263,8 +266,6 @@ export default function DashboardPage() {
                 </div>
               </div>
             </div>
-
-            {/* Row 2: Anniversaries */}
             <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-100 transition-colors hover:bg-slate-100/50">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center shrink-0">
@@ -296,9 +297,7 @@ export default function DashboardPage() {
           <div className="lg:col-span-3 bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center">
-                  <IC.Doc />
-                </div>
+                <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center"><IC.Doc /></div>
                 <div>
                   <h2 className="text-[13px] font-black text-slate-900">Recent Documents</h2>
                   <p className="text-[10px] text-slate-400 font-medium leading-none mt-0.5">Latest uploads across clients</p>
@@ -308,13 +307,11 @@ export default function DashboardPage() {
                 View all <IC.ChevronRight />
               </Link>
             </div>
-
             <div className="hidden sm:grid grid-cols-12 px-6 py-2 bg-slate-50 border-b border-slate-100">
               {["Name", "Client", "Size", "Uploaded"].map((h, i) => (
                 <span key={h} className={`text-[10px] font-black uppercase tracking-widest text-slate-400 ${i === 0 ? "col-span-5" : i === 1 ? "col-span-3" : i === 2 ? "col-span-2 text-right" : "col-span-2 text-right"}`}>{h}</span>
               ))}
             </div>
-
             <div className="divide-y divide-slate-50">
               {loading ? (
                 [1,2,3,4].map(i => (
@@ -352,10 +349,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Right col — 2 cols */}
+          {/* Right col */}
           <div className="lg:col-span-2 flex flex-col gap-5">
-
-            {/* Birthdays */}
             <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex-1">
               <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
                 <div className="flex items-center gap-3">
@@ -369,7 +364,6 @@ export default function DashboardPage() {
                   Calendar <IC.ChevronRight />
                 </Link>
               </div>
-
               <div className="divide-y divide-slate-50">
                 {loading ? (
                   [1,2,3].map(i => (
@@ -423,7 +417,6 @@ export default function DashboardPage() {
                 </Link>
               </div>
             </div>
-
           </div>
         </div>
       </main>
