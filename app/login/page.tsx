@@ -18,9 +18,6 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // ✅ FIX: Use Supabase native sign-in instead of a custom /api/auth/login fetch.
-      // This automatically persists the session to localStorage (because persistSession: true
-      // is now set in supabaseClient.ts), so the dashboard can read it immediately on mount.
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -33,9 +30,6 @@ export default function LoginPage() {
         return;
       }
 
-      // ✅ FIX: No manual localStorage.setItem needed — Supabase handles that automatically.
-      // ✅ FIX: No setTimeout needed — navigate immediately. The session is already written
-      //         to localStorage before router.push fires, so the dashboard reads it on mount.
       setMessageType("success");
       setMessage(
         `Welcome back, ${
@@ -43,7 +37,9 @@ export default function LoginPage() {
         }! Redirecting...`
       );
 
-      router.push("/dashboard");
+      // Full page navigation so Supabase finishes writing session to
+      // localStorage before the dashboard mounts and calls getSession()
+      window.location.href = "/dashboard";
     } catch (err) {
       console.error("Login error:", err);
       setMessage("Connection error. Please try again.");
