@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { supabase } from "@/lib/supabaseClient";
+// import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
+
 
 interface UserData { name?: string; email?: string; role?: string; }
 interface DashboardStats { totalClients: number; totalDocuments: number; upcomingBirthdays: number; todayBirthdays: number; todayAnniversaries: number; upcomingAnniversaries: number; }
@@ -77,6 +79,8 @@ export default function DashboardPage() {
   // null = "we don't know yet", false = "definitely not authed" → redirect
   const [authChecked, setAuthChecked] = useState<boolean | null>(null);
 
+
+  const supabase = createClient();   // ← ADD THIS LINE HERE
   const todayQuote = QUOTES[new Date().getDate() % QUOTES.length];
 
   useEffect(() => {

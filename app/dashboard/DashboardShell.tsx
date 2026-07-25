@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Sidebar from "../components/Sidebar";
+import { createClient } from "@/lib/supabase/client";
 
 const INACTIVITY_TIMEOUT = 15 * 60 * 1000; // 15 minutes
 
@@ -20,44 +21,51 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const router = useRouter();
   const pathname = usePathname();
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const supabase = createClient();
 
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
-  // Load user from localStorage
-  const loadUser = useCallback(() => {
-    const raw = window.localStorage.getItem("supabase_user");
-    if (raw) {
-      try {
-        setUser(JSON.parse(raw) as UserData);
-      } catch {
-        router.push("/login");
-      }
-    } else {
+  // Load user from real Supabase session (not localStorage)
+  const loadUser = useCallback(async () => {
+    const { data: { user: authUser }, error } = await supabase.auth.getUser();
+
+    if (error || !authUser) {
       router.push("/login");
+      setLoading(false);
+      return;
     }
+
+    setUser({
+      name: authUser.user_metadata?.name,
+      email: authUser.email,
+      role: authUser.user_metadata?.role || "Agent",
+      persona: authUser.user_metadata?.persona,
+    });
     setLoading(false);
-  }, [router]);
+  }, [router, supabase]);
 
   useEffect(() => {
     loadUser();
-    
-    // Listen for cross-component profile updates
-    const handleUserUpdate = () => loadUser();
-    window.addEventListener("user_updated", handleUserUpdate);
-    return () => window.removeEventListener("user_updated", handleUserUpdate);
-  }, [loadUser]);
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "SIGNED_OUT") {
+        router.push("/login");
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [loadUser, supabase, router]);
 
   // Auto-logout on inactivity (FR-02)
   const resetTimer = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = setTimeout(() => {
-      window.localStorage.removeItem("supabase_user");
-      window.localStorage.removeItem("supabase_session");
+    timeoutRef.current = setTimeout(async () => {
+      await supabase.auth.signOut();
       router.push("/login");
     }, INACTIVITY_TIMEOUT);
-  }, [router]);
+  }, [router, supabase]);
 
   useEffect(() => {
     const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
@@ -69,9 +77,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     };
   }, [resetTimer]);
 
-  const handleSignOut = () => {
-    window.localStorage.removeItem("supabase_user");
-    window.localStorage.removeItem("supabase_session");
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
     router.push("/login");
   };
 
@@ -86,13 +93,12 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     );
   }
 
-if (!user) return null;
+  if (!user) return null;
 
   return (
     <div className="flex min-h-screen bg-[#f8fbff] text-navy relative">
-      {/* Mobile Overlay */}
       {isMobileMenuOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-navy/80 z-40 lg:hidden backdrop-blur-sm transition-opacity"
           onClick={() => setIsMobileMenuOpen(false)}
         />
@@ -103,7 +109,6 @@ if (!user) return null;
       </div>
 
       <main className="flex-1 flex flex-col min-h-screen w-full lg:w-auto overflow-hidden">
-        {/* Mobile Header */}
         <div className="lg:hidden flex items-center justify-between p-4 bg-white border-b border-slate-100 sticky top-0 z-30 shadow-sm">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
