@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface CelebrationItem {
@@ -154,6 +155,7 @@ function daysUntil(dob: string) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function BirthdaysPage() {
+  const supabase = createClient(); // Initialize Supabase Client
   const [activeTab, setActiveTab] = useState<"birthdays"|"anniversaries">("birthdays");
   const [birthdays, setBirthdays] = useState<CelebrationItem[]>([]);
   const [anniversaries, setAnniversaries] = useState<CelebrationItem[]>([]);
@@ -175,16 +177,65 @@ export default function BirthdaysPage() {
   const messages  = activeTab==="birthdays" ? BIRTHDAY_MESSAGES  : ANNIVERSARY_MESSAGES;
   const filteredTemplates = faithFilter==="all" ? templates : templates.filter(t=>t.faith===faithFilter);
 
-  useEffect(()=>{ fetchBirthdays(); fetchAnniversaries(); },[range]);
+  // Consolidated useEffect with AbortController for race-conditions
+  useEffect(() => {
+    const controller = new AbortController();
+    const { signal } = controller;
 
-  async function fetchBirthdays() {
-    setLoading(true);
-    try { const r=await fetch(`/api/birthdays?range=${range}`); const d=await r.json(); setBirthdays(d.birthdays||[]); if(d.stats) setStats(d.stats); }
-    catch{} finally { setLoading(false); }
+    const loadAllData = async () => {
+      setLoading(true);
+      try {
+        await Promise.all([
+          fetchBirthdays(signal),
+          fetchAnniversaries(signal)
+        ]);
+      } catch (err: any) {
+        if (err.name !== 'AbortError') console.error("Fetch Error:", err);
+      } finally {
+        if (!signal.aborted) setLoading(false);
+      }
+    };
+
+    loadAllData();
+    return () => controller.abort();
+  }, [range]);
+
+  async function fetchBirthdays(signal: AbortSignal) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const r = await fetch(`/api/birthdays?range=${range}`, { 
+        signal,
+        headers: { Authorization: `Bearer ${session.access_token}` } 
+      });
+      const d = await r.json();
+      if (!signal.aborted) {
+        setBirthdays(d.birthdays || []);
+        if (d.stats) setStats(d.stats);
+      }
+    } catch (e: any) {
+       if (e.name !== 'AbortError') console.error("Bday API Error:", e);
+    }
   }
-  async function fetchAnniversaries() {
-    try { const r=await fetch(`/api/anniversaries?range=${range}`); const d=await r.json(); setAnniversaries(d.anniversaries||[]); if(d.stats) setAnnStats(d.stats); }
-    catch{}
+
+  async function fetchAnniversaries(signal: AbortSignal) {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const r = await fetch(`/api/anniversaries?range=${range}`, { 
+        signal,
+        headers: { Authorization: `Bearer ${session.access_token}` } 
+      });
+      const d = await r.json();
+      if (!signal.aborted) {
+        setAnniversaries(d.anniversaries || []);
+        if (d.stats) setAnnStats(d.stats);
+      }
+    } catch (e: any) {
+       if (e.name !== 'AbortError') console.error("Ann API Error:", e);
+    }
   }
 
   const openGreeting = (person: CelebrationItem) => {
@@ -240,7 +291,6 @@ export default function BirthdaysPage() {
   ctx.font="100px serif"; ctx.textAlign="center";
   ctx.fillText(tpl.emoji, W/2, bY+190);
 
-  // ── Tamil wish — auto-scale to never overflow
   ctx.save();
   ctx.font="bold 48px 'Noto Sans Tamil',serif";
   ctx.fillStyle=tpl.accent; ctx.textAlign="center";
@@ -260,7 +310,6 @@ export default function BirthdaysPage() {
     W/2, bY+452
   );
 
-  // ── PROFILE ROW: photo LEFT, name+years RIGHT
   const rowTop = bY+490;
   const photoR = 110;
   const photoX = M+90+photoR;
@@ -1179,7 +1228,6 @@ export default function BirthdaysPage() {
           }
         }
 
-        /* Subtle background pattern for preview pane */
         .modal-right::before {
           content: '';
           position: absolute;

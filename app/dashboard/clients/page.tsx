@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 
 interface ClientData {
   id: string;
@@ -88,6 +89,8 @@ function ClientAvatar({
 }
 
 export default function ClientsPage() {
+  const supabase = createClient();
+
   const [clients, setClients]       = useState<ClientData[]>([]);
   const [search, setSearch]         = useState("");
   const [filter, setFilter]         = useState("all");
@@ -118,15 +121,20 @@ export default function ClientsPage() {
   const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setLoading(false); return; }
+
       const p = new URLSearchParams();
       if (search) p.set("search", search);
       if (filter !== "all") p.set("status", filter);
-      const res = await fetch(`/api/clients?${p}`);
+      const res = await fetch(`/api/clients?${p}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
       const data = await res.json();
       setClients(data.clients || []);
       setTotal(data.total || 0);
     } catch { /* silent */ } finally { setLoading(false); }
-  }, [search, filter]);
+  }, [search, filter, supabase]);
 
   useEffect(() => {
     const t = setTimeout(fetchClients, 300);
@@ -157,17 +165,24 @@ export default function ClientsPage() {
     }
     setSaving(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setSaving(false); return; }
+      const authHeaders = {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+      };
+
       if (editingClient) {
         await fetch(`/api/clients/${editingClient.id}`, {
           method: "PUT",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders,
           body: JSON.stringify(formData),
         });
         closeModal(); fetchClients();
       } else {
         const res = await fetch("/api/clients", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: authHeaders,
           body: JSON.stringify(formData),
         });
         const data = await res.json();
@@ -180,7 +195,15 @@ export default function ClientsPage() {
   };
 
   const handleDelete = async (id: string) => {
-    try { await fetch(`/api/clients/${id}`, { method: "DELETE" }); fetchClients(); } catch { /* silent */ }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      await fetch(`/api/clients/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      fetchClients();
+    } catch { /* silent */ }
     setDeleteConfirm(null);
   };
 

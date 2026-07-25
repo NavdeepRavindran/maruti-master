@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 interface DocData {
   id: string;
@@ -62,6 +63,8 @@ const CATEGORIES: {
 const getCat = (key?: DocCategory) => CATEGORIES.find(c => c.key === key) ?? CATEGORIES[0];
 
 export default function DocumentsPage() {
+  const supabase = createClient();
+
   const [docs, setDocs] = useState<DocData[]>([]);
   const [clients, setClients] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +87,11 @@ export default function DocumentsPage() {
 
   async function fetchClients() {
     try {
-      const res = await fetch("/api/clients");
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const res = await fetch("/api/clients", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
       const data = await res.json();
       setClients(data.clients || []);
     } catch (e) { console.error(e); }
@@ -93,8 +100,12 @@ export default function DocumentsPage() {
   async function fetchDocs() {
     setLoading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setLoading(false); return; }
       const params = search ? `?search=${encodeURIComponent(search)}` : "";
-      const res = await fetch(`/api/documents${params}`);
+      const res = await fetch(`/api/documents${params}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
       const data = await res.json();
       setDocs(data.documents || []);
     } catch { } finally { setLoading(false); }
@@ -102,7 +113,15 @@ export default function DocumentsPage() {
 
   async function deleteDoc(id: string) {
     if (!confirm("Delete this document?")) return;
-    try { await fetch(`/api/documents/${id}`, { method: "DELETE" }); fetchDocs(); } catch { }
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      await fetch(`/api/documents/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      fetchDocs();
+    } catch { }
   }
 
   async function handleUpload() {
@@ -110,12 +129,19 @@ export default function DocumentsPage() {
       return alert("Please fill all fields, select a category, and attach a file");
     setUploading(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setUploading(false); return; }
+
       const formData = new FormData();
       formData.append("file", selectedFile);
       formData.append("client_id", uploadForm.client_id);
       formData.append("name", uploadForm.name);
       formData.append("category", uploadForm.category);
-      const res = await fetch("/api/documents", { method: "POST", body: formData });
+      const res = await fetch("/api/documents", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        body: formData,
+      });
       if (res.ok) {
         setShowUploadModal(false);
         setUploadForm({ name: "", file_name: "", file_size: 0, file_url: "", client_id: "", category: "" });
