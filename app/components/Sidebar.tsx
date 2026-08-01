@@ -145,7 +145,8 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           margin-bottom: 36px !important;
           height: 52px !important; /* Fixed height locks geometry during collapse transition */
           box-sizing: border-box !important;
-          overflow: hidden !important;
+          overflow: hidden !important; /* Enforces absolute containment inside the div */
+          flex-wrap: nowrap !important; /* Never wrap items vertically */
         }
 
         /* ── Morphing Collapsed Dock Circle ── */
@@ -173,6 +174,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           padding: 0 !important;
           outline: none !important;
           pointer-events: auto !important;
+          margin: 0 !important;
         }
 
         .b-nav-hamburger:hover {
@@ -192,16 +194,12 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
           opacity: 1;
           visibility: visible;
+          flex-wrap: nowrap !important;
         }
 
+        /* Remove the wrapper layout flow completely when collapsed to guarantee zero leaks */
         .b-nav-dock.collapsed .b-content-wrapper {
-          opacity: 0 !important;
-          visibility: hidden !important;
-          pointer-events: none !important;
-          transform: scale(0.9) translateY(10px) !important;
-          width: 0 !important;
-          height: 0 !important;
-          overflow: hidden !important;
+          display: none !important;
         }
 
         /* ── Brand Logo Styling ── */
@@ -345,53 +343,77 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           color: #0E7AC7;
         }
 
-        /* ── Responsive Styling ── */
+        /* ── Responsive Mobile Viewport Styling ── */
         @media (max-width: 640px) {
           .b-nav-dock {
             margin-bottom: 24px !important;
-            padding: 6px 12px !important;
+            padding: 4px 8px !important; /* Compact container padding */
             border-radius: 20px !important;
-            height: 44px !important; /* Scaled down height for mobile */
+            height: 44px !important; /* Ergonomic 44px height */
+            gap: 6px !important;
           }
+          
+          /* Hide the redundant branding logo to save horizontal width */
+          .b-nav-brand,
+          .b-nav-brand + .b-nav-divider {
+            display: none !important;
+          }
+
           .b-nav-dock.collapsed {
             width: 44px !important;
             height: 44px !important;
             border-radius: 44px !important;
             padding: 0 !important;
           }
+          
           .b-nav-hamburger {
             width: 44px !important;
             height: 44px !important;
           }
+          
           .b-nav-items {
             gap: 2px !important;
           }
+          
           .b-nav-item {
-            padding: 8px 10px !important;
-            gap: 0px;
+            padding: 6px 8px !important;
+            width: 36px !important; /* Lock width to prevent text overflow calculations */
+            height: 36px !important;
             border-radius: 12px !important;
+            justify-content: center !important;
           }
+          
           .b-nav-label {
-            display: none !important;
+            display: none !important; /* Never render text labels on small viewports */
           }
+          
           .b-nav-avatar {
             width: 28px !important;
             height: 28px !important;
             font-size: 10px !important;
             border-radius: 8px !important;
           }
+          
           .b-nav-signout {
             width: 28px !important;
             height: 28px !important;
             border-radius: 8px !important;
           }
+          
           .b-nav-toggle-btn {
             width: 28px !important;
             height: 28px !important;
             border-radius: 8px !important;
           }
+          
           .b-nav-divider {
             height: 18px !important;
+            margin: 0 2px !important;
+          }
+          
+          .b-nav-divider-mini {
+            height: 14px !important;
+            margin: 0 1px !important;
           }
         }
       `}</style>
