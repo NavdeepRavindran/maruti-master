@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -61,13 +62,31 @@ interface SidebarProps {
 
 export default function Sidebar({ role, userName, userEmail, onSignOut }: SidebarProps) {
   const pathname = usePathname();
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
+  // Sync state with localstorage on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedState = localStorage.getItem("b_nav_collapsed");
+      if (savedState === "true") {
+        setIsCollapsed(true);
+      }
+    }
+  }, []);
+
+  const handleCollapseToggle = (collapsedValue: boolean) => {
+    setIsCollapsed(collapsedValue);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("b_nav_collapsed", collapsedValue.toString());
+    }
+  };
 
   return (
     <>
       <style>{`
         /* ── Page Layout Adjustments ── */
         body {
-          padding-bottom: 160px !important; /* Increased padding to allow scrolling past the higher bar */
+          padding-bottom: 160px !important;
         }
 
         /* ── Expand Sibling Dashboard Containers to 100% Width ── */
@@ -80,7 +99,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           width: 100% !important;
           max-width: 100% !important;
           min-width: 0 !important;
-          padding-bottom: 160px !important; /* Forces layout siblings to clear the navigation bar context */
+          padding-bottom: 160px !important;
         }
 
         /* ── Edge-to-Edge Invisible Container Wrapper ── */
@@ -99,7 +118,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           display: flex !important;
           justify-content: center !important;
           align-items: flex-end !important;
-          pointer-events: none !important; /* Clicks bypass the empty wrapper region */
+          pointer-events: none !important;
           overflow: visible !important;
           padding: 0 !important;
           margin: 0 !important;
@@ -110,7 +129,6 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
         .b-nav-dock {
           display: flex !important;
           align-items: center !important;
-          gap: 12px !important;
           background: rgba(255, 255, 255, 0.85) !important;
           backdrop-filter: blur(20px) !important;
           -webkit-backdrop-filter: blur(20px) !important;
@@ -120,11 +138,68 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           box-shadow: 
             0 10px 30px -5px rgba(0, 90, 135, 0.12), 
             0 4px 12px -2px rgba(0, 90, 135, 0.04) !important;
-          pointer-events: auto !important; /* Re-enable clicks specifically on the navigation dock */
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          pointer-events: auto !important;
+          transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1) !important;
           width: max-content;
           max-width: 95vw;
-          margin-bottom: 36px !important; /* Raised higher from 20px to 36px to prevent button overlapping */
+          margin-bottom: 36px !important;
+          height: 52px !important; /* Fixed height locks geometry during collapse transition */
+          box-sizing: border-box !important;
+        }
+
+        /* ── Morphing Collapsed Dock Circle ── */
+        .b-nav-dock.collapsed {
+          width: 52px !important;
+          height: 52px !important;
+          padding: 0 !important;
+          border-radius: 52px !important;
+          justify-content: center !important;
+        }
+
+        /* ── Floating Action Menu Toggle ── */
+        .b-nav-hamburger {
+          display: none;
+          align-items: center;
+          justify-content: center;
+          width: 52px;
+          height: 52px;
+          border-radius: 50%;
+          border: none;
+          background: transparent;
+          color: #64748B;
+          cursor: pointer;
+          transition: all 0.2s ease;
+          padding: 0;
+          outline: none;
+        }
+
+        .b-nav-hamburger:hover {
+          color: #0E7AC7;
+          background: rgba(14, 122, 199, 0.08);
+        }
+
+        .b-nav-dock.collapsed .b-nav-hamburger {
+          display: flex !important;
+        }
+
+        /* ── Navigation Content Container ── */
+        .b-content-wrapper {
+          display: flex !important;
+          align-items: center !important;
+          gap: 12px !important;
+          transition: opacity 0.22s ease, transform 0.22s ease, visibility 0.22s ease;
+          opacity: 1;
+          visibility: visible;
+        }
+
+        .b-nav-dock.collapsed .b-content-wrapper {
+          opacity: 0 !important;
+          visibility: hidden !important;
+          pointer-events: none !important;
+          transform: scale(0.9) translateY(10px);
+          width: 0 !important;
+          height: 0 !important;
+          overflow: hidden;
         }
 
         /* ── Brand Logo Styling ── */
@@ -197,6 +272,14 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           flex-shrink: 0;
         }
 
+        .b-nav-divider-mini {
+          width: 1px;
+          height: 16px;
+          background: #E5E7EB;
+          margin: 0 2px;
+          flex-shrink: 0;
+        }
+
         /* ── Profile and Actions ── */
         .b-nav-profile {
           display: flex;
@@ -240,13 +323,36 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           color: #EF4444;
         }
 
+        /* ── Collapse Trigger Button ── */
+        .b-nav-toggle-btn {
+          width: 32px;
+          height: 32px;
+          border-radius: 10px;
+          border: none;
+          background: transparent;
+          color: #64748B;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .b-nav-toggle-btn:hover {
+          background: rgba(14, 122, 199, 0.08);
+          color: #0E7AC7;
+        }
+
         /* ── Responsive Styling ── */
         @media (max-width: 640px) {
           .b-nav-dock {
-            margin-bottom: 24px !important; /* Raised higher from 12px to 24px to clear mobile buttons & system bars */
+            margin-bottom: 24px !important;
             padding: 6px 12px !important;
-            gap: 6px !important;
             border-radius: 20px !important;
+          }
+          .b-nav-dock.collapsed {
+            width: 52px !important;
+            padding: 0 !important;
           }
           .b-nav-items {
             gap: 2px !important;
@@ -257,7 +363,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
             border-radius: 12px !important;
           }
           .b-nav-label {
-            display: none !important; /* Hide label text dynamically on small displays */
+            display: none !important;
           }
           .b-nav-avatar {
             width: 28px !important;
@@ -270,6 +376,11 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
             height: 28px !important;
             border-radius: 8px !important;
           }
+          .b-nav-toggle-btn {
+            width: 28px !important;
+            height: 28px !important;
+            border-radius: 8px !important;
+          }
           .b-nav-divider {
             height: 18px !important;
           }
@@ -277,56 +388,82 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
       `}</style>
 
       <aside className="sidebar">
-        <div className="b-nav-dock">
-          {/* Brand Logo */}
-          <Link href="/dashboard" className="b-nav-brand" title="Maruthi Insure Care">
-            <img
-              src="/images/logo-mic.png"
-              alt="Maruthi Logo"
-              width={28}
-              height={28}
-            />
-          </Link>
+        <div className={`b-nav-dock ${isCollapsed ? "collapsed" : ""}`}>
+          {/* Hamburger Menu (Only active when collapsed) */}
+          <button
+            onClick={() => handleCollapseToggle(false)}
+            className="b-nav-hamburger"
+            title="Show Menu"
+          >
+            <svg width="22" height="22" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
 
-          <div className="b-nav-divider" />
+          {/* Full Content Wrapper (Transitions smoothly) */}
+          <div className="b-content-wrapper">
+            {/* Brand Logo */}
+            <Link href="/dashboard" className="b-nav-brand" title="Maruthi Insure Care">
+              <img
+                src="/images/logo-mic.png"
+                alt="Maruthi Logo"
+                width={28}
+                height={28}
+              />
+            </Link>
 
-          {/* Navigation Tabs */}
-          <nav className="b-nav-items">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`b-nav-item${isActive ? " active" : ""}`}
-                >
-                  <span className="b-nav-icon">{item.icon}</span>
-                  <span className="b-nav-label">{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+            <div className="b-nav-divider" />
 
-          <div className="b-nav-divider" />
+            {/* Navigation Tabs */}
+            <nav className="b-nav-items">
+              {navItems.map((item) => {
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={`b-nav-item${isActive ? " active" : ""}`}
+                  >
+                    <span className="b-nav-icon">{item.icon}</span>
+                    <span className="b-nav-label">{item.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
 
-          {/* Profile Avatar & Sign-Out */}
-          <div className="b-nav-profile">
-            <div 
-              className="b-nav-avatar" 
-              title={`${userName || "User"} (${role || "Agent"})`}
-            >
-              {userName?.[0]?.toUpperCase() || role?.[0]?.toUpperCase() || "U"}
+            <div className="b-nav-divider" />
+
+            {/* Profile Avatar, Sign-Out & Collapse Buttons */}
+            <div className="b-nav-profile">
+              <div 
+                className="b-nav-avatar" 
+                title={`${userName || "User"} (${role || "Agent"})`}
+              >
+                {userName?.[0]?.toUpperCase() || role?.[0]?.toUpperCase() || "U"}
+              </div>
+              
+              <button
+                onClick={onSignOut}
+                className="b-nav-signout"
+                title="Sign Out"
+              >
+                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+              </button>
+
+              <div className="b-nav-divider-mini" />
+
+              <button
+                onClick={() => handleCollapseToggle(true)}
+                className="b-nav-toggle-btn"
+                title="Collapse Menu"
+              >
+                <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                </svg>
+              </button>
             </div>
-            
-            <button
-              onClick={onSignOut}
-              className="b-nav-signout"
-              title="Sign Out"
-            >
-              <svg width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-            </button>
           </div>
         </div>
       </aside>
