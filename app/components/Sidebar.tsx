@@ -145,6 +145,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           margin-bottom: 36px !important;
           height: 52px !important; /* Fixed height locks geometry during collapse transition */
           box-sizing: border-box !important;
+          overflow: hidden !important;
         }
 
         /* ── Morphing Collapsed Dock Circle ── */
@@ -158,24 +159,25 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
 
         /* ── Floating Action Menu Toggle ── */
         .b-nav-hamburger {
-          display: none;
-          align-items: center;
-          justify-content: center;
-          width: 52px;
-          height: 52px;
-          border-radius: 50%;
-          border: none;
-          background: transparent;
-          color: #64748B;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          padding: 0;
-          outline: none;
+          display: none !important;
+          align-items: center !important;
+          justify-content: center !important;
+          width: 52px !important;
+          height: 52px !important;
+          border-radius: 50% !important;
+          border: none !important;
+          background: transparent !important;
+          color: #64748B !important;
+          cursor: pointer !important;
+          transition: all 0.2s ease !important;
+          padding: 0 !important;
+          outline: none !important;
+          pointer-events: auto !important;
         }
 
         .b-nav-hamburger:hover {
-          color: #0E7AC7;
-          background: rgba(14, 122, 199, 0.08);
+          color: #0E7AC7 !important;
+          background: rgba(14, 122, 199, 0.08) !important;
         }
 
         .b-nav-dock.collapsed .b-nav-hamburger {
@@ -196,10 +198,10 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           opacity: 0 !important;
           visibility: hidden !important;
           pointer-events: none !important;
-          transform: scale(0.9) translateY(10px);
+          transform: scale(0.9) translateY(10px) !important;
           width: 0 !important;
           height: 0 !important;
-          overflow: hidden;
+          overflow: hidden !important;
         }
 
         /* ── Brand Logo Styling ── */
@@ -349,10 +351,17 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
             margin-bottom: 24px !important;
             padding: 6px 12px !important;
             border-radius: 20px !important;
+            height: 44px !important; /* Scaled down height for mobile */
           }
           .b-nav-dock.collapsed {
-            width: 52px !important;
+            width: 44px !important;
+            height: 44px !important;
+            border-radius: 44px !important;
             padding: 0 !important;
+          }
+          .b-nav-hamburger {
+            width: 44px !important;
+            height: 44px !important;
           }
           .b-nav-items {
             gap: 2px !important;
