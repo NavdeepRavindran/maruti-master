@@ -3,6 +3,7 @@
 import { useEffect, useState, use, useRef } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
+import { createClient } from "@/lib/supabase/client";
 
 
 interface ClientData {
@@ -50,20 +51,19 @@ interface DocData {
   file_url?: string;
 }
 
-const labelCls =
-  "block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5";
+const labelCls = "block text-xs font-semibold text-[#6B7280] mb-1.5";
 const inputCls =
-  "w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all text-[13px] font-semibold text-slate-800 placeholder:text-slate-400 placeholder:font-normal";
+  "w-full px-4 py-3 rounded-2xl bg-[#F7F9FC] border border-slate-200 focus:bg-white focus:border-[#0E7AC7] focus:ring-2 focus:ring-[#DDF3FF] outline-none transition-all text-[13px] font-semibold text-[#1F2937] placeholder:text-slate-400 placeholder:font-normal";
 
 const avatarGradients = [
-  "from-blue-500 to-blue-700",
-  "from-violet-500 to-purple-700",
-  "from-rose-500 to-pink-700",
-  "from-amber-500 to-orange-600",
-  "from-emerald-500 to-teal-700",
-  "from-sky-500 to-cyan-700",
-  "from-indigo-500 to-indigo-700",
-  "from-fuchsia-500 to-pink-700",
+  "from-[#0E7AC7] to-[#005A87]",
+  "from-[#7C6CF6] to-[#5B4FD1]",
+  "from-[#EF4444] to-[#B91C1C]",
+  "from-[#F59E0B] to-[#C2740A]",
+  "from-[#14B86A] to-[#0E8F52]",
+  "from-[#06B6D4] to-[#0E7AC7]",
+  "from-[#6366F1] to-[#4338CA]",
+  "from-[#EC4899] to-[#BE185D]",
 ];
 const getGradient = (name: string) =>
   avatarGradients[name.charCodeAt(0) % avatarGradients.length];
@@ -94,7 +94,7 @@ function Avatar({
   }
   return (
     <div
-      className={`${sizeMap[size]} rounded-2xl bg-gradient-to-br ${getGradient(name)} flex items-center justify-center text-white font-black shrink-0 ring-4 ring-white shadow-lg`}
+      className={`${sizeMap[size]} rounded-2xl bg-gradient-to-br ${getGradient(name)} flex items-center justify-center text-white font-bold shrink-0 ring-4 ring-white shadow-lg`}
     >
       {name[0]?.toUpperCase()}
     </div>
@@ -107,6 +107,8 @@ export default function ClientProfilePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const supabase = createClient();
+
   const [client, setClient] = useState<ClientData | null>(null);
   const [family, setFamily] = useState<FamilyMember[]>([]);
   const [docs, setDocs] = useState<DocData[]>([]);
@@ -130,7 +132,7 @@ export default function ClientProfilePage({
   });
   const [selectedDocFile, setSelectedDocFile] = useState<File | null>(null);
   const [editForm, setEditForm] = useState<
-    Partial<ClientData & { profilePic?: string }>
+    Partial<ClientData & { profile_pic?: string }>
   >({});
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"docs" | "family">("docs");
@@ -142,10 +144,22 @@ export default function ClientProfilePage({
     fetchClient();
   }, [id]);
 
+  // ── Helper: always attach the current Supabase session token ────────────
+  async function authHeaders(json = true) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    const headers: HeadersInit = {};
+    if (json) headers["Content-Type"] = "application/json";
+    if (session) headers["Authorization"] = `Bearer ${session.access_token}`;
+    return headers;
+  }
+
   async function fetchClient() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/clients/${id}`);
+      const headers = await authHeaders(false);
+      const res = await fetch(`/api/clients/${id}`, { headers });
       const data = await res.json();
       if (data.client) setClient(data.client);
       if (data.family_members) setFamily(data.family_members);
@@ -175,7 +189,7 @@ export default function ClientProfilePage({
       pin_code: client.pin_code || "",
       notes: client.notes || "",
       status: client.status || "Active",
-      profilePic: client.profile_pic || "",
+      profile_pic: client.profile_pic || "",
     });
     setShowEditModal(true);
   }
@@ -189,24 +203,30 @@ export default function ClientProfilePage({
     }
     const reader = new FileReader();
     reader.onload = () =>
-      setEditForm((prev) => ({ ...prev, profilePic: reader.result as string }));
+      setEditForm((prev) => ({ ...prev, profile_pic: reader.result as string }));
     reader.readAsDataURL(file);
   }
 
   async function saveEdit() {
     setSaving(true);
     try {
+      const headers = await authHeaders(true);
       const res = await fetch(`/api/clients/${id}`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...editForm, profile_pic: editForm.profilePic }),
+        headers,
+        body: JSON.stringify({ ...editForm, profile_pic: editForm.profile_pic }),
       });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || `Update failed (${res.status})`);
+      }
       const data = await res.json();
       if (data.client) setClient(data.client);
       setShowEditModal(false);
+      toast.success("Profile updated successfully!");
       fetchClient();
-    } catch {
-      alert("Failed to update client.");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to update client.");
     } finally {
       setSaving(false);
     }
@@ -222,8 +242,10 @@ export default function ClientProfilePage({
       return;
     setRegenerating(true);
     try {
+      const headers = await authHeaders(true);
       const res = await fetch(`/api/clients/${id}/regenerate`, {
         method: "POST",
+        headers,
       });
       const data = await res.json();
       if (data.client) {
@@ -231,10 +253,10 @@ export default function ClientProfilePage({
           ...client,
            plain_password: data.client.temporaryPassword,
         });
-        alert("Password regenerated.");
+        toast.success("Password regenerated.");
       }
     } catch {
-      alert("Failed to regenerate password.");
+      toast.error("Failed to regenerate password.");
     } finally {
       setRegenerating(false);
     }
@@ -242,11 +264,12 @@ export default function ClientProfilePage({
 
   function copyToClipboard(text: string, msg: string) {
     navigator.clipboard.writeText(text);
+    if (msg) toast.success(msg);
   }
   function copyAllCredentials() {
     if (!client) return;
     const text = `Client Portal Access\n\nLogin ID: ${client.clientloginid || "N/A"}\nPassword: ${client.plain_password || "N/A"}\nPortal URL: ${window.location.origin}/client-login`;
-    copyToClipboard(text, "All credentials copied!");
+    copyToClipboard(text, "");
   }
 
   const formatSize = (b: number) =>
@@ -277,10 +300,10 @@ export default function ClientProfilePage({
   };
   const docColor = (t: string) =>
     ({
-      PDF: "bg-rose-50 text-rose-600 border-rose-100",
-      IMG: "bg-amber-50 text-amber-600 border-amber-100",
-      DOC: "bg-indigo-50 text-indigo-600 border-indigo-100",
-    })[t] || "bg-emerald-50 text-emerald-600 border-emerald-100";
+      PDF: "bg-[#EF4444]/10 text-[#EF4444]",
+      IMG: "bg-[#F59E0B]/10 text-[#F59E0B]",
+      DOC: "bg-[#7C6CF6]/10 text-[#7C6CF6]",
+    })[t] || "bg-[#14B86A]/10 text-[#14B86A]";
 
   async function addFamilyMember() {
     if (
@@ -291,9 +314,10 @@ export default function ClientProfilePage({
       return;
     setSaving(true);
     try {
+      const headers = await authHeaders(true);
       await fetch(`/api/clients/${id}/family`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify(familyForm),
       });
       setShowFamilyModal(false);
@@ -303,8 +327,10 @@ export default function ClientProfilePage({
         relationship: "",
         phone: "",
       });
+      toast.success("Family member added.");
       fetchClient();
     } catch {
+      toast.error("Failed to add family member.");
     } finally {
       setSaving(false);
     }
@@ -313,7 +339,8 @@ export default function ClientProfilePage({
   async function deleteFamilyMember(fid: string) {
     if (!confirm("Delete this family member and their documents?")) return;
     try {
-      await fetch(`/api/clients/${id}/family/${fid}`, { method: "DELETE" });
+      const headers = await authHeaders(false);
+      await fetch(`/api/clients/${id}/family/${fid}`, { method: "DELETE", headers });
       fetchClient();
     } catch {}
   }
@@ -325,6 +352,7 @@ export default function ClientProfilePage({
       );
     setSaving(true);
     try {
+      const authOnly = await authHeaders(false);
       const formData = new FormData();
       formData.append("file", selectedDocFile);
       formData.append("client_id", id);
@@ -334,6 +362,7 @@ export default function ClientProfilePage({
         formData.append("family_member_id", docForm.family_member_id);
       const res = await fetch("/api/documents", {
         method: "POST",
+        headers: authOnly,
         body: formData,
       });
       if (!res.ok) {
@@ -350,9 +379,10 @@ export default function ClientProfilePage({
         category: "",
       });
       setSelectedDocFile(null);
+      toast.success("Document uploaded.");
       fetchClient();
     } catch (e: any) {
-      alert("Error: " + e.message);
+      toast.error("Error: " + e.message);
     } finally {
       setSaving(false);
     }
@@ -361,30 +391,34 @@ export default function ClientProfilePage({
 async function deleteDocument(did: string) {
   if (!confirm("Delete this document?")) return;
   try {
-    const res = await fetch(`/api/documents/${did}`, { method: "DELETE" });
+    const headers = await authHeaders(false);
+    const res = await fetch(`/api/documents/${did}`, { method: "DELETE", headers });
     if (!res.ok) {
       const e = await res.json();
-      alert("Delete failed: " + (e.error || res.status));
+      toast.error("Delete failed: " + (e.error || res.status));
       return;
     }
     fetchClient();
   } catch (e: any) {
-    alert("Delete failed: " + e.message);
+    toast.error("Delete failed: " + e.message);
   }
 }
 
   if (loading)
     return (
       <div className="flex items-center justify-center py-40">
-        <div className="w-8 h-8 border-[3px] border-slate-900 border-t-transparent rounded-full animate-spin" />
+        <svg className="w-8 h-8 animate-spin text-[#005A87]" fill="none" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
       </div>
     );
 
   if (!client)
     return (
       <div className="py-32 text-center">
-        <p className="text-slate-400 font-bold mb-4">Client not found.</p>
-        <Link href="/dashboard/clients" className="text-blue-600 font-bold">
+        <p className="text-[#6B7280] font-semibold mb-4">Client not found.</p>
+        <Link href="/dashboard/clients" className="text-[#005A87] font-bold">
           ← Back to Clients
         </Link>
       </div>
@@ -401,12 +435,12 @@ async function deleteDocument(did: string) {
     .join(", ");
 
   return (
-    <div className="min-h-screen bg-[#f5f6fa]">
+    <div className="min-h-screen bg-[#F7F9FC]">
       {/* ── Top nav bar ─────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur border-b border-slate-200 px-4 sm:px-6 h-14 flex items-center justify-between">
+      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 sm:px-6 h-16 flex items-center justify-between">
         <Link
           href="/dashboard/clients"
-          className="flex items-center gap-2 text-[12px] font-bold text-slate-500 hover:text-slate-900 transition-colors"
+          className="flex items-center gap-2 text-[13px] font-bold text-[#6B7280] hover:text-[#1F2937] transition-colors"
         >
           <svg
             className="w-4 h-4"
@@ -421,12 +455,12 @@ async function deleteDocument(did: string) {
               d="M15 19l-7-7 7-7"
             />
           </svg>
-          Clients
+          <span className="hidden sm:inline">Clients</span>
         </Link>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowDocModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-[11px] font-bold hover:bg-blue-600 transition-all active:scale-95"
+            className="flex items-center gap-1.5 px-3.5 h-10 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95"
           >
             <svg
               className="w-3.5 h-3.5"
@@ -441,11 +475,11 @@ async function deleteDocument(did: string) {
                 d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
               />
             </svg>
-            Upload
+            <span className="hidden sm:inline">Upload</span>
           </button>
           <button
             onClick={openEdit}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-[11px] font-bold hover:border-blue-500 hover:text-blue-600 transition-all"
+            className="flex items-center gap-1.5 px-3.5 h-10 bg-white border border-slate-200 text-[#1F2937] rounded-xl text-xs font-bold hover:border-[#0E7AC7] hover:text-[#005A87] transition-all"
           >
             <svg
               className="w-3.5 h-3.5"
@@ -466,7 +500,7 @@ async function deleteDocument(did: string) {
       </div>
 
       {/* ── Hero / Profile Header ────────────────────────────────── */}
-      <div className="bg-white border-b border-slate-200">
+      <div className="bg-white border-b border-slate-100">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {/* Mobile: stacked, Desktop: row */}
           <div className="flex flex-col sm:flex-row sm:items-end gap-5">
@@ -476,11 +510,11 @@ async function deleteDocument(did: string) {
                 <img
                   src={client.profile_pic}
                   alt={fullName}
-                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl object-cover ring-4 ring-white shadow-xl"
+                  className="w-20 h-20 sm:w-24 sm:h-24 rounded-[22px] object-cover ring-4 ring-white shadow-xl"
                 />
               ) : (
                 <div
-                  className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-br ${getGradient(client.name)} flex items-center justify-center text-white font-black text-3xl sm:text-4xl ring-4 ring-white shadow-xl`}
+                  className={`w-20 h-20 sm:w-24 sm:h-24 rounded-[22px] bg-gradient-to-br ${getGradient(client.name)} flex items-center justify-center text-white font-bold text-3xl sm:text-4xl ring-4 ring-white shadow-xl`}
                 >
                   {fullName[0]?.toUpperCase()}
                 </div>
@@ -491,35 +525,33 @@ async function deleteDocument(did: string) {
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-3">
                 <div>
-<div>
-  <h1 className="text-3xl sm:text-4xl font-black text-slate-900 uppercase leading-none">
-    {client.surname}
-  </h1>
+                  <h1 className="text-2xl sm:text-[28px] font-bold text-[#1F2937] leading-none">
+                    {client.surname}
+                  </h1>
 
-  <p className="mt-1 text-sm sm:text-base font-semibold text-slate-500">
-    {client.name}
-  </p>
-</div>
-                  <div className="flex flex-wrap items-center gap-2 mt-2">
+                  <p className="mt-1.5 text-sm sm:text-base font-medium text-[#6B7280]">
+                    {client.name}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${
                         client.status === "Active"
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border border-amber-200"
+                          ? "bg-[#14B86A]/10 text-[#14B86A]"
+                          : "bg-[#F59E0B]/10 text-[#F59E0B]"
                       }`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${client.status === "Active" ? "bg-emerald-500" : "bg-amber-400"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${client.status === "Active" ? "bg-[#14B86A]" : "bg-[#F59E0B]"}`}
                       />
                       {client.status}
                     </span>
                     {client.gender && (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-500 uppercase tracking-widest">
+                      <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-[#F7F9FC] text-[#6B7280]">
                         {client.gender}
                       </span>
                     )}
                     {client.occupation && (
-                      <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-slate-100 text-slate-500 truncate max-w-[140px]">
+                      <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-[#F7F9FC] text-[#6B7280] truncate max-w-[140px]">
                         {client.occupation}
                       </span>
                     )}
@@ -528,39 +560,39 @@ async function deleteDocument(did: string) {
               </div>
 
               {/* Quick stats row */}
-              <div className="flex flex-wrap gap-4 mt-4">
+              <div className="flex flex-wrap gap-4 sm:gap-6 mt-5">
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">
                     Age
                   </p>
-                  <p className="text-[15px] font-black text-slate-900">
+                  <p className="text-[16px] font-bold text-[#1F2937] mt-0.5">
                     {getAge(client.date_of_birth)} yrs
                   </p>
                 </div>
-                <div className="w-px bg-slate-200" />
+                <div className="w-px bg-slate-100" />
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">
                     DOB
                   </p>
-                  <p className="text-[15px] font-black text-slate-900">
+                  <p className="text-[16px] font-bold text-[#1F2937] mt-0.5">
                     {formatDate(client.date_of_birth)}
                   </p>
                 </div>
-                <div className="w-px bg-slate-200" />
+                <div className="w-px bg-slate-100" />
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">
                     Documents
                   </p>
-                  <p className="text-[15px] font-black text-slate-900">
+                  <p className="text-[16px] font-bold text-[#7C6CF6] mt-0.5">
                     {docs.length}
                   </p>
                 </div>
-                <div className="w-px bg-slate-200" />
+                <div className="w-px bg-slate-100" />
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">
                     Family
                   </p>
-                  <p className="text-[15px] font-black text-slate-900">
+                  <p className="text-[16px] font-bold text-[#0E7AC7] mt-0.5">
                     {family.length}
                   </p>
                 </div>
@@ -569,14 +601,14 @@ async function deleteDocument(did: string) {
           </div>
 
           {/* Contact strip */}
-          <div className="mt-5 pt-5 border-t border-slate-100 flex flex-wrap gap-4">
+          <div className="mt-6 pt-5 border-t border-slate-100 flex flex-wrap gap-3 sm:gap-4">
             <a
               href={`tel:${client.phone}`}
-              className="flex items-center gap-2 text-[12px] font-bold text-slate-700 hover:text-blue-600 transition-colors"
+              className="flex items-center gap-2 text-[13px] font-semibold text-[#1F2937] hover:text-[#005A87] transition-colors"
             >
-              <span className="w-7 h-7 rounded-lg bg-blue-50 border border-blue-100 flex items-center justify-center">
+              <span className="w-9 h-9 rounded-xl bg-[#DDF3FF] flex items-center justify-center shrink-0">
                 <svg
-                  className="w-3.5 h-3.5 text-blue-600"
+                  className="w-4 h-4 text-[#005A87]"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -594,11 +626,11 @@ async function deleteDocument(did: string) {
             {client.email && (
               <a
                 href={`mailto:${client.email}`}
-                className="flex items-center gap-2 text-[12px] font-bold text-slate-700 hover:text-blue-600 transition-colors truncate"
+                className="flex items-center gap-2 text-[13px] font-semibold text-[#1F2937] hover:text-[#005A87] transition-colors truncate"
               >
-                <span className="w-7 h-7 rounded-lg bg-violet-50 border border-violet-100 flex items-center justify-center shrink-0">
+                <span className="w-9 h-9 rounded-xl bg-[#7C6CF6]/10 flex items-center justify-center shrink-0">
                   <svg
-                    className="w-3.5 h-3.5 text-violet-600"
+                    className="w-4 h-4 text-[#7C6CF6]"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -615,10 +647,10 @@ async function deleteDocument(did: string) {
               </a>
             )}
             {fullAddress && (
-              <div className="flex items-center gap-2 text-[12px] font-bold text-slate-500">
-                <span className="w-7 h-7 rounded-lg bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-[#6B7280]">
+                <span className="w-9 h-9 rounded-xl bg-[#EF4444]/10 flex items-center justify-center shrink-0">
                   <svg
-                    className="w-3.5 h-3.5 text-rose-500"
+                    className="w-4 h-4 text-[#EF4444]"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -640,27 +672,27 @@ async function deleteDocument(did: string) {
                 <span className="truncate max-w-[220px]">{fullAddress}</span>
 
                 <button
-  onClick={() => {
-    navigator.clipboard.writeText(fullAddress);
-    toast.success("Address copied successfully!");
-  }}
-  className="shrink-0 p-1 rounded hover:bg-slate-100"
-  title="Copy address"
->
-  <svg
-    className="w-4 h-4 text-slate-400"
-    fill="none"
-    viewBox="0 0 24 24"
-    stroke="currentColor"
-    strokeWidth={2}
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M8 16h8M8 12h8m-8-4h8M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z"
-    />
-  </svg>
-</button>
+                  onClick={() => {
+                    navigator.clipboard.writeText(fullAddress);
+                    toast.success("Address copied successfully!");
+                  }}
+                  className="shrink-0 p-1.5 rounded-lg hover:bg-[#F7F9FC]"
+                  title="Copy address"
+                >
+                  <svg
+                    className="w-4 h-4 text-[#6B7280]"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8 16h8M8 12h8m-8-4h8M8 4h8a2 2 0 012 2v12a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z"
+                    />
+                  </svg>
+                </button>
               </div>
             )}
           </div>
@@ -668,11 +700,11 @@ async function deleteDocument(did: string) {
       </div>
 
       {/* ── Main content ─────────────────────────────────────────── */}
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-4">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-4 sm:space-y-5">
         {/* Personal details card */}
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-            <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+        <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
+          <div className="px-5 py-4 border-b border-slate-50">
+            <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
               Personal Details
             </h2>
           </div>
@@ -693,22 +725,22 @@ async function deleteDocument(did: string) {
               .filter((i) => i.value)
               .map(({ label, value }) => (
                 <div key={label}>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest mb-1">
                     {label}
                   </p>
-                  <p className="text-[13px] font-bold text-slate-800">
+                  <p className="text-[13px] font-bold text-[#1F2937]">
                     {value}
                   </p>
                 </div>
               ))}
           </div>
           {client.notes && (
-            <div className="px-5 pb-4 pt-0">
-              <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
-                <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">
+            <div className="px-5 pb-5 pt-0">
+              <div className="bg-[#F59E0B]/10 rounded-2xl px-4 py-3">
+                <p className="text-[10px] font-bold text-[#F59E0B] uppercase tracking-widest mb-1">
                   Notes
                 </p>
-                <p className="text-[13px] text-amber-900 font-medium">
+                <p className="text-[13px] text-[#92640a] font-medium">
                   {client.notes}
                 </p>
               </div>
@@ -718,12 +750,12 @@ async function deleteDocument(did: string) {
 
         {/* Portal access card */}
         {client.clientloginid && (
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-md bg-slate-900 flex items-center justify-center">
+          <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-[#005A87] flex items-center justify-center">
                   <svg
-                    className="w-3 h-3 text-white"
+                    className="w-3.5 h-3.5 text-white"
                     fill="none"
                     viewBox="0 0 24 24"
                     stroke="currentColor"
@@ -736,23 +768,23 @@ async function deleteDocument(did: string) {
                     />
                   </svg>
                 </div>
-                <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+                <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
                   Portal Access
                 </h2>
               </div>
-<button
-  onClick={async () => {
-    try {
-      await copyAllCredentials();
-      toast.success("Credentials copied successfully!");
-    } catch {
-      toast.error("Failed to copy credentials");
-    }
-  }}
-  className="text-[11px] font-bold text-blue-600 hover:text-blue-700 transition-colors"
->
-  Copy all
-</button>
+              <button
+                onClick={async () => {
+                  try {
+                    await copyAllCredentials();
+                    toast.success("Credentials copied successfully!");
+                  } catch {
+                    toast.error("Failed to copy credentials");
+                  }
+                }}
+                className="text-xs font-bold text-[#005A87] hover:text-[#0E7AC7] transition-colors"
+              >
+                Copy all
+              </button>
             </div>
             <div className="px-5 py-4 grid sm:grid-cols-2 gap-4">
               <div>
@@ -761,7 +793,7 @@ async function deleteDocument(did: string) {
                   <input
                     readOnly
                       value={client.phone || ""}
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-bold text-slate-700 outline-none"
+                    className="flex-1 bg-[#F7F9FC] border border-slate-200 rounded-xl px-3 py-2.5 text-[13px] font-bold text-[#1F2937] outline-none"
                   />
                   <button
                     onClick={() =>
@@ -770,7 +802,7 @@ async function deleteDocument(did: string) {
                         "Login ID copied!",
                       )
                     }
-                    className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors shrink-0"
+                    className="w-10 h-10 flex items-center justify-center bg-[#F7F9FC] border border-slate-200 rounded-xl text-[#6B7280] hover:bg-slate-100 transition-colors shrink-0"
                   >
                     <svg
                       className="w-3.5 h-3.5"
@@ -796,11 +828,11 @@ async function deleteDocument(did: string) {
                       type={showPassword ? "text" : "password"}
                       readOnly
                       value={client.plain_password || ""}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-3 pr-9 py-2.5 text-[13px] font-bold text-slate-700 outline-none tracking-widest"
+                      className="w-full bg-[#F7F9FC] border border-slate-200 rounded-xl pl-3 pr-9 py-2.5 text-[13px] font-bold text-[#1F2937] outline-none tracking-widest"
                     />
                     <button
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#1F2937]"
                     >
                       <svg
                         className="w-4 h-4"
@@ -841,7 +873,7 @@ async function deleteDocument(did: string) {
                         "Password copied!",
                       )
                     }
-                    className="w-9 h-9 flex items-center justify-center bg-slate-50 border border-slate-200 rounded-xl text-slate-500 hover:bg-slate-100 transition-colors shrink-0"
+                    className="w-10 h-10 flex items-center justify-center bg-[#F7F9FC] border border-slate-200 rounded-xl text-[#6B7280] hover:bg-slate-100 transition-colors shrink-0"
                   >
                     <svg
                       className="w-3.5 h-3.5"
@@ -860,7 +892,7 @@ async function deleteDocument(did: string) {
                   <button
                     onClick={regeneratePassword}
                     disabled={regenerating}
-                    className="w-9 h-9 flex items-center justify-center bg-red-50 border border-red-100 rounded-xl text-red-500 hover:bg-red-100 transition-colors shrink-0 disabled:opacity-50"
+                    className="w-10 h-10 flex items-center justify-center bg-[#EF4444]/10 rounded-xl text-[#EF4444] hover:bg-[#EF4444]/15 transition-colors shrink-0 disabled:opacity-50"
                     title="Regenerate"
                   >
                     <svg
@@ -884,7 +916,7 @@ async function deleteDocument(did: string) {
         )}
 
         {/* Tabs */}
-        <div className="flex items-center gap-1 p-1 bg-white border border-slate-200 rounded-2xl w-fit">
+        <div className="flex items-center gap-1 p-1.5 bg-white border border-slate-100 rounded-2xl w-fit shadow-sm">
           {[
             { key: "docs", label: `Documents`, count: docs.length },
             { key: "family", label: `Family`, count: family.length },
@@ -892,18 +924,18 @@ async function deleteDocument(did: string) {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key as any)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-[11px] font-black uppercase tracking-widest transition-all ${
+              className={`flex items-center gap-2 px-4 sm:px-5 h-10 rounded-xl text-xs font-bold transition-all ${
                 activeTab === tab.key
-                  ? "bg-slate-900 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-800 hover:bg-slate-50"
+                  ? "bg-[#005A87] text-white shadow-sm"
+                  : "text-[#6B7280] hover:text-[#1F2937] hover:bg-[#F7F9FC]"
               }`}
             >
               {tab.label}
               <span
-                className={`px-1.5 py-0.5 rounded-md text-[10px] font-black ${
+                className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
                   activeTab === tab.key
                     ? "bg-white/20 text-white"
-                    : "bg-slate-100 text-slate-500"
+                    : "bg-[#F7F9FC] text-[#6B7280]"
                 }`}
               >
                 {tab.count}
@@ -914,14 +946,14 @@ async function deleteDocument(did: string) {
 
         {/* Documents tab */}
         {activeTab === "docs" && (
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+          <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+              <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
                 Documents
               </h2>
               <button
                 onClick={() => setShowDocModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-[11px] font-bold hover:bg-blue-600 transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 h-9 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95"
               >
                 <svg
                   className="w-3 h-3"
@@ -940,8 +972,8 @@ async function deleteDocument(did: string) {
               </button>
             </div>
             {docs.length === 0 ? (
-              <div className="py-16 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-300">
+              <div className="py-16 text-center px-5">
+                <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
                   <svg
                     className="w-6 h-6"
                     fill="none"
@@ -956,12 +988,12 @@ async function deleteDocument(did: string) {
                     />
                   </svg>
                 </div>
-                <p className="text-[13px] font-bold text-slate-400 mb-2">
+                <p className="text-[13px] font-semibold text-[#1F2937] mb-2">
                   No documents yet
                 </p>
                 <button
                   onClick={() => setShowDocModal(true)}
-                  className="text-[12px] text-blue-600 font-bold hover:underline"
+                  className="text-xs text-[#005A87] font-bold hover:underline"
                 >
                   Upload first document →
                 </button>
@@ -971,23 +1003,23 @@ async function deleteDocument(did: string) {
                 {docs.map((doc) => (
                   <div
                     key={doc.id}
-                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/60 transition-colors group"
+                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F9FC] transition-colors group"
                   >
                     <div
-                      className={`w-10 h-10 rounded-xl border flex items-center justify-center font-black text-[10px] shrink-0 ${docColor(doc.file_type)}`}
+                      className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${docColor(doc.file_type)}`}
                     >
                       {doc.file_type}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-slate-900 truncate group-hover:text-blue-600 transition-colors">
+                      <p className="text-[13px] font-bold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">
                         {doc.name}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-[10px] text-slate-400 font-medium truncate">
+                        <p className="text-[11px] text-[#6B7280] font-medium truncate">
                           {doc.file_name}
                         </p>
                         {doc.family_member_id && (
-                          <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded shrink-0">
+                          <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-1.5 py-0.5 rounded shrink-0">
                             {family.find((f) => f.id === doc.family_member_id)
                               ?.name || "Family"}
                           </span>
@@ -995,7 +1027,7 @@ async function deleteDocument(did: string) {
                       </div>
                     </div>
                     <div className="text-right shrink-0 hidden sm:block">
-                      <p className="text-[11px] font-bold text-slate-400">
+                      <p className="text-[11px] font-semibold text-[#6B7280]">
                         {formatSize(doc.file_size)}
                       </p>
                       <p className="text-[10px] text-slate-300 font-medium">
@@ -1003,49 +1035,81 @@ async function deleteDocument(did: string) {
                       </p>
                     </div>
                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
-                      <a
-                        href={
-                          doc.file_url && doc.file_url.length > 5
-                            ? doc.file_url
-                            : "#"
-                        }
-                        download={doc.file_name}
-                        target="_blank"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all"
-                      >
-                        <svg
-                          className="w-3.5 h-3.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                          />
-                        </svg>
-                      </a>
-                      <button
-                        onClick={() => deleteDocument(doc.id)}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all"
-                      >
-                        <svg
-                          className="w-3.5 h-3.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </div>
+
+  {/* View */}
+  <a
+    href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
+    target="_blank"
+    rel="noopener noreferrer"
+    title="View Document"
+    className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
+  >
+    <svg
+      className="w-3.5 h-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+      />
+      <circle
+        cx="12"
+        cy="12"
+        r="3"
+        stroke="currentColor"
+        strokeWidth={2}
+      />
+    </svg>
+  </a>
+
+  {/* Download */}
+  <a
+    href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
+    download={doc.file_name}
+    title="Download"
+    className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all"
+  >
+    <svg
+      className="w-3.5 h-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+      />
+    </svg>
+  </a>
+
+  {/* Delete */}
+  <button
+    onClick={() => deleteDocument(doc.id)}
+    title="Delete"
+    className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
+  >
+    <svg
+      className="w-3.5 h-3.5"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+      />
+    </svg>
+  </button>
+
+</div>
                   </div>
                 ))}
               </div>
@@ -1055,14 +1119,14 @@ async function deleteDocument(did: string) {
 
         {/* Family tab */}
         {activeTab === "family" && (
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">
+          <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
+            <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+              <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
                 Family Members
               </h2>
               <button
                 onClick={() => setShowFamilyModal(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-[11px] font-bold hover:bg-blue-600 transition-all active:scale-95"
+                className="flex items-center gap-1.5 px-3.5 h-9 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95"
               >
                 <svg
                   className="w-3 h-3"
@@ -1081,8 +1145,8 @@ async function deleteDocument(did: string) {
               </button>
             </div>
             {family.length === 0 ? (
-              <div className="py-16 text-center">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-300">
+              <div className="py-16 text-center px-5">
+                <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
                   <svg
                     className="w-6 h-6"
                     fill="none"
@@ -1097,12 +1161,12 @@ async function deleteDocument(did: string) {
                     />
                   </svg>
                 </div>
-                <p className="text-[13px] font-bold text-slate-400 mb-2">
+                <p className="text-[13px] font-semibold text-[#1F2937] mb-2">
                   No family members yet
                 </p>
                 <button
                   onClick={() => setShowFamilyModal(true)}
-                  className="text-[12px] text-blue-600 font-bold hover:underline"
+                  className="text-xs text-[#005A87] font-bold hover:underline"
                 >
                   Add first family member →
                 </button>
@@ -1112,36 +1176,36 @@ async function deleteDocument(did: string) {
                 {family.map((fm) => (
                   <div
                     key={fm.id}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/60 transition-colors group"
+                    className="flex items-center gap-4 px-5 py-4 hover:bg-[#F7F9FC] transition-colors group"
                   >
                     <div
-                      className={`w-10 h-10 rounded-xl bg-gradient-to-br ${getGradient(fm.name)} flex items-center justify-center text-white font-black text-sm shrink-0`}
+                      className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(fm.name)} flex items-center justify-center text-white font-bold text-sm shrink-0`}
                     >
                       {fm.name[0]?.toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-slate-900 group-hover:text-blue-600 transition-colors">
+                      <p className="text-[13px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors">
                         {fm.name}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wider">
+                        <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded uppercase tracking-wider">
                           {fm.relationship}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-medium">
+                        <span className="text-[10px] text-[#6B7280] font-medium">
                           Age {getAge(fm.date_of_birth)}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-medium">
+                        <span className="text-[10px] text-[#6B7280] font-medium">
                           · {formatDate(fm.date_of_birth)}
                         </span>
                         {fm.phone && (
-                          <span className="text-[10px] text-slate-400 font-medium hidden sm:block">
+                          <span className="text-[10px] text-[#6B7280] font-medium hidden sm:block">
                             · {fm.phone}
                           </span>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-lg">
+                      <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2.5 py-1.5 rounded-lg">
                         {
                           docs.filter((d) => d.family_member_id === fm.id)
                             .length
@@ -1150,7 +1214,7 @@ async function deleteDocument(did: string) {
                       </span>
                       <button
                         onClick={() => deleteFamilyMember(fm.id)}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-slate-100 text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all opacity-0 group-hover:opacity-100"
+                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                       >
                         <svg
                           className="w-3.5 h-3.5"
@@ -1182,19 +1246,19 @@ async function deleteDocument(did: string) {
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setShowEditModal(false)}
           />
-          <div className="relative bg-white w-full sm:max-w-xl rounded-t-3xl sm:rounded-2xl shadow-2xl max-h-[95vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between z-10 rounded-t-3xl sm:rounded-t-2xl">
+          <div className="relative bg-white w-full sm:max-w-xl rounded-t-[28px] sm:rounded-[22px] shadow-2xl max-h-[95vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-6 py-4 flex items-center justify-between z-10 rounded-t-[28px] sm:rounded-t-[22px]">
               <div>
-                <h2 className="text-[15px] font-black text-slate-900">
+                <h2 className="text-[16px] font-bold text-[#1F2937]">
                   Edit Client
                 </h2>
-                <p className="text-[11px] text-slate-400 font-medium">
+                <p className="text-xs text-[#6B7280] font-medium">
                   Update client information
                 </p>
               </div>
               <button
                 onClick={() => setShowEditModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500"
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
               >
                 <svg
                   className="w-4 h-4"
@@ -1214,47 +1278,47 @@ async function deleteDocument(did: string) {
 
             <div className="px-6 py-5 space-y-4">
               {/* Profile pic section */}
-              <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                {editForm.profilePic ? (
+              <div className="flex items-center gap-4 p-4 bg-[#F7F9FC] rounded-2xl">
+                {editForm.profile_pic ? (
                   <img
-                    src={editForm.profilePic}
+                    src={editForm.profile_pic}
                     alt="Preview"
-                    className="w-16 h-16 rounded-xl object-cover ring-2 ring-white shadow-md shrink-0"
+                    className="w-16 h-16 rounded-2xl object-cover ring-2 ring-white shadow-md shrink-0"
                   />
                 ) : (
                   <div
-                    className={`w-16 h-16 rounded-xl bg-gradient-to-br ${getGradient(editForm.name || "A")} flex items-center justify-center text-white font-black text-2xl ring-2 ring-white shadow-md shrink-0`}
+                    className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${getGradient(editForm.name || "A")} flex items-center justify-center text-white font-bold text-2xl ring-2 ring-white shadow-md shrink-0`}
                   >
                     {editForm.name ? editForm.name[0].toUpperCase() : "?"}
                   </div>
                 )}
                 <div>
-                  <p className="text-[12px] font-black text-slate-700 mb-2">
+                  <p className="text-xs font-bold text-[#1F2937] mb-2">
                     Profile Photo
                   </p>
                   <div className="flex gap-2">
                     <button
                       type="button"
                       onClick={() => picInputRef.current?.click()}
-                      className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[11px] font-bold text-slate-600 hover:bg-slate-100 transition-all"
+                      className="px-3 py-1.5 rounded-lg bg-[#DDF3FF] text-[11px] font-bold text-[#005A87] hover:bg-[#c9ecff] transition-all"
                     >
-                      {editForm.profilePic ? "Change" : "Upload"}
+                      {editForm.profile_pic ? "Change" : "Upload"}
                     </button>
-                    {editForm.profilePic && (
+                    {editForm.profile_pic && (
                       <button
                         type="button"
                         onClick={() => {
-                          setEditForm((p) => ({ ...p, profilePic: "" }));
+                          setEditForm((p) => ({ ...p, profile_pic: "" }));
                           if (picInputRef.current)
                             picInputRef.current.value = "";
                         }}
-                        className="px-3 py-1.5 rounded-lg border border-red-100 bg-red-50 text-[11px] font-bold text-red-600 hover:bg-red-100 transition-all"
+                        className="px-3 py-1.5 rounded-lg bg-[#EF4444]/10 text-[11px] font-bold text-[#EF4444] hover:bg-[#EF4444]/15 transition-all"
                       >
                         Remove
                       </button>
                     )}
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1.5">
+                  <p className="text-[10px] text-[#6B7280] mt-1.5">
                     JPG, PNG or WEBP · Max 2 MB
                   </p>
                 </div>
@@ -1533,17 +1597,17 @@ async function deleteDocument(did: string) {
               </div>
             </div>
 
-            <div className="sticky bottom-0 bg-white border-t border-slate-100 px-6 py-4 flex gap-3">
+            <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-100 px-6 py-4 flex gap-3">
               <button
                 onClick={() => setShowEditModal(false)}
-                className="flex-1 py-3 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-700 hover:bg-slate-50 transition-all"
+                className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC] transition-all"
               >
                 Cancel
               </button>
               <button
                 onClick={saveEdit}
                 disabled={saving}
-                className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-[13px] font-bold disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95"
+                className="flex-1 h-12 rounded-2xl bg-[#005A87] hover:bg-[#00476b] text-white text-[13px] font-bold disabled:opacity-50 flex items-center justify-center gap-2 transition-all active:scale-95 shadow-sm shadow-[#005A87]/20"
               >
                 {saving ? (
                   <>
@@ -1599,14 +1663,14 @@ async function deleteDocument(did: string) {
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setShowFamilyModal(false)}
           />
-          <div className="relative bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl">
+          <div className="relative bg-white w-full sm:max-w-md rounded-t-[28px] sm:rounded-[22px] shadow-2xl">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-[15px] font-black text-slate-900">
+              <h2 className="text-[16px] font-bold text-[#1F2937]">
                 Add Family Member
               </h2>
               <button
                 onClick={() => setShowFamilyModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500"
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
               >
                 <svg
                   className="w-4 h-4"
@@ -1698,7 +1762,7 @@ async function deleteDocument(did: string) {
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
               <button
                 onClick={() => setShowFamilyModal(false)}
-                className="flex-1 py-3 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-700 hover:bg-slate-50"
+                className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC]"
               >
                 Cancel
               </button>
@@ -1710,7 +1774,7 @@ async function deleteDocument(did: string) {
                   !familyForm.date_of_birth ||
                   !familyForm.relationship
                 }
-                className="flex-1 py-3 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-blue-600 transition-all disabled:opacity-50 active:scale-95"
+                className="flex-1 h-12 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all disabled:opacity-50 active:scale-95"
               >
                 {saving ? "Saving…" : "Add Member"}
               </button>
@@ -1726,14 +1790,14 @@ async function deleteDocument(did: string) {
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setShowDocModal(false)}
           />
-          <div className="relative bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl">
+          <div className="relative bg-white w-full sm:max-w-md rounded-t-[28px] sm:rounded-[22px] shadow-2xl">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-[15px] font-black text-slate-900">
+              <h2 className="text-[16px] font-bold text-[#1F2937]">
                 Upload Document
               </h2>
               <button
                 onClick={() => setShowDocModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 text-slate-500"
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
               >
                 <svg
                   className="w-4 h-4"
@@ -1802,10 +1866,10 @@ async function deleteDocument(did: string) {
                       });
                     }
                   }}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 outline-none font-bold text-slate-700 file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-slate-900 file:text-white cursor-pointer text-[13px]"
+                  className="w-full px-4 py-3 rounded-2xl bg-[#F7F9FC] border border-slate-200 outline-none font-bold text-[#1F2937] file:mr-4 file:py-1.5 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-[#005A87] file:text-white cursor-pointer text-[13px]"
                 />
                 {docForm.file_name && (
-                  <p className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-1">
+                  <p className="text-[11px] text-[#14B86A] font-bold mt-1.5 flex items-center gap-1">
                     <svg
                       className="w-3.5 h-3.5"
                       fill="none"
@@ -1845,7 +1909,7 @@ async function deleteDocument(did: string) {
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
               <button
                 onClick={() => setShowDocModal(false)}
-                className="flex-1 py-3 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-700 hover:bg-slate-50"
+                className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC]"
               >
                 Cancel
               </button>
@@ -1857,7 +1921,7 @@ async function deleteDocument(did: string) {
                   !selectedDocFile ||
                   !docForm.category
                 }
-                className="flex-1 py-3 rounded-xl bg-slate-900 text-white text-[13px] font-bold hover:bg-blue-600 transition-all disabled:opacity-50 active:scale-95"
+                className="flex-1 h-12 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all disabled:opacity-50 active:scale-95"
               >
                 {saving ? "Uploading…" : "Upload"}
               </button>

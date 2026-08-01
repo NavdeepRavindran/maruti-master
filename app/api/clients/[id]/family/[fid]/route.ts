@@ -1,22 +1,32 @@
 import { NextResponse } from "next/server";
-import { supabase } from "../../../../../../lib/supabaseClient";
+import { supabaseAdmin } from "../../../../../../lib/supabaseClient";
 
-
-// PUT /api/clients/[id]/family/[fid] — Update family member
+// PUT /api/clients/[id]/family/[fid]
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string; fid: string }> }
 ) {
   const { id, fid } = await params;
   const body = await request.json().catch(() => null);
-  if (!body) return NextResponse.json({ error: "Invalid body" }, { status: 400 });
 
-  if (!supabase) {
-    return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
+  if (!body) {
+    return NextResponse.json(
+      { error: "Invalid body" },
+      { status: 400 }
+    );
+  }
+
+  const admin = supabaseAdmin;
+
+  if (!admin) {
+    return NextResponse.json(
+      { error: "Supabase Admin client not initialized" },
+      { status: 500 }
+    );
   }
 
   try {
-    const { data, error } = await supabase
+    const { data, error } = await admin
       .from("family_members")
       .update(body)
       .eq("id", fid)
@@ -24,30 +34,91 @@ export async function PUT(
       .select()
       .single();
 
-    if (error) throw error;
-    return NextResponse.json({ family_member: data });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    if (error) {
+      console.error(error);
+
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      family_member: data,
+    });
+
+  } catch (err: unknown) {
+    console.error(err);
+
+    return NextResponse.json(
+      {
+        error: err instanceof Error ? err.message : "Internal Server Error",
+      },
+      { status: 500 }
+    );
   }
 }
 
-// DELETE /api/clients/[id]/family/[fid] — Delete family member
+// DELETE /api/clients/[id]/family/[fid]
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string; fid: string }> }
 ) {
   const { id, fid } = await params;
 
-  if (!supabase) {
-    return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
+  const admin = supabaseAdmin;
+
+  if (!admin) {
+    return NextResponse.json(
+      { error: "Supabase Admin client not initialized" },
+      { status: 500 }
+    );
   }
 
   try {
-    await supabase.from("documents").delete().eq("family_member_id", fid);
-    const { error } = await supabase.from("family_members").delete().eq("id", fid).eq("client_id", id);
-    if (error) throw error;
-    return NextResponse.json({ success: true });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    // Delete all documents belonging to this family member
+    const { error: docsError } = await admin
+      .from("documents")
+      .delete()
+      .eq("family_member_id", fid);
+
+    if (docsError) {
+      console.error("Document Delete Error:", docsError);
+
+      return NextResponse.json(
+        { error: docsError.message },
+        { status: 500 }
+      );
+    }
+
+    // Delete family member
+    const { error: familyError } = await admin
+      .from("family_members")
+      .delete()
+      .eq("id", fid)
+      .eq("client_id", id);
+
+    if (familyError) {
+      console.error("Family Delete Error:", familyError);
+
+      return NextResponse.json(
+        { error: familyError.message },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+    });
+
+  } catch (err: unknown) {
+    console.error(err);
+
+    return NextResponse.json(
+      {
+        error: err instanceof Error ? err.message : "Internal Server Error",
+      },
+      { status: 500 }
+    );
   }
 }

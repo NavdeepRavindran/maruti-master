@@ -20,7 +20,7 @@ const clientSchema = z.object({
   pinCode: z.string().regex(/^\d{6}$/, "PIN Code must be 6 digits"),
   notes: z.string().optional(),
   agent_id: z.string().optional(),
-  profilePic: z.string().optional(),
+  profile_pic: z.string().optional(),
 });
 
 // ── Auth helper ────────────────────────────────────────────────────────────
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
         state: validatedData.state || null,
         pin_code: validatedData.pinCode || null,
         notes: validatedData.notes || null,
-        profile_pic: validatedData.profilePic || null,
+        profile_pic: validatedData.profile_pic || null,
         status: "Active",
         agent_id: validatedData.agent_id || null,
         clientloginid: validatedData.phone,
