@@ -67,7 +67,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
       <style>{`
         /* ── Page Layout Adjustments ── */
         body {
-          padding-bottom: 110px !important;
+          padding-bottom: 160px !important; /* Increased padding to allow scrolling past the higher bar */
         }
 
         /* ── Expand Sibling Dashboard Containers to 100% Width ── */
@@ -80,6 +80,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           width: 100% !important;
           max-width: 100% !important;
           min-width: 0 !important;
+          padding-bottom: 160px !important; /* Forces layout siblings to clear the navigation bar context */
         }
 
         /* ── Edge-to-Edge Invisible Container Wrapper ── */
@@ -123,7 +124,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           width: max-content;
           max-width: 95vw;
-          margin-bottom: 20px; /* Float elevation offset from bottom screen boundary */
+          margin-bottom: 36px !important; /* Raised higher from 20px to 36px to prevent button overlapping */
         }
 
         /* ── Brand Logo Styling ── */
@@ -242,7 +243,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
         /* ── Responsive Styling ── */
         @media (max-width: 640px) {
           .b-nav-dock {
-            margin-bottom: 12px;
+            margin-bottom: 24px !important; /* Raised higher from 12px to 24px to clear mobile buttons & system bars */
             padding: 6px 12px !important;
             gap: 6px !important;
             border-radius: 20px !important;

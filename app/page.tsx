@@ -422,9 +422,9 @@ export default function LoginPage() {
           }}
         >
           {[
-            { n: "2,000+", l: "Families Protected" },
-            { n: "₹15Cr+", l: "Claims Settled" },
-            { n: "15+", l: "Years of Trust" },
+            { l: "Clients", n: "1,000+" },  
+            { l: "Policies", n: "3,000+" },
+            { l: "Renewals", n: "2,000+" },
           ].map((s) => (
             <div key={s.l} style={{ textAlign: "center" }}>
               <div
