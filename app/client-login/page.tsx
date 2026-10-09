@@ -12,7 +12,14 @@ export default function ClientLoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginId || !password) return;
+    const cleanId = loginId.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanId || !cleanPassword) {
+      setError("Please enter your Login ID and Password.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -20,18 +27,18 @@ export default function ClientLoginPage() {
       const res = await fetch("/api/auth/client-login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ loginId, password })
+        body: JSON.stringify({ loginId: cleanId, password: cleanPassword })
       });
       const data = await res.json();
       
       if (res.ok && data.success) {
-        router.push(`/client-portal/${data.clientId}`);
+        window.location.href = `/client-portal/${data.clientId}`;
       } else {
         setError(data.error || "Invalid login credentials. Please try again.");
+        setLoading(false);
       }
     } catch (err: any) {
       setError("A network error occurred. Please try again later.");
-    } finally {
       setLoading(false);
     }
   };
@@ -54,12 +61,12 @@ export default function ClientLoginPage() {
 
           <form onSubmit={handleLogin} className="space-y-5">
             <div>
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">Login ID</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 block mb-2">Login ID / Phone</label>
               <input 
                 type="text" 
                 value={loginId}
                 onChange={e => setLoginId(e.target.value)}
-                placeholder="MC-XXXXXX"
+                placeholder="Enter Login ID or Phone"
                 className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl outline-none focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10 transition-all font-bold text-slate-700"
                 required
               />
@@ -86,8 +93,8 @@ export default function ClientLoginPage() {
 
             <button 
               type="submit" 
-              disabled={loading || !loginId || !password}
-              className="w-full py-4 mt-2 bg-[#03071e] hover:bg-blue-600 text-white rounded-2xl font-black text-sm transition-all disabled:opacity-50 disabled:hover:bg-[#03071e] shadow-lg shadow-[#03071e]/20 hover:shadow-blue-600/30 active:scale-[0.98]"
+              disabled={loading}
+              className="w-full py-4 mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-black text-sm transition-all shadow-lg shadow-blue-500/30 hover:shadow-blue-600/40 active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? "Authenticating..." : "Access Vault"}
             </button>

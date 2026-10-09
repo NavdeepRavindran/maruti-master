@@ -65,9 +65,39 @@ export async function PUT(
   }
 
   try {
+    const updatePayload: Record<string, any> = {
+      updated_at: new Date().toISOString(),
+    };
+
+    if (body.name !== undefined) updatePayload.name = body.name;
+    if (body.surname !== undefined) updatePayload.surname = body.surname;
+    if (body.phone !== undefined) updatePayload.phone = body.phone;
+    if (body.alternate_mobile !== undefined || body.alternateMobile !== undefined) {
+      updatePayload.alternate_mobile = body.alternate_mobile ?? body.alternateMobile;
+    }
+    if (body.email !== undefined) updatePayload.email = body.email;
+    if (body.date_of_birth !== undefined) updatePayload.date_of_birth = body.date_of_birth;
+    if (body.anniversary_date !== undefined || body.anniversaryDate !== undefined) {
+      updatePayload.anniversary_date = body.anniversary_date ?? body.anniversaryDate;
+    }
+    if (body.gender !== undefined) updatePayload.gender = body.gender;
+    if (body.marital_status !== undefined || body.maritalStatus !== undefined) {
+      updatePayload.marital_status = body.marital_status ?? body.maritalStatus;
+    }
+    if (body.occupation !== undefined) updatePayload.occupation = body.occupation;
+    if (body.address !== undefined) updatePayload.address = body.address;
+    if (body.city !== undefined) updatePayload.city = body.city;
+    if (body.state !== undefined) updatePayload.state = body.state;
+    if (body.pin_code !== undefined || body.pinCode !== undefined) {
+      updatePayload.pin_code = body.pin_code ?? body.pinCode;
+    }
+    if (body.notes !== undefined) updatePayload.notes = body.notes;
+    if (body.profile_pic !== undefined) updatePayload.profile_pic = body.profile_pic;
+    if (body.status !== undefined) updatePayload.status = body.status;
+
     const { data, error } = await supabaseAdmin
       .from("clients")
-      .update({ ...body, updated_at: new Date().toISOString() })
+      .update(updatePayload)
       .eq("id", id)
       .select()
       .single();

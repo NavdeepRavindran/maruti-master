@@ -4,6 +4,7 @@ import { useEffect, useState, use, useRef } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
+import { capitalizeWords, sanitizeAlphabetsOnly, FAMILY_RELATIONSHIPS } from "@/lib/formatUtils";
 
 
 interface ClientData {
@@ -49,6 +50,7 @@ interface DocData {
   created_at: string;
   family_member_id?: string | null;
   file_url?: string;
+  category?: string;
 }
 
 const labelCls = "block text-xs font-semibold text-[#6B7280] mb-1.5";
@@ -139,6 +141,20 @@ export default function ClientProfilePage({
   const [showPassword, setShowPassword] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const picInputRef = useRef<HTMLInputElement>(null);
+  const directPicInputRef = useRef<HTMLInputElement>(null);
+
+  // Password change modal state (Item 8)
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPasswordInput, setNewPasswordInput] = useState("");
+  const [savingPassword, setSavingPassword] = useState(false);
+
+  // In-App Document Viewer state (Item 9)
+  const [viewingDoc, setViewingDoc] = useState<DocData | null>(null);
+
+  // Family details view and edit state (Item 5 & 11)
+  const [viewingFamilyMember, setViewingFamilyMember] = useState<FamilyMember | null>(null);
+  const [editingFamilyMember, setEditingFamilyMember] = useState<FamilyMember | null>(null);
+  const [savingFamilyEdit, setSavingFamilyEdit] = useState(false);
 
   useEffect(() => {
     fetchClient();
@@ -151,7 +167,9 @@ export default function ClientProfilePage({
     } = await supabase.auth.getSession();
     const headers: HeadersInit = {};
     if (json) headers["Content-Type"] = "application/json";
-    if (session) headers["Authorization"] = `Bearer ${session.access_token}`;
+    if (session) {
+      headers["Authorization"] = `Bearer ${session.access_token}`;
+    }
     return headers;
   }
 
@@ -229,6 +247,99 @@ export default function ClientProfilePage({
       toast.error(e?.message || "Failed to update client.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  // Direct photo upload handler (Item 3)
+  async function handleDirectPhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Image must be under 2 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const b64 = reader.result as string;
+      try {
+        const headers = await authHeaders(true);
+        const res = await fetch(`/api/clients/${id}`, {
+          method: "PUT",
+          headers,
+          body: JSON.stringify({ profile_pic: b64 }),
+        });
+        if (res.ok) {
+          setClient((prev: any) => (prev ? { ...prev, profile_pic: b64 } : prev));
+          toast.success("Profile photo updated successfully!");
+        } else {
+          toast.error("Failed to update photo.");
+        }
+      } catch {
+        toast.error("Failed to update photo.");
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // Custom password change handler (Item 8)
+  async function handleSavePassword() {
+    if (!newPasswordInput.trim() || newPasswordInput.trim().length < 4) {
+      alert("Password must be at least 4 characters long.");
+      return;
+    }
+    setSavingPassword(true);
+    try {
+      const headers = await authHeaders(true);
+      const res = await fetch(`/api/clients/${id}/password`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ password: newPasswordInput.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to update password");
+      setClient((prev: any) =>
+        prev ? { ...prev, plain_password: newPasswordInput.trim(), temporaryPassword: newPasswordInput.trim() } : prev
+      );
+      setShowPasswordModal(false);
+      setNewPasswordInput("");
+      toast.success("Client password changed successfully!");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update password");
+    } finally {
+      setSavingPassword(false);
+    }
+  }
+
+  // Edit Family Member handler (Item 5 & 11)
+  async function handleSaveFamilyEdit() {
+    if (!editingFamilyMember || !editingFamilyMember.name.trim()) {
+      alert("Family member name is required.");
+      return;
+    }
+    setSavingFamilyEdit(true);
+    try {
+      const headers = await authHeaders(true);
+      const res = await fetch(`/api/clients/${id}/family/${editingFamilyMember.id}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify({
+          name: capitalizeWords(editingFamilyMember.name),
+          relationship: editingFamilyMember.relationship,
+          date_of_birth: editingFamilyMember.date_of_birth,
+          phone: editingFamilyMember.phone,
+        }),
+      });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || "Failed to update family member.");
+      }
+      toast.success("Family member updated successfully!");
+      setEditingFamilyMember(null);
+      fetchClient();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update family member.");
+    } finally {
+      setSavingFamilyEdit(false);
     }
   }
 
@@ -315,11 +426,16 @@ export default function ClientProfilePage({
     setSaving(true);
     try {
       const headers = await authHeaders(true);
-      await fetch(`/api/clients/${id}/family`, {
+      const res = await fetch(`/api/clients/${id}/family`, {
         method: "POST",
         headers,
         body: JSON.stringify(familyForm),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `Failed to add family member (${res.status})`);
+      }
+      const data = await res.json();
       setShowFamilyModal(false);
       setFamilyForm({
         name: "",
@@ -328,9 +444,16 @@ export default function ClientProfilePage({
         phone: "",
       });
       toast.success("Family member added.");
+      if (data.family_member) {
+        setFamily((prev) => [
+          ...prev.filter((f) => f.id !== data.family_member.id),
+          data.family_member,
+        ]);
+      }
+      setActiveTab("family");
       fetchClient();
-    } catch {
-      toast.error("Failed to add family member.");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to add family member.");
     } finally {
       setSaving(false);
     }
@@ -340,7 +463,11 @@ export default function ClientProfilePage({
     if (!confirm("Delete this family member and their documents?")) return;
     try {
       const headers = await authHeaders(false);
-      await fetch(`/api/clients/${id}/family/${fid}`, { method: "DELETE", headers });
+      const res = await fetch(`/api/clients/${id}/family/${fid}`, { method: "DELETE", headers });
+      if (res.ok) {
+        setFamily((prev) => prev.filter((f) => f.id !== fid));
+        toast.success("Family member removed.");
+      }
       fetchClient();
     } catch {}
   }
@@ -504,8 +631,8 @@ async function deleteDocument(did: string) {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {/* Mobile: stacked, Desktop: row */}
           <div className="flex flex-col sm:flex-row sm:items-end gap-5">
-            {/* Avatar */}
-            <div className="shrink-0">
+            {/* Avatar with Direct Photo Upload (Item 3) */}
+            <div className="shrink-0 relative group">
               {client.profile_pic ? (
                 <img
                   src={client.profile_pic}
@@ -519,19 +646,52 @@ async function deleteDocument(did: string) {
                   {fullName[0]?.toUpperCase()}
                 </div>
               )}
+              {/* Photo Upload Overlay Button */}
+              <button
+                type="button"
+                onClick={() => directPicInputRef.current?.click()}
+                className="absolute inset-0 rounded-[22px] bg-black/0 group-hover:bg-black/50 flex flex-col items-center justify-center transition-all opacity-0 group-hover:opacity-100 text-white cursor-pointer"
+                title="Change Profile Photo"
+              >
+                <svg className="w-5 h-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <span className="text-[10px] font-bold">Upload</span>
+              </button>
+              <input
+                ref={directPicInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleDirectPhotoUpload}
+                className="hidden"
+              />
             </div>
 
-            {/* Name + meta */}
+            {/* Name + meta (Item 1 & Item 6) */}
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h1 className="text-2xl sm:text-[28px] font-bold text-[#1F2937] leading-none">
-                    {client.surname}
-                  </h1>
+                  <div className="flex items-baseline gap-2.5 flex-wrap">
+                    <h1 className="text-2xl sm:text-[28px] font-bold text-[#1F2937]">
+                      {capitalizeWords(client.name)}
+                    </h1>
+                    {client.surname && (
+                      <span className="text-2xl sm:text-[28px] font-bold text-[#005A87]">
+                        {capitalizeWords(client.surname)}
+                      </span>
+                    )}
+                  </div>
 
-                  <p className="mt-1.5 text-sm sm:text-base font-medium text-[#6B7280]">
-                    {client.name}
-                  </p>
+                  <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-[#6B7280] flex-wrap">
+                    <span>First Name: <strong className="text-[#1F2937]">{capitalizeWords(client.name)}</strong></span>
+                    {client.surname && (
+                      <>
+                        <span>•</span>
+                        <span>Surname: <strong className="text-[#005A87]">{capitalizeWords(client.surname)}</strong></span>
+                      </>
+                    )}
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     <span
                       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${
@@ -647,7 +807,7 @@ async function deleteDocument(did: string) {
               </a>
             )}
             {fullAddress && (
-              <div className="flex items-center gap-2 text-[13px] font-semibold text-[#6B7280]">
+              <div className="flex items-center gap-2 text-[13px] font-semibold text-[#6B7280] basis-full sm:basis-auto">
                 <span className="w-9 h-9 rounded-xl bg-[#EF4444]/10 flex items-center justify-center shrink-0">
                   <svg
                     className="w-4 h-4 text-[#EF4444]"
@@ -669,7 +829,7 @@ async function deleteDocument(did: string) {
                   </svg>
                 </span>
 
-                <span className="truncate max-w-[220px]">{fullAddress}</span>
+                <span className="break-words text-[#1F2937] leading-relaxed">{fullAddress}</span>
 
                 <button
                   onClick={() => {
@@ -703,13 +863,21 @@ async function deleteDocument(did: string) {
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-4 sm:space-y-5">
         {/* Personal details card */}
         <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
-          <div className="px-5 py-4 border-b border-slate-50">
+          <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
             <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
               Personal Details
             </h2>
+            {client.notes && client.notes.includes("Allotment:") && (
+              <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>
+                Re-entry Allotment Active
+              </span>
+            )}
           </div>
           <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
             {[
+              { label: "First Name", value: capitalizeWords(client.name) },
+              { label: "Surname", value: capitalizeWords(client.surname || "") || "—" },
               { label: "Marital Status", value: client.marital_status },
               { label: "Alternate Mobile", value: client.alternate_mobile },
               {
@@ -721,14 +889,15 @@ async function deleteDocument(did: string) {
               { label: "City", value: client.city },
               { label: "State", value: client.state },
               { label: "PIN Code", value: client.pin_code },
+              { label: "Full Address", value: fullAddress || "—" },
             ]
               .filter((i) => i.value)
               .map(({ label, value }) => (
-                <div key={label}>
+                <div key={label} className={label === "Full Address" ? "col-span-2 sm:col-span-3" : ""}>
                   <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest mb-1">
                     {label}
                   </p>
-                  <p className="text-[13px] font-bold text-[#1F2937]">
+                  <p className="text-[13px] font-bold text-[#1F2937] break-words">
                     {value}
                   </p>
                 </div>
@@ -738,9 +907,9 @@ async function deleteDocument(did: string) {
             <div className="px-5 pb-5 pt-0">
               <div className="bg-[#F59E0B]/10 rounded-2xl px-4 py-3">
                 <p className="text-[10px] font-bold text-[#F59E0B] uppercase tracking-widest mb-1">
-                  Notes
+                  Notes / Allotment Reminders
                 </p>
-                <p className="text-[13px] text-[#92640a] font-medium">
+                <p className="text-[13px] text-[#92640a] font-medium whitespace-pre-line">
                   {client.notes}
                 </p>
               </div>
@@ -772,19 +941,34 @@ async function deleteDocument(did: string) {
                   Portal Access
                 </h2>
               </div>
-              <button
-                onClick={async () => {
-                  try {
-                    await copyAllCredentials();
-                    toast.success("Credentials copied successfully!");
-                  } catch {
-                    toast.error("Failed to copy credentials");
-                  }
-                }}
-                className="text-xs font-bold text-[#005A87] hover:text-[#0E7AC7] transition-colors"
-              >
-                Copy all
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNewPasswordInput("");
+                    setShowPasswordModal(true);
+                  }}
+                  className="text-xs font-bold text-[#0E7AC7] hover:underline transition-colors flex items-center gap-1"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                  Change Password
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      await copyAllCredentials();
+                      toast.success("Credentials copied successfully!");
+                    } catch {
+                      toast.error("Failed to copy credentials");
+                    }
+                  }}
+                  className="text-xs font-bold text-[#005A87] hover:text-[#0E7AC7] transition-colors"
+                >
+                  Copy all
+                </button>
+              </div>
             </div>
             <div className="px-5 py-4 grid sm:grid-cols-2 gap-4">
               <div>
@@ -1036,12 +1220,11 @@ async function deleteDocument(did: string) {
                     </div>
                    <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
 
-  {/* View */}
-  <a
-    href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
-    target="_blank"
-    rel="noopener noreferrer"
-    title="View Document"
+  {/* View In-App */}
+  <button
+    type="button"
+    onClick={() => setViewingDoc(doc)}
+    title="View Document in App"
     className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
   >
     <svg
@@ -1064,7 +1247,7 @@ async function deleteDocument(did: string) {
         strokeWidth={2}
       />
     </svg>
-  </a>
+  </button>
 
   {/* Download */}
   <a
@@ -1204,17 +1387,42 @@ async function deleteDocument(did: string) {
                         )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2.5 py-1.5 rounded-lg">
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2 py-1 rounded-lg">
                         {
                           docs.filter((d) => d.family_member_id === fm.id)
                             .length
                         }{" "}
                         docs
                       </span>
+                      {/* View Family Details (Item 5 & 11) */}
+                      <button
+                        type="button"
+                        onClick={() => setViewingFamilyMember(fm)}
+                        title="View Family Details"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                      </button>
+                      {/* Edit Family Details (Item 5 & 11) */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingFamilyMember(fm)}
+                        title="Edit Family Member"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                      </button>
+                      {/* Delete */}
                       <button
                         onClick={() => deleteFamilyMember(fm.id)}
-                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
+                        title="Delete Family Member"
                       >
                         <svg
                           className="w-3.5 h-3.5"
@@ -1241,7 +1449,7 @@ async function deleteDocument(did: string) {
 
       {/* ── Edit Client Modal ────────────────────────────────────── */}
       {showEditModal && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setShowEditModal(false)}
@@ -1338,7 +1546,7 @@ async function deleteDocument(did: string) {
                     type="text"
                     value={editForm.name || ""}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, name: e.target.value })
+                      setEditForm({ ...editForm, name: sanitizeAlphabetsOnly(e.target.value) })
                     }
                     className={inputCls}
                   />
@@ -1349,7 +1557,7 @@ async function deleteDocument(did: string) {
                     type="text"
                     value={editForm.surname || ""}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, surname: e.target.value })
+                      setEditForm({ ...editForm, surname: sanitizeAlphabetsOnly(e.target.value) })
                     }
                     className={inputCls}
                   />
@@ -1658,7 +1866,7 @@ async function deleteDocument(did: string) {
 
       {/* ── Add Family Modal ─────────────────────────────────────── */}
       {showFamilyModal && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setShowFamilyModal(false)}
@@ -1694,7 +1902,7 @@ async function deleteDocument(did: string) {
                   type="text"
                   value={familyForm.name}
                   onChange={(e) =>
-                    setFamilyForm({ ...familyForm, name: e.target.value })
+                    setFamilyForm({ ...familyForm, name: sanitizeAlphabetsOnly(e.target.value) })
                   }
                   className={inputCls}
                   placeholder="e.g. Priya Sharma"
@@ -1728,17 +1936,7 @@ async function deleteDocument(did: string) {
                     className={inputCls}
                   >
                     <option value="">Select...</option>
-                    {[
-                      "Wife",
-                      "Husband",
-                      "Son",
-                      "Daughter",
-                      "Father",
-                      "Mother",
-                      "Brother",
-                      "Sister",
-                      "Other",
-                    ].map((r) => (
+                    {FAMILY_RELATIONSHIPS.map((r) => (
                       <option key={r} value={r}>
                         {r}
                       </option>
@@ -1785,7 +1983,7 @@ async function deleteDocument(did: string) {
 
       {/* ── Upload Document Modal ────────────────────────────────── */}
       {showDocModal && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setShowDocModal(false)}
@@ -1924,6 +2122,326 @@ async function deleteDocument(did: string) {
                 className="flex-1 h-12 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all disabled:opacity-50 active:scale-95"
               >
                 {saving ? "Uploading…" : "Upload"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Change Password Modal (Item 8) ─────────────────────────── */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setShowPasswordModal(false)}
+          />
+          <div className="relative bg-white w-full sm:max-w-md rounded-t-[28px] sm:rounded-[22px] shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-[16px] font-bold text-[#1F2937]">Change Password</h2>
+                <p className="text-xs text-[#6B7280]">Update client portal access password</p>
+              </div>
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className={labelCls}>New Password</label>
+                <input
+                  type="text"
+                  value={newPasswordInput}
+                  onChange={(e) => setNewPasswordInput(e.target.value)}
+                  placeholder="Enter new password (min 4 characters)"
+                  className={inputCls}
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => setShowPasswordModal(false)}
+                className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSavePassword}
+                disabled={savingPassword || !newPasswordInput.trim()}
+                className="flex-1 h-12 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all disabled:opacity-50 active:scale-95"
+              >
+                {savingPassword ? "Updating…" : "Update Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── In-App Document Viewer Modal (Item 9) ─────────────────── */}
+      {viewingDoc && (
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+            onClick={() => setViewingDoc(null)}
+          />
+          <div className="relative bg-white w-full sm:max-w-2xl rounded-t-[28px] sm:rounded-[22px] shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="text-[16px] font-bold text-[#1F2937] truncate max-w-sm">
+                  {viewingDoc.name}
+                </h2>
+                <p className="text-xs text-[#6B7280]">
+                  {viewingDoc.file_name} · {formatSize(viewingDoc.file_size)}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {viewingDoc.file_url && (
+                  <a
+                    href={viewingDoc.file_url}
+                    download={viewingDoc.file_name}
+                    className="p-2 rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all text-xs font-bold flex items-center gap-1.5"
+                    title="Download"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                  </a>
+                )}
+                <button
+                  onClick={() => setViewingDoc(null)}
+                  className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
+                >
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 p-6 overflow-y-auto bg-slate-50 flex items-center justify-center min-h-[340px]">
+              {viewingDoc.file_type === "IMG" && viewingDoc.file_url ? (
+                <img
+                  src={viewingDoc.file_url}
+                  alt={viewingDoc.name}
+                  className="max-h-[65vh] max-w-full rounded-xl object-contain shadow-sm border border-slate-200"
+                />
+              ) : viewingDoc.file_url && viewingDoc.file_url.startsWith("http") ? (
+                <iframe
+                  src={viewingDoc.file_url}
+                  className="w-full h-[60vh] rounded-xl border border-slate-200 bg-white"
+                  title={viewingDoc.name}
+                />
+              ) : (
+                <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 max-w-md">
+                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-lg mx-auto mb-3 ${docColor(viewingDoc.file_type)}`}>
+                    {viewingDoc.file_type}
+                  </div>
+                  <h3 className="font-bold text-[#1F2937] text-base mb-1">{viewingDoc.name}</h3>
+                  <p className="text-xs text-[#6B7280] mb-4">
+                    Category: {viewingDoc.category || "General Document"}
+                  </p>
+                  <p className="text-xs text-slate-500 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    In-app document viewer is rendering this {viewingDoc.file_type} record. You can download or preview it securely.
+                  </p>
+                  {viewingDoc.file_url && (
+                    <a
+                      href={viewingDoc.file_url}
+                      download={viewingDoc.file_name}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#005A87] text-white text-xs font-bold hover:bg-[#00476b] transition-all"
+                    >
+                      Download Document
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── View Family Member Modal (Item 5 & 11) ───────────────── */}
+      {viewingFamilyMember && (
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setViewingFamilyMember(null)}
+          />
+          <div className="relative bg-white w-full sm:max-w-md rounded-t-[28px] sm:rounded-[22px] shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-[16px] font-bold text-[#1F2937]">Family Member Details</h2>
+                <p className="text-xs text-[#6B7280]">View saved family record</p>
+              </div>
+              <button
+                onClick={() => setViewingFamilyMember(null)}
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="flex items-center gap-3 p-3 bg-[#F7F9FC] rounded-2xl">
+                <div
+                  className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getGradient(viewingFamilyMember.name)} flex items-center justify-center text-white font-bold text-lg`}
+                >
+                  {viewingFamilyMember.name[0]?.toUpperCase()}
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-[#1F2937]">{viewingFamilyMember.name}</h3>
+                  <span className="text-[11px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded uppercase">
+                    {viewingFamilyMember.relationship}
+                  </span>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Date of Birth</p>
+                  <p className="text-[13px] font-bold text-[#1F2937]">{formatDate(viewingFamilyMember.date_of_birth)}</p>
+                </div>
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Age</p>
+                  <p className="text-[13px] font-bold text-[#1F2937]">{getAge(viewingFamilyMember.date_of_birth)} years</p>
+                </div>
+              </div>
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
+                <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Phone Number</p>
+                <p className="text-[13px] font-bold text-[#1F2937]">{viewingFamilyMember.phone || "Not provided"}</p>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => setViewingFamilyMember(null)}
+                className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC]"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  const m = viewingFamilyMember;
+                  setViewingFamilyMember(null);
+                  setEditingFamilyMember(m);
+                }}
+                className="flex-1 h-12 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all flex items-center justify-center gap-1.5"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Family Member Modal (Item 5 & 11) ────────────────── */}
+      {editingFamilyMember && (
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div
+            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            onClick={() => setEditingFamilyMember(null)}
+          />
+          <div className="relative bg-white w-full sm:max-w-md rounded-t-[28px] sm:rounded-[22px] shadow-2xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h2 className="text-[16px] font-bold text-[#1F2937]">Edit Family Member</h2>
+                <p className="text-xs text-[#6B7280]">Modify saved family details</p>
+              </div>
+              <button
+                onClick={() => setEditingFamilyMember(null)}
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
+              >
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div>
+                <label className={labelCls}>Full Name *</label>
+                <input
+                  type="text"
+                  value={editingFamilyMember.name}
+                  onChange={(e) =>
+                    setEditingFamilyMember({
+                      ...editingFamilyMember,
+                      name: sanitizeAlphabetsOnly(e.target.value),
+                    })
+                  }
+                  className={inputCls}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Date of Birth *</label>
+                  <input
+                    type="date"
+                    value={editingFamilyMember.date_of_birth}
+                    onChange={(e) =>
+                      setEditingFamilyMember({
+                        ...editingFamilyMember,
+                        date_of_birth: e.target.value,
+                      })
+                    }
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Relationship *</label>
+                  <select
+                    value={editingFamilyMember.relationship}
+                    onChange={(e) =>
+                      setEditingFamilyMember({
+                        ...editingFamilyMember,
+                        relationship: e.target.value,
+                      })
+                    }
+                    className={inputCls}
+                  >
+                    <option value="">Select...</option>
+                    {FAMILY_RELATIONSHIPS.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Phone</label>
+                <input
+                  type="tel"
+                  value={editingFamilyMember.phone || ""}
+                  onChange={(e) =>
+                    setEditingFamilyMember({
+                      ...editingFamilyMember,
+                      phone: e.target.value.replace(/\D/g, ""),
+                    })
+                  }
+                  className={inputCls}
+                  placeholder="Optional"
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => setEditingFamilyMember(null)}
+                className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC]"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveFamilyEdit}
+                disabled={savingFamilyEdit || !editingFamilyMember.name.trim()}
+                className="flex-1 h-12 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all disabled:opacity-50 active:scale-95"
+              >
+                {savingFamilyEdit ? "Saving…" : "Save Changes"}
               </button>
             </div>
           </div>

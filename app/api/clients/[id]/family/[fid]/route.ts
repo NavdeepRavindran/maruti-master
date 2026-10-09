@@ -36,7 +36,6 @@ export async function PUT(
 
     if (error) {
       console.error(error);
-
       return NextResponse.json(
         { error: error.message },
         { status: 500 }
@@ -46,10 +45,8 @@ export async function PUT(
     return NextResponse.json({
       family_member: data,
     });
-
   } catch (err: unknown) {
     console.error(err);
-
     return NextResponse.json(
       {
         error: err instanceof Error ? err.message : "Internal Server Error",
@@ -84,7 +81,6 @@ export async function DELETE(
 
     if (docsError) {
       console.error("Document Delete Error:", docsError);
-
       return NextResponse.json(
         { error: docsError.message },
         { status: 500 }
@@ -100,7 +96,6 @@ export async function DELETE(
 
     if (familyError) {
       console.error("Family Delete Error:", familyError);
-
       return NextResponse.json(
         { error: familyError.message },
         { status: 500 }
@@ -110,10 +105,8 @@ export async function DELETE(
     return NextResponse.json({
       success: true,
     });
-
   } catch (err: unknown) {
     console.error(err);
-
     return NextResponse.json(
       {
         error: err instanceof Error ? err.message : "Internal Server Error",

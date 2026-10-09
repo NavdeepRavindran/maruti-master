@@ -72,6 +72,7 @@ export default function DocumentsPage() {
   const [activeCategory, setActiveCategory] = useState<DocCategory | "all">("all");
   const [viewMode, setViewMode] = useState<"list" | "grid">("list");
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [viewingDoc, setViewingDoc] = useState<DocData | null>(null);
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadForm, setUploadForm] = useState({
@@ -792,17 +793,28 @@ export default function DocumentsPage() {
                       <div className="dp-card-top">
                         <div className="dp-card-type" style={{ background: tc.bg }}>{tc.icon}</div>
                         <div className="dp-card-actions">
+                          <button
+                            type="button"
+                            className="dp-card-action"
+                            title="View in App"
+                            onClick={() => setViewingDoc(doc)}
+                          >
+                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </button>
                           <a
                             href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
                             download={doc.file_name}
-                            target="_blank"
+                            title="Download"
                             className="dp-card-action"
                           >
                             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                             </svg>
                           </a>
-                          <button className="dp-card-action del" onClick={() => deleteDoc(doc.id)}>
+                          <button className="dp-card-action del" title="Delete" onClick={() => deleteDoc(doc.id)}>
                             <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
@@ -847,17 +859,28 @@ export default function DocumentsPage() {
                       <div className="dp-list-col-date">{formatDate(doc.created_at)}</div>
                       <div className="dp-list-col-size">{formatSize(doc.file_size)}</div>
                       <div className="dp-list-actions">
+                        <button
+                          type="button"
+                          className="dp-list-action"
+                          title="View in App"
+                          onClick={() => setViewingDoc(doc)}
+                        >
+                          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                        </button>
                         <a
                           href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
                           download={doc.file_name}
-                          target="_blank"
+                          title="Download"
                           className="dp-list-action"
                         >
                           <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                           </svg>
                         </a>
-                        <button className="dp-list-action del" onClick={() => deleteDoc(doc.id)}>
+                        <button className="dp-list-action del" title="Delete" onClick={() => deleteDoc(doc.id)}>
                           <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                           </svg>
@@ -997,6 +1020,87 @@ export default function DocumentsPage() {
               >
                 {uploading ? "Uploading…" : "Upload File"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── In-App Document Viewer Modal (Item 9) ── */}
+      {viewingDoc && (
+        <div
+          className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background: "rgba(15,23,42,0.7)", backdropFilter: "blur(8px)" }}
+          onClick={e => { if (e.target === e.currentTarget) setViewingDoc(null); }}
+        >
+          <div className="relative bg-white w-full sm:max-w-2xl rounded-t-[28px] sm:rounded-[22px] shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="text-[16px] font-bold text-[#1F2937] truncate max-w-sm">
+                  {viewingDoc.name}
+                </h2>
+                <p className="text-xs text-[#6B7280]">
+                  {viewingDoc.file_name} · {formatSize(viewingDoc.file_size)} · {viewingDoc.client_name || "Client"}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {viewingDoc.file_url && (
+                  <a
+                    href={viewingDoc.file_url}
+                    download={viewingDoc.file_name}
+                    className="p-2 rounded-xl bg-[#eff6ff] text-[#3b82f6] hover:bg-[#3b82f6] hover:text-white transition-all text-xs font-bold flex items-center gap-1.5"
+                    title="Download"
+                  >
+                    <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                  </a>
+                )}
+                <button
+                  onClick={() => setViewingDoc(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors text-sm font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 p-6 overflow-y-auto bg-slate-50 flex items-center justify-center min-h-[340px]">
+              {viewingDoc.file_type === "IMG" && viewingDoc.file_url ? (
+                <img
+                  src={viewingDoc.file_url}
+                  alt={viewingDoc.name}
+                  className="max-h-[65vh] max-w-full rounded-xl object-contain shadow-sm border border-slate-200"
+                />
+              ) : viewingDoc.file_url && viewingDoc.file_url.startsWith("http") ? (
+                <iframe
+                  src={viewingDoc.file_url}
+                  className="w-full h-[60vh] rounded-xl border border-slate-200 bg-white"
+                  title={viewingDoc.name}
+                />
+              ) : (
+                <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 max-w-md shadow-sm">
+                  <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto mb-3 bg-blue-50 text-blue-600">
+                    {viewingDoc.file_type === "PDF" ? "📄" : "📁"}
+                  </div>
+                  <h3 className="font-bold text-[#1F2937] text-base mb-1">{viewingDoc.name}</h3>
+                  <p className="text-xs text-[#6B7280] mb-4">
+                    Category: {viewingDoc.category || "General Document"}
+                  </p>
+                  <p className="text-xs text-slate-500 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    Secure in-app preview for {viewingDoc.file_name}. You can view the document contents or download directly.
+                  </p>
+                  {viewingDoc.file_url && (
+                    <a
+                      href={viewingDoc.file_url}
+                      download={viewingDoc.file_name}
+                      className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#3b82f6] text-white text-xs font-bold hover:bg-[#2563eb] transition-all shadow-md"
+                    >
+                      Download Document
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
