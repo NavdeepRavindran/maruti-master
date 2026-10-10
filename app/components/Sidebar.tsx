@@ -445,7 +445,7 @@ export default function Sidebar({ role, userName, userEmail, onSignOut }: Sideba
 
             <div className="b-nav-divider" />
 
-            {/* Navigation Tabs */}
+
             <nav className="b-nav-items">
               {navItems.map((item) => {
                 const isActive = pathname === item.href;
