@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin, supabaseAuth } from "../../../lib/supabaseClient";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-
 const clientSchema = z.object({
   name: z.string().min(1, "Name is required"),
   surname: z.string().min(1, "Surname is required"),
@@ -35,6 +34,10 @@ async function getAuthUser(request: Request) {
 
 // GET /api/clients
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const search = searchParams.get("search") || "";
+  const status = searchParams.get("status") || "";
+
   if (!supabaseAdmin) {
     return NextResponse.json({ error: "Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY" }, { status: 500 });
   }
@@ -43,10 +46,6 @@ export async function GET(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
-
-  const { searchParams } = new URL(request.url);
-  const search = searchParams.get("search") || "";
-  const status = searchParams.get("status") || "";
 
   try {
     let query = supabaseAdmin
@@ -77,11 +76,26 @@ export async function GET(request: Request) {
 
     const clients = (data || []).map((c: any) => ({
       id: c.id,
-      name: `${c.name || ""}${c.surname ? " " + c.surname : ""}`.trim(),
+      name: c.name,
+      surname: c.surname || "",
+      fullName: `${c.name || ""}${c.surname ? " " + c.surname : ""}`.trim(),
       phone: c.phone,
-      email: c.email,
+      alternate_mobile: c.alternate_mobile || "",
+      alternateMobile: c.alternate_mobile || "",
+      email: c.email || "",
       date_of_birth: c.date_of_birth,
-      address: [c.address, c.city, c.state, c.pin_code].filter(Boolean).join(", "),
+      anniversary_date: c.anniversary_date || "",
+      anniversaryDate: c.anniversary_date || "",
+      address: c.address || "",
+      city: c.city || "",
+      state: c.state || "",
+      pin_code: c.pin_code || "",
+      pinCode: c.pin_code || "",
+      gender: c.gender || "",
+      marital_status: c.marital_status || "",
+      maritalStatus: c.marital_status || "",
+      occupation: c.occupation || "",
+      notes: c.notes || "",
       status: c.status,
       clientLoginId: c.clientloginid,
       profile_pic: c.profile_pic || null,
@@ -114,14 +128,31 @@ export async function POST(request: Request) {
 
     const { data: existingClient } = await supabaseAdmin
       .from("clients")
-      .select("id")
+      .select("id, name, phone, notes")
       .eq("phone", validatedData.phone)
       .maybeSingle();
 
     if (existingClient) {
+      // Double entry / Re-entry detected
+      const allotmentId = `ALT-${Math.floor(100000 + Math.random() * 900000)}`;
+      const reminderDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString("en-IN");
+      const reminderNote = `[RE-ENTRY ALLOTMENT ${allotmentId}]: Follow-up reminder scheduled for ${reminderDate}`;
+      const updatedNotes = existingClient.notes ? `${existingClient.notes}\n${reminderNote}` : reminderNote;
+
+      await supabaseAdmin
+        .from("clients")
+        .update({ notes: updatedNotes, updated_at: new Date().toISOString() })
+        .eq("id", existingClient.id);
+
       return NextResponse.json(
-        { error: "Mobile number already exists" },
-        { status: 400 }
+        {
+          client: { ...existingClient, notes: updatedNotes, allotmentId, reminderDate },
+          isDoubleEntry: true,
+          allotmentId,
+          reminderDate,
+          message: `Double entry / Re-entry detected for ${existingClient.name}. Allotment ${allotmentId} generated automatically and reminder scheduled for ${reminderDate}.`,
+        },
+        { status: 200 }
       );
     }
 
@@ -146,7 +177,7 @@ export async function POST(request: Request) {
         state: validatedData.state || null,
         pin_code: validatedData.pinCode || null,
         notes: validatedData.notes || null,
-        profile_pic: validatedData.profile_pic || null,
+        profile_pic: validatedData.profile_pic || (rawBody as any).profile_pic || null,
         status: "Active",
         agent_id: validatedData.agent_id || null,
         clientloginid: validatedData.phone,

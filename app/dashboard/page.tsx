@@ -85,8 +85,7 @@ export default function DashboardPage() {
   const todayQuote = QUOTES[new Date().getDate() % QUOTES.length];
 
   useEffect(() => {
-    // ✅ Use onAuthStateChange — this fires immediately with the current session
-    // state AND whenever auth changes. Much more reliable than getSession() alone.
+    // Use onAuthStateChange — fires immediately with the current session state
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (event === "SIGNED_OUT" || !session) {
@@ -123,8 +122,8 @@ export default function DashboardPage() {
       ]);
       const c = await cR.json(), d = await dR.json(), b = await bR.json(), a = await aR.json();
       setStats({
-        totalClients:          c.total            || 0,
-        totalDocuments:        d.total            || 0,
+        totalClients:          c.total            || (c.clients?.length) || 0,
+        totalDocuments:        d.total            || (d.documents?.length) || 0,
         upcomingBirthdays:     b.stats?.thisWeek  || 0,
         todayBirthdays:        b.stats?.today     || 0,
         todayAnniversaries:    a.stats?.today     || 0,
@@ -133,7 +132,7 @@ export default function DashboardPage() {
       setBirthdays((b.birthdays || []).slice(0, 5));
       setRecentDocs((d.documents || []).slice(0, 5));
     } catch (err) {
-      console.error("Dashboard fetch failed:", err);
+      console.error("Dashboard fetch error:", err);
     } finally {
       setLoading(false);
     }

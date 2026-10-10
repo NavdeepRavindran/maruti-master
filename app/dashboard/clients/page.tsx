@@ -3,14 +3,38 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { capitalizeWords, sanitizeAlphabetsOnly, FAMILY_RELATIONSHIPS } from "@/lib/formatUtils";
+
+export interface FormFamilyMember {
+  id?: string;
+  name: string;
+  relationship: string;
+  date_of_birth: string;
+  phone: string;
+}
 
 interface ClientData {
   id: string;
   name: string;
+  surname?: string;
   phone: string;
+  alternate_mobile?: string;
+  alternateMobile?: string;
   email?: string;
   date_of_birth: string;
+  anniversary_date?: string;
+  anniversaryDate?: string;
   address?: string;
+  town?: string;
+  city?: string;
+  state?: string;
+  pin_code?: string;
+  pinCode?: string;
+  gender?: string;
+  marital_status?: string;
+  maritalStatus?: string;
+  occupation?: string;
+  notes?: string;
   status: string;
   family_count?: number;
   document_count?: number;
@@ -74,17 +98,19 @@ function ClientAvatar({
     return (
       <img
         src={profile_pic}
-        alt={name}
+        alt={name || "Client"}
         className={`${sizeMap[size]} rounded-full object-cover shrink-0 shadow-sm ${className}`}
       />
     );
   }
 
+  const initial = (name?.[0] || "?").toUpperCase();
+
   return (
     <div
-      className={`${sizeMap[size]} rounded-full bg-gradient-to-br ${getGradient(name)} flex items-center justify-center text-white font-bold shrink-0 shadow-sm ${className}`}
+      className={`${sizeMap[size]} rounded-full bg-gradient-to-br ${getGradient(name || "A")} flex items-center justify-center text-white font-bold shrink-0 shadow-sm ${className}`}
     >
-      {name[0].toUpperCase()}
+      {initial}
     </div>
   );
 }
@@ -107,6 +133,7 @@ export default function ClientsPage() {
   };
 
   const [formData, setForm]         = useState(defaultForm);
+  const [familyMembers, setFamilyMembers] = useState<FormFamilyMember[]>([]);
   const [saving, setSaving]         = useState(false);
   const [total, setTotal]           = useState(0);
 async function fetchPincode(pin: string) {
@@ -148,15 +175,16 @@ setForm(prev => ({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { setLoading(false); return; }
 
+      const token = session.access_token;
       const p = new URLSearchParams();
       if (search) p.set("search", search);
       if (filter !== "all") p.set("status", filter);
       const res = await fetch(`/api/clients?${p}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       setClients(data.clients || []);
-      setTotal(data.total || 0);
+      setTotal(data.total || (data.clients?.length) || 0);
     } catch { /* silent */ } finally { setLoading(false); }
   }, [search, filter, supabase]);
 
@@ -181,87 +209,192 @@ setForm(prev => ({
   };
 
   const handleSave = async () => {
-    const phoneValid = /^\d{10}$/.test(formData.phone);
-    const pinValid = /^\d{6}$/.test(formData.pinCode);
-    if (!formData.name || !formData.surname || !phoneValid || !formData.date_of_birth || !formData.email || !pinValid) {
-      alert("Please ensure all mandatory fields are filled correctly (10-digit phone, 6-digit PIN).");
+    if (!formData.name.trim()) {
+      alert("Please enter Full Name.");
       return;
     }
+    if (!formData.surname.trim()) {
+      alert("Please enter Surname.");
+      return;
+    }
+    const phoneValid = /^\d{10}$/.test(formData.phone.trim());
+    if (!phoneValid) {
+      alert("Please enter a valid 10-digit mobile number.");
+      return;
+    }
+    if (!formData.email.trim() || !formData.email.includes("@")) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+    if (!formData.date_of_birth) {
+      alert("Please select Date of Birth.");
+      return;
+    }
+    const pinValid = /^\d{6}$/.test(formData.pinCode.trim());
+    if (!pinValid) {
+      alert("Please enter a valid 6-digit PIN code.");
+      return;
+    }
+
     setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setSaving(false); return; }
+      if (!session) {
+        alert("Session expired. Please log in again.");
+        setSaving(false);
+        return;
+      }
+      const token = session.access_token;
       const authHeaders = {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${session.access_token}`,
+        Authorization: `Bearer ${token}`,
       };
 
+      const payload = {
+        ...formData,
+        name: capitalizeWords(formData.name),
+        surname: capitalizeWords(formData.surname),
+      };
+
+      let targetClientId = editingClient?.id;
+
       if (editingClient) {
-        await fetch(`/api/clients/${editingClient.id}`, {
+        const res = await fetch(`/api/clients/${editingClient.id}`, {
           method: "PUT",
           headers: authHeaders,
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         });
-        closeModal(); fetchClients();
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to update client.");
+        }
       } else {
         const res = await fetch("/api/clients", {
           method: "POST",
           headers: authHeaders,
-          body: JSON.stringify(formData),
+          body: JSON.stringify(payload),
         });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to create client.");
+        }
         const data = await res.json();
-        if (data.client && data.client.clientLoginId) {
+        targetClientId = data.client?.id;
+
+        if (data.isDoubleEntry) {
+          alert(`Double entry / Re-entry detected!\n\nAllotment Reference: ${data.allotmentId}\nFollow-up Reminder: ${data.reminderDate}\n\n${data.message}`);
+        } else if (data.client && data.client.clientLoginId) {
           alert(`Client created successfully!\n\nPortal Login ID: ${data.client.clientLoginId}\nTemporary Password: ${data.client.temporaryPassword}\n\nPlease copy and share these credentials with the client.`);
         }
-        closeModal(); fetchClients();
       }
-    } catch { /* silent */ } finally { setSaving(false); }
+
+      // Save Family Members if any were added/updated
+      if (targetClientId && familyMembers.length > 0) {
+        for (const fm of familyMembers) {
+          if (!fm.name.trim()) continue;
+          const fmPayload = {
+            name: capitalizeWords(fm.name),
+            relationship: fm.relationship || "Other",
+            date_of_birth: fm.date_of_birth || "2000-01-01",
+            phone: fm.phone || null,
+          };
+          if (fm.id) {
+            await fetch(`/api/clients/${targetClientId}/family/${fm.id}`, {
+              method: "PUT",
+              headers: authHeaders,
+              body: JSON.stringify(fmPayload),
+            }).catch(() => {});
+          } else {
+            await fetch(`/api/clients/${targetClientId}/family`, {
+              method: "POST",
+              headers: authHeaders,
+              body: JSON.stringify(fmPayload),
+            }).catch(() => {});
+          }
+        }
+      }
+
+      closeModal();
+      await fetchClients();
+    } catch (err: any) {
+      alert(err?.message || "An error occurred while saving client details.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleDelete = async (id: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
+
+      const token = session.access_token;
       await fetch(`/api/clients/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       fetchClients();
     } catch { /* silent */ }
     setDeleteConfirm(null);
   };
 
-const openEdit = (c: ClientData | any) => {
-  setEditing(c);
+  const openEdit = async (c: ClientData | any) => {
+    setEditing(c);
 
-  setForm({
-    name: c.name || "",
-    surname: c.surname || "",
-    phone: c.phone || "",
-    alternateMobile: c.alternateMobile || "",
-    email: c.email || "",
-    date_of_birth: c.date_of_birth || "",
-    anniversaryDate: c.anniversaryDate || "",
-    gender: c.gender || "",
-    maritalStatus: c.maritalStatus || "",
-    occupation: c.occupation || "",
+    let firstName = c.name || "";
+    let surname = c.surname || "";
+    if (!surname && firstName.includes(" ")) {
+      const parts = firstName.trim().split(/\s+/);
+      firstName = parts[0];
+      surname = parts.slice(1).join(" ");
+    }
 
-    address: c.address || "",
-    town: c.town || "",          // ✅ Added
-    city: c.city || "",
-    state: c.state || "",
-    pinCode: c.pinCode || "",
+    setForm({
+      name: capitalizeWords(firstName),
+      surname: capitalizeWords(surname),
+      phone: c.phone || "",
+      alternateMobile: c.alternateMobile || c.alternate_mobile || "",
+      email: c.email || "",
+      date_of_birth: c.date_of_birth || "",
+      anniversaryDate: c.anniversaryDate || c.anniversary_date || "",
+      gender: c.gender || "",
+      maritalStatus: c.maritalStatus || c.marital_status || "",
+      occupation: c.occupation || "",
 
-    notes: c.notes || "",
-    profile_pic: c.profile_pic || "",
-  });
+      address: c.address || "",
+      town: c.town || "",
+      city: c.city || "",
+      state: c.state || "",
+      pinCode: c.pinCode || c.pin_code || "",
 
-  setShowAdd(true);
-};
+      notes: c.notes || "",
+      profile_pic: c.profile_pic || "",
+    });
+
+    // Also load family members for this client
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const token = session.access_token;
+      const res = await fetch(`/api/clients/${c.id}/family`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFamilyMembers(data.family_members || []);
+      }
+    } catch {
+      setFamilyMembers([]);
+    }
+
+    setShowAdd(true);
+  };
 
   const closeModal = () => {
-    setShowAdd(false); setEditing(null);
+    setShowAdd(false);
+    setEditing(null);
     setForm(defaultForm);
+    setFamilyMembers([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -460,7 +593,10 @@ const openEdit = (c: ClientData | any) => {
                       className="group-hover:scale-105 transition-transform"
                     />
                     <div className="min-w-0">
-                      <Link href={`/dashboard/clients/${c.id}`} className="text-[13px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors truncate block">{c.name}</Link>
+                      <Link href={`/dashboard/clients/${c.id}`} className="text-[13px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors truncate block">
+                        <span>{capitalizeWords(c.name)}</span>{" "}
+                        <span className="text-[#0E7AC7] font-semibold">{capitalizeWords(c.surname || "")}</span>
+                      </Link>
                       <div className="flex items-center gap-1 text-[11px] text-[#6B7280] font-medium mt-0.5">
                         <IC.Calendar /> {formatDob(c.date_of_birth)}
                       </div>
@@ -537,7 +673,7 @@ const openEdit = (c: ClientData | any) => {
 
       {/* ── Delete Confirmation Modal ────────────────────────────── */}
       {deleteConfirm && (
-        <div className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-4">
+        <div className="fixed inset-0 z-[10002] flex items-end sm:items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)} />
           <div className="relative bg-white rounded-[22px] w-full max-w-sm p-6 shadow-2xl">
             <div className="w-12 h-12 rounded-2xl bg-[#EF4444]/10 flex items-center justify-center mx-auto mb-4 text-[#EF4444]">
@@ -561,7 +697,7 @@ const openEdit = (c: ClientData | any) => {
 
       {/* ── Add / Edit Modal ─────────────────────────────────────── */}
       {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeModal} />
           <div className="relative bg-white w-full sm:max-w-xl rounded-t-[28px] sm:rounded-[22px] shadow-2xl max-h-[95vh] overflow-y-auto">
 
@@ -653,11 +789,23 @@ const openEdit = (c: ClientData | any) => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Full Name <span className="text-[#EF4444]">*</span></label>
-                  <input type="text" value={formData.name} onChange={e => setForm({...formData, name: e.target.value})} placeholder="First Name" className={inputCls} />
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={e => setForm({...formData, name: sanitizeAlphabetsOnly(e.target.value)})}
+                    placeholder="First Name"
+                    className={inputCls}
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>Surname <span className="text-[#EF4444]">*</span></label>
-                  <input type="text" value={formData.surname} onChange={e => setForm({...formData, surname: e.target.value})} placeholder="Last Name" className={inputCls} />
+                  <input
+                    type="text"
+                    value={formData.surname}
+                    onChange={e => setForm({...formData, surname: sanitizeAlphabetsOnly(e.target.value)})}
+                    placeholder="Last Name"
+                    className={inputCls}
+                  />
                 </div>
               </div>
 
@@ -839,6 +987,105 @@ const openEdit = (c: ClientData | any) => {
 
 </div>
 
+              {/* ── Family Details Section (Item 7) ────────────────── */}
+              <div className="border border-slate-200/80 bg-slate-50/50 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold text-[#1F2937] uppercase tracking-wider">Family Details</h3>
+                    <p className="text-[11px] text-[#6B7280]">Add or manage family members directly with this client</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFamilyMembers(prev => [...prev, { name: "", relationship: "Wife", date_of_birth: "", phone: "" }])}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#005A87] text-white text-xs font-bold hover:bg-[#00476b] transition-all shadow-sm"
+                  >
+                    + Add Member
+                  </button>
+                </div>
+
+                {familyMembers.length === 0 ? (
+                  <p className="text-xs text-slate-400 italic py-1">No family members added yet. Click &quot;+ Add Member&quot; to include family details.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {familyMembers.map((fm, idx) => (
+                      <div key={idx} className="bg-white rounded-xl p-3 border border-slate-200/80 shadow-xs space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold text-[#005A87]">Family Member #{idx + 1}</span>
+                          <button
+                            type="button"
+                            onClick={() => setFamilyMembers(prev => prev.filter((_, i) => i !== idx))}
+                            className="text-[11px] text-[#EF4444] font-bold hover:underline"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Full Name *</label>
+                            <input
+                              type="text"
+                              placeholder="Name"
+                              value={fm.name}
+                              onChange={e => {
+                                const val = sanitizeAlphabetsOnly(e.target.value);
+                                setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, name: val } : m));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl bg-[#F7F9FC] border border-slate-200 text-xs font-semibold text-[#1F2937]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Relationship *</label>
+                            <select
+                              value={fm.relationship}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, relationship: val } : m));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl bg-[#F7F9FC] border border-slate-200 text-xs font-semibold text-[#1F2937]"
+                            >
+                              <option value="">Select...</option>
+                              {FAMILY_RELATIONSHIPS.map((r) => (
+                                <option key={r} value={r}>
+                                  {r}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Date of Birth</label>
+                            <input
+                              type="date"
+                              value={fm.date_of_birth}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, date_of_birth: val } : m));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl bg-[#F7F9FC] border border-slate-200 text-xs font-semibold text-[#1F2937]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Phone</label>
+                            <input
+                              type="tel"
+                              maxLength={10}
+                              placeholder="10 digits (Optional)"
+                              value={fm.phone}
+                              onChange={e => {
+                                const val = e.target.value.replace(/\D/g, "");
+                                setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, phone: val } : m));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl bg-[#F7F9FC] border border-slate-200 text-xs font-semibold text-[#1F2937]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div>
                 <label className={labelCls}>Notes</label>
                 <textarea value={formData.notes} onChange={e => setForm({...formData, notes: e.target.value})} placeholder="Any additional notes..." className={inputCls} style={{ minHeight: "100px" }} />
@@ -852,8 +1099,9 @@ const openEdit = (c: ClientData | any) => {
                 Cancel
               </button>
               <button
+                type="button"
                 onClick={handleSave}
-                disabled={saving || !formData.name || !formData.surname || !/^\d{10}$/.test(formData.phone) || !formData.date_of_birth || !formData.email || !/^\d{6}$/.test(formData.pinCode)}
+                disabled={saving}
                 className="flex-1 h-12 rounded-2xl bg-[#005A87] hover:bg-[#00476b] text-white text-[13px] font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm shadow-[#005A87]/20"
               >
                 {saving ? (
