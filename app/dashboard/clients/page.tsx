@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { capitalizeWords, sanitizeAlphabetsOnly, FAMILY_RELATIONSHIPS } from "@/lib/formatUtils";
@@ -119,6 +119,7 @@ export default function ClientsPage() {
   const supabase = createClient();
 
   const [clients, setClients]       = useState<ClientData[]>([]);
+  const [allClients, setAllClients] = useState<ClientData[]>([]);
   const [search, setSearch]         = useState("");
   const [filter, setFilter]         = useState("all");
   const [loading, setLoading]       = useState(true);
@@ -136,6 +137,44 @@ export default function ClientsPage() {
   const [familyMembers, setFamilyMembers] = useState<FormFamilyMember[]>([]);
   const [saving, setSaving]         = useState(false);
   const [total, setTotal]           = useState(0);
+
+  // Real-time Duplicate Client Detection
+  const trimmedPhone = (formData.phone || "").trim();
+  const trimmedEmail = (formData.email || "").trim().toLowerCase();
+
+  const duplicateClient = useMemo(() => {
+    const pool = allClients.length > 0 ? allClients : clients;
+    if (!trimmedPhone && !trimmedEmail) return null;
+    return (
+      pool.find((c) => {
+        if (editingClient && c.id === editingClient.id) return false;
+        const matchPhone = Boolean(
+          trimmedPhone.length === 10 &&
+          c.phone &&
+          c.phone.trim() === trimmedPhone
+        );
+        const matchEmail = Boolean(
+          trimmedEmail &&
+          trimmedEmail.includes("@") &&
+          c.email &&
+          c.email.trim().toLowerCase() === trimmedEmail
+        );
+        return matchPhone || matchEmail;
+      }) || null
+    );
+  }, [allClients, clients, trimmedPhone, trimmedEmail, editingClient]);
+
+  const isDuplicatePhone = Boolean(
+    duplicateClient &&
+    trimmedPhone.length === 10 &&
+    duplicateClient.phone?.trim() === trimmedPhone
+  );
+
+  const isDuplicateEmail = Boolean(
+    duplicateClient &&
+    trimmedEmail.includes("@") &&
+    duplicateClient.email?.trim().toLowerCase() === trimmedEmail
+  );
 async function fetchPincode(pin: string) {
   try {
     console.log("Fetching PIN:", pin);
@@ -185,6 +224,9 @@ setForm(prev => ({
       const data = await res.json();
       setClients(data.clients || []);
       setTotal(data.total || (data.clients?.length) || 0);
+      if (!search && filter === "all") {
+        setAllClients(data.clients || []);
+      }
     } catch { /* silent */ } finally { setLoading(false); }
   }, [search, filter, supabase]);
 
@@ -192,6 +234,26 @@ setForm(prev => ({
     const t = setTimeout(fetchClients, 300);
     return () => clearTimeout(t);
   }, [fetchClients]);
+
+  // Ensure allClients is available when Add Modal opens
+  useEffect(() => {
+    if (showAddModal && allClients.length === 0) {
+      (async () => {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) return;
+          const token = session.access_token;
+          const res = await fetch("/api/clients", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.clients) setAllClients(data.clients);
+          }
+        } catch { /* silent */ }
+      })();
+    }
+  }, [showAddModal, allClients.length, supabase]);
 
   // ── Profile pic handler ──────────────────────────────────────────────────
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -209,6 +271,10 @@ setForm(prev => ({
   };
 
   const handleSave = async () => {
+    if (!editingClient && duplicateClient) {
+      alert(`Duplicate client identified! A client with this mobile number or email already exists (${duplicateClient.name} ${duplicateClient.surname || ""}). Cannot add duplicate client.`);
+      return;
+    }
     if (!formData.name.trim()) {
       alert("Please enter Full Name.");
       return;
@@ -715,6 +781,15 @@ setForm(prev => ({
             {/* Form */}
             <div className="px-6 py-5 space-y-4">
 
+              {/* Duplicate Notice */}
+              {!editingClient && duplicateClient && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-left">
+                  <p className="text-xs font-semibold text-red-700">
+                    Duplicate client (already exists with this mobile or email: {duplicateClient.name} {duplicateClient.surname || ""})
+                  </p>
+                </div>
+              )}
+
               {/* ── Profile Picture Upload ─────────────────────────── */}
               <div className="flex flex-col items-center gap-3 py-2">
                 <div className="relative group">
@@ -812,7 +887,19 @@ setForm(prev => ({
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Mobile <span className="text-[#EF4444]">*</span></label>
-                  <input type="tel" maxLength={10} value={formData.phone} onChange={e => setForm({...formData, phone: e.target.value.replace(/\D/g, '')})} placeholder="10-digit number" className={inputCls} />
+                  <input
+                    type="tel"
+                    maxLength={10}
+                    value={formData.phone}
+                    onChange={e => setForm({...formData, phone: e.target.value.replace(/\D/g, '')})}
+                    placeholder="10-digit number"
+                    className={`${inputCls} ${!editingClient && isDuplicatePhone ? "!border-red-400 !bg-red-50/30 text-red-900" : ""}`}
+                  />
+                  {!editingClient && isDuplicatePhone && (
+                    <p className="text-[11px] font-medium text-red-600 mt-1">
+                      Already exists with this mobile: {duplicateClient?.name} {duplicateClient?.surname || ""}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>Alternate Mobile</label>
@@ -822,7 +909,18 @@ setForm(prev => ({
 
               <div>
                 <label className={labelCls}>Email Address <span className="text-[#EF4444]">*</span></label>
-                <input type="email" value={formData.email} onChange={e => setForm({...formData, email: e.target.value})} placeholder="client@email.com" className={inputCls} />
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={e => setForm({...formData, email: e.target.value})}
+                  placeholder="client@email.com"
+                  className={`${inputCls} ${!editingClient && isDuplicateEmail ? "!border-red-400 !bg-red-50/30 text-red-900" : ""}`}
+                />
+                {!editingClient && isDuplicateEmail && (
+                  <p className="text-[11px] font-medium text-red-600 mt-1">
+                    Already exists with this email: {duplicateClient?.name} {duplicateClient?.surname || ""}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -1101,7 +1199,7 @@ setForm(prev => ({
               <button
                 type="button"
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || (!editingClient && Boolean(duplicateClient))}
                 className="flex-1 h-12 rounded-2xl bg-[#005A87] hover:bg-[#00476b] text-white text-[13px] font-bold transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm shadow-[#005A87]/20"
               >
                 {saving ? (

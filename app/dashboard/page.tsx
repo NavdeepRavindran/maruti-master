@@ -91,7 +91,7 @@ export default function DashboardPage() {
         if (event === "SIGNED_OUT" || !session) {
           // Definitely not logged in → redirect
           setAuthChecked(false);
-          router.replace("/login");
+          window.location.replace("/login");
           return;
         }
 
