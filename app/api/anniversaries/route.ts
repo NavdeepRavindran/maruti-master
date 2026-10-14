@@ -27,16 +27,16 @@ interface AnniversaryEntry {
 async function getAuthUser(request: Request) {
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
+  try {
+    const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
+    if (error || !user) return null;
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(request: Request) {
-  if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
-  }
-
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
@@ -46,10 +46,13 @@ export async function GET(request: Request) {
   const range = searchParams.get("range") || "month";
 
   try {
+    if (!supabaseAdmin) throw new Error("No supabaseAdmin");
+
     const { data: clients, error } = await supabaseAdmin
       .from("clients")
       .select("id, name, anniversary_date, phone")
       .not("anniversary_date", "is", null)
+      .eq("is_deleted", false)
       .order("name");
 
     if (error) throw error;
@@ -74,7 +77,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ anniversaries: filtered, stats: getStats(entries) });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Failed to fetch anniversaries" }, { status: 500 });
   }
 }
 

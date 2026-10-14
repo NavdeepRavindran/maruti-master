@@ -18,25 +18,16 @@ export async function proxy(request: NextRequest) {
     try {
       const { payload } = await jwtVerify(token, JWT_SECRET);
       
-      // Ensure they can only access their own dashboard ID
+      // Ensure clients can only access their own dashboard ID
       const requestedId = pathname.split('/')[2]; 
       if (payload.clientId !== requestedId) {
         return NextResponse.redirect(new URL('/client-login', request.url));
       }
 
       return NextResponse.next();
-    } catch (err) {
-      // Token invalid or expired
+    } catch {
       return NextResponse.redirect(new URL('/client-login', request.url));
     }
-  }
-
-  // 2. Protect API Routes (Simplified for Client Portal APIs)
-  if (pathname.startsWith('/api/clients/') && !pathname.includes('/regenerate') && request.method === 'GET') {
-    // If it's a specific client API call, we can check if they have a token or an agent session.
-    // Since we don't have full agent auth setup yet in this codebase, we'll allow it if they have a valid client token
-    // for that specific ID, OR if we assume agent for now.
-    // For a fully production app, you would verify Supabase Auth for agents here.
   }
 
   return NextResponse.next();

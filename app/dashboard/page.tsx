@@ -11,6 +11,7 @@ interface UserData { name?: string; email?: string; role?: string; }
 interface DashboardStats { totalClients: number; totalDocuments: number; upcomingBirthdays: number; todayBirthdays: number; todayAnniversaries: number; upcomingAnniversaries: number; }
 interface BirthdayItem { name: string; date_of_birth: string; relationship: string; phone?: string; client_id: string; }
 interface DocumentItem { name: string; file_name: string; file_type: string; file_size: number; created_at: string; client_name?: string; }
+interface ClientItem { id: string; name: string; surname?: string; phone: string; email?: string; city?: string; state?: string; occupation?: string; status: string; created_at: string; family_count?: number; document_count?: number; }
 
 const QUOTES = [
   { text: "The secret of getting ahead is getting started.", author: "Mark Twain" },
@@ -75,6 +76,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({ totalClients: 0, totalDocuments: 0, upcomingBirthdays: 0, todayBirthdays: 0, todayAnniversaries: 0, upcomingAnniversaries: 0 });
   const [birthdays, setBirthdays] = useState<BirthdayItem[]>([]);
   const [recentDocs, setRecentDocs] = useState<DocumentItem[]>([]);
+  const [recentClients, setRecentClients] = useState<ClientItem[]>([]);
   const [loading, setLoading] = useState(true);
   // ✅ KEY FIX: Start as null (unknown) not true/false.
   // null = "we don't know yet", false = "definitely not authed" → redirect
@@ -85,31 +87,32 @@ export default function DashboardPage() {
   const todayQuote = QUOTES[new Date().getDate() % QUOTES.length];
 
   useEffect(() => {
-    // Use onAuthStateChange — fires immediately with the current session state
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === "SIGNED_OUT" || !session) {
-          // Definitely not logged in → redirect
-          setAuthChecked(false);
-          window.location.replace("/login");
-          return;
+    try {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (event === "SIGNED_OUT" || !session) {
+            setAuthChecked(false);
+            window.location.replace("/login");
+            return;
+          }
+
+          setAuthChecked(true);
+          setUser({
+            name: session.user.user_metadata?.name || session.user.email?.split("@")[0] || "Agent",
+            email: session.user.email,
+            role: session.user.user_metadata?.role || "Agent",
+          });
+
+          await fetchDashboardData(session.access_token);
         }
+      );
 
-        // We have a valid session
-        setAuthChecked(true);
-        setUser({
-          name: session.user.user_metadata?.name,
-          email: session.user.email,
-          role: session.user.user_metadata?.role,
-        });
-
-        await fetchDashboardData(session.access_token);
-      }
-    );
-
-    // Cleanup subscription on unmount
-    return () => subscription.unsubscribe();
-  }, []);
+      return () => subscription?.unsubscribe();
+    } catch {
+      setAuthChecked(false);
+      window.location.replace("/login");
+    }
+  }, [supabase]);
 
   async function fetchDashboardData(accessToken: string) {
     const headers: HeadersInit = { Authorization: `Bearer ${accessToken}` };
@@ -131,6 +134,11 @@ export default function DashboardPage() {
       });
       setBirthdays((b.birthdays || []).slice(0, 5));
       setRecentDocs((d.documents || []).slice(0, 5));
+      const sortedClients = [...(c.clients || [])].sort(
+        (clA: ClientItem, clB: ClientItem) =>
+          new Date(clB.created_at || 0).getTime() - new Date(clA.created_at || 0).getTime()
+      );
+      setRecentClients(sortedClients.slice(0, 5));
     } catch (err) {
       console.error("Dashboard fetch error:", err);
     } finally {
@@ -300,60 +308,171 @@ export default function DashboardPage() {
         {/* Main grid */}
         <div className="grid lg:grid-cols-5 gap-5 sm:gap-6">
 
-          {/* Documents — 3 cols */}
-          <div className="lg:col-span-3 bg-white rounded-[22px] border border-slate-100 shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-50">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#7C6CF6]/10 text-[#7C6CF6] flex items-center justify-center"><IC.Doc /></div>
-                <div>
-                  <h2 className="text-[15px] font-bold text-[#1F2937]">Recent Documents</h2>
-                  <p className="text-xs text-[#6B7280] font-medium leading-none mt-1">Latest uploads across clients</p>
-                </div>
-              </div>
-              <Link href="/dashboard/documents" className="flex items-center gap-1 text-xs font-bold text-[#005A87] hover:text-[#0E7AC7] transition-colors shrink-0">
-                View all <IC.ChevronRight />
-              </Link>
-            </div>
-            <div className="hidden sm:grid grid-cols-12 px-6 py-2.5 bg-[#F7F9FC]">
-              {["Name", "Client", "Size", "Uploaded"].map((h, i) => (
-                <span key={h} className={`text-[10px] font-bold uppercase tracking-widest text-[#6B7280] ${i === 0 ? "col-span-5" : i === 1 ? "col-span-3" : i === 2 ? "col-span-2 text-right" : "col-span-2 text-right"}`}>{h}</span>
-              ))}
-            </div>
-            <div className="divide-y divide-slate-50">
-              {loading ? (
-                [1,2,3,4].map(i => (
-                  <div key={i} className="flex items-center gap-3 px-5 sm:px-6 py-4">
-                    <Skeleton className="w-10 h-10 shrink-0" />
-                    <div className="flex-1 space-y-1.5"><Skeleton className="h-3 w-2/5" /><Skeleton className="h-2.5 w-1/4" /></div>
-                    <Skeleton className="h-2.5 w-16 hidden sm:block" />
+          {/* Documents & Recent Clients — 3 cols */}
+          <div className="lg:col-span-3 flex flex-col gap-5 sm:gap-6">
+
+            {/* Documents */}
+            <div className="bg-white rounded-[22px] border border-slate-100 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#7C6CF6]/10 text-[#7C6CF6] flex items-center justify-center"><IC.Doc /></div>
+                  <div>
+                    <h2 className="text-[15px] font-bold text-[#1F2937]">Recent Documents</h2>
+                    <p className="text-xs text-[#6B7280] font-medium leading-none mt-1">Latest uploads across clients</p>
                   </div>
-                ))
-              ) : recentDocs.length === 0 ? (
-                <div className="py-16 text-center px-5">
-                  <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]"><IC.Folder /></div>
-                  <p className="text-sm font-semibold text-[#1F2937]">No documents yet</p>
-                  <Link href="/dashboard/documents" className="text-xs text-[#005A87] font-bold hover:underline mt-1 inline-block">Upload your first →</Link>
                 </div>
-              ) : (
-                recentDocs.map((doc, i) => {
-                  const m = getDocMeta(doc.file_type);
-                  return (
-                    <div key={i} className="grid sm:grid-cols-12 items-center px-5 sm:px-6 py-3.5 gap-1 sm:gap-0 hover:bg-[#F7F9FC] transition-colors group">
-                      <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
-                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${m.bg}`}>
-                          <span className={`text-[9px] font-bold leading-none ${m.text}`}>{doc.file_type}</span>
-                        </div>
-                        <p className="text-sm font-semibold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">{doc.file_name}</p>
-                      </div>
-                      <p className="sm:col-span-3 hidden sm:block text-[13px] text-[#6B7280] font-medium truncate pl-1">{doc.client_name || "—"}</p>
-                      <p className="sm:col-span-2 hidden sm:block text-xs text-[#6B7280] font-medium text-right">{formatSize(doc.file_size)}</p>
-                      <p className="sm:col-span-2 hidden sm:block text-xs text-[#6B7280] font-medium text-right">{formatTime(doc.created_at)}</p>
-                      <p className="sm:hidden text-xs text-[#6B7280] font-medium pl-[52px] -mt-1">{formatSize(doc.file_size)} · {formatTime(doc.created_at)}{doc.client_name ? ` · ${doc.client_name}` : ""}</p>
+                <Link href="/dashboard/documents" className="flex items-center gap-1 text-xs font-bold text-[#005A87] hover:text-[#0E7AC7] transition-colors shrink-0">
+                  View all <IC.ChevronRight />
+                </Link>
+              </div>
+              <div className="hidden sm:grid grid-cols-12 px-6 py-2.5 bg-[#F7F9FC]">
+                {["Name", "Client", "Size", "Uploaded"].map((h, i) => (
+                  <span key={h} className={`text-[10px] font-bold uppercase tracking-widest text-[#6B7280] ${i === 0 ? "col-span-5" : i === 1 ? "col-span-3" : i === 2 ? "col-span-2 text-right" : "col-span-2 text-right"}`}>{h}</span>
+                ))}
+              </div>
+              <div className="divide-y divide-slate-50">
+                {loading ? (
+                  [1,2,3,4].map(i => (
+                    <div key={i} className="flex items-center gap-3 px-5 sm:px-6 py-4">
+                      <Skeleton className="w-10 h-10 shrink-0" />
+                      <div className="flex-1 space-y-1.5"><Skeleton className="h-3 w-2/5" /><Skeleton className="h-2.5 w-1/4" /></div>
+                      <Skeleton className="h-2.5 w-16 hidden sm:block" />
                     </div>
-                  );
-                })
-              )}
+                  ))
+                ) : recentDocs.length === 0 ? (
+                  <div className="py-16 text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]"><IC.Folder /></div>
+                    <p className="text-sm font-semibold text-[#1F2937]">No documents yet</p>
+                    <Link href="/dashboard/documents" className="text-xs text-[#005A87] font-bold hover:underline mt-1 inline-block">Upload your first →</Link>
+                  </div>
+                ) : (
+                  recentDocs.map((doc, i) => {
+                    const m = getDocMeta(doc.file_type);
+                    return (
+                      <div key={i} className="grid sm:grid-cols-12 items-center px-5 sm:px-6 py-3.5 gap-1 sm:gap-0 hover:bg-[#F7F9FC] transition-colors group">
+                        <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${m.bg}`}>
+                            <span className={`text-[9px] font-bold leading-none ${m.text}`}>{doc.file_type}</span>
+                          </div>
+                          <p className="text-sm font-semibold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">{doc.file_name}</p>
+                        </div>
+                        <p className="sm:col-span-3 hidden sm:block text-[13px] text-[#6B7280] font-medium truncate pl-1">{doc.client_name || "—"}</p>
+                        <p className="sm:col-span-2 hidden sm:block text-xs text-[#6B7280] font-medium text-right">{formatSize(doc.file_size)}</p>
+                        <p className="sm:col-span-2 hidden sm:block text-xs text-[#6B7280] font-medium text-right">{formatTime(doc.created_at)}</p>
+                        <p className="sm:hidden text-xs text-[#6B7280] font-medium pl-[52px] -mt-1">{formatSize(doc.file_size)} · {formatTime(doc.created_at)}{doc.client_name ? ` · ${doc.client_name}` : ""}</p>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
             </div>
+
+            {/* Recently Added Clients */}
+            <div className="bg-white rounded-[22px] border border-slate-100 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#005A87]/10 text-[#005A87] flex items-center justify-center">
+                    <IC.Users />
+                  </div>
+                  <div>
+                    <h2 className="text-[15px] font-bold text-[#1F2937]">Recently Added Clients</h2>
+                    <p className="text-xs text-[#6B7280] font-medium leading-none mt-1">Latest onboarded client profiles & contact details</p>
+                  </div>
+                </div>
+                <Link href="/dashboard/clients" className="flex items-center gap-1 text-xs font-bold text-[#005A87] hover:text-[#0E7AC7] transition-colors shrink-0">
+                  View all <IC.ChevronRight />
+                </Link>
+              </div>
+              <div className="hidden sm:grid grid-cols-12 px-6 py-2.5 bg-[#F7F9FC]">
+                <span className="col-span-5 text-[10px] font-bold uppercase tracking-widest text-[#6B7280]">Client</span>
+                <span className="col-span-3 text-[10px] font-bold uppercase tracking-widest text-[#6B7280]">Contact</span>
+                <span className="col-span-2 text-[10px] font-bold uppercase tracking-widest text-[#6B7280]">City</span>
+                <span className="col-span-2 text-[10px] font-bold uppercase tracking-widest text-[#6B7280] text-right">Added</span>
+              </div>
+              <div className="divide-y divide-slate-50">
+                {loading ? (
+                  [1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-3 px-5 sm:px-6 py-4">
+                      <Skeleton className="w-10 h-10 rounded-xl shrink-0" />
+                      <div className="flex-1 space-y-1.5">
+                        <Skeleton className="h-3 w-2/5" />
+                        <Skeleton className="h-2.5 w-1/4" />
+                      </div>
+                      <Skeleton className="h-2.5 w-16 hidden sm:block" />
+                    </div>
+                  ))
+                ) : recentClients.length === 0 ? (
+                  <div className="py-14 text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
+                      <IC.Users />
+                    </div>
+                    <p className="text-sm font-semibold text-[#1F2937]">No clients yet</p>
+                    <Link href="/dashboard/clients?action=add" className="text-xs text-[#005A87] font-bold hover:underline mt-1 inline-block">
+                      Add your first client →
+                    </Link>
+                  </div>
+                ) : (
+                  recentClients.map((client) => {
+                    const fullName = `${client.name} ${(client.surname || "").toUpperCase()}`.trim();
+                    const initials = client.name ? (client.name[0] + (client.surname ? client.surname[0] : "")).toUpperCase() : "CL";
+                    return (
+                      <Link
+                        key={client.id}
+                        href={`/dashboard/clients/${client.id}`}
+                        className="grid sm:grid-cols-12 items-center px-5 sm:px-6 py-3.5 gap-1 sm:gap-0 hover:bg-[#F7F9FC] transition-colors group"
+                      >
+                        <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-[#005A87]/10 text-[#005A87] flex items-center justify-center font-bold text-xs shrink-0 group-hover:bg-[#005A87] group-hover:text-white transition-colors">
+                            {initials}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">
+                              {fullName}
+                            </p>
+                            <p className="text-xs text-[#6B7280] font-medium truncate">
+                              {client.occupation || "Client"}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="sm:col-span-3 hidden sm:block min-w-0 pl-1">
+                          <p className="text-[13px] text-[#1F2937] font-medium truncate">
+                            {client.phone}
+                          </p>
+                          {client.email && (
+                            <p className="text-xs text-[#6B7280] font-medium truncate">
+                              {client.email}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="sm:col-span-2 hidden sm:block min-w-0">
+                          <p className="text-xs text-[#6B7280] font-medium truncate">
+                            {client.city || "—"}
+                          </p>
+                        </div>
+
+                        <div className="sm:col-span-2 hidden sm:flex flex-col items-end justify-center">
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mb-0.5 ${client.status === "Active" ? "bg-[#14B86A]/10 text-[#14B86A]" : "bg-slate-100 text-slate-500"}`}>
+                            {client.status || "Active"}
+                          </span>
+                          <span className="text-[11px] text-[#6B7280] font-medium">
+                            {formatTime(client.created_at)}
+                          </span>
+                        </div>
+
+                        <div className="sm:hidden text-xs text-[#6B7280] font-medium pl-[52px] -mt-1 flex items-center gap-2">
+                          <span>{client.phone}</span>
+                          {client.city && <span>· {client.city}</span>}
+                          <span>· {formatTime(client.created_at)}</span>
+                        </div>
+                      </Link>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
           </div>
 
           {/* Right col */}

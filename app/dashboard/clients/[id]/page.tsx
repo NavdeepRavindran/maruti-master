@@ -4,7 +4,16 @@ import { useEffect, useState, use, useRef } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
-import { capitalizeWords, sanitizeAlphabetsOnly, FAMILY_RELATIONSHIPS } from "@/lib/formatUtils";
+import {
+  capitalizeWords,
+  sanitizeAlphabetsOnly,
+  formatFamilyName,
+  FAMILY_RELATIONSHIPS,
+  formatDate,
+  getAge,
+  validateDateRange,
+} from "@/lib/formatUtils";
+import { validateEmail } from "@/lib/emailValidator";
 
 
 interface ClientData {
@@ -39,6 +48,7 @@ interface FamilyMember {
   date_of_birth: string;
   relationship: string;
   phone?: string;
+  occupation?: string;
 }
 
 interface DocData {
@@ -123,7 +133,9 @@ export default function ClientProfilePage({
     date_of_birth: "",
     relationship: "",
     phone: "",
+    occupation: "",
   });
+  const [docFilterMember, setDocFilterMember] = useState<string>("all");
   const [docForm, setDocForm] = useState({
     name: "",
     file_name: "",
@@ -155,6 +167,50 @@ export default function ClientProfilePage({
   const [viewingFamilyMember, setViewingFamilyMember] = useState<FamilyMember | null>(null);
   const [editingFamilyMember, setEditingFamilyMember] = useState<FamilyMember | null>(null);
   const [savingFamilyEdit, setSavingFamilyEdit] = useState(false);
+
+  // In-modal error banners (displayed directly on the same layer)
+  const [editModalError, setEditModalError] = useState<string | null>(null);
+  const [familyModalError, setFamilyModalError] = useState<string | null>(null);
+  const [editFamilyModalError, setEditFamilyModalError] = useState<string | null>(null);
+
+  // Discard Confirmation Modal state (prevents accidental closing on outside clicks)
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [discardTarget, setDiscardTarget] = useState<"editClient" | "addFamily" | "editFamily" | null>(null);
+
+  const requestCloseEditModal = () => {
+    setDiscardTarget("editClient");
+    setShowDiscardConfirm(true);
+  };
+
+  const requestCloseFamilyModal = () => {
+    if (familyForm.name || familyForm.date_of_birth || familyForm.phone || familyForm.occupation) {
+      setDiscardTarget("addFamily");
+      setShowDiscardConfirm(true);
+    } else {
+      setShowFamilyModal(false);
+      setFamilyModalError(null);
+    }
+  };
+
+  const requestCloseEditFamilyModal = () => {
+    setDiscardTarget("editFamily");
+    setShowDiscardConfirm(true);
+  };
+
+  const handleConfirmDiscard = () => {
+    if (discardTarget === "editClient") {
+      setShowEditModal(false);
+      setEditModalError(null);
+    } else if (discardTarget === "addFamily") {
+      setShowFamilyModal(false);
+      setFamilyModalError(null);
+    } else if (discardTarget === "editFamily") {
+      setEditingFamilyMember(null);
+      setEditFamilyModalError(null);
+    }
+    setShowDiscardConfirm(false);
+    setDiscardTarget(null);
+  };
 
   useEffect(() => {
     fetchClient();
@@ -209,6 +265,7 @@ export default function ClientProfilePage({
       status: client.status || "Active",
       profile_pic: client.profile_pic || "",
     });
+    setEditModalError(null);
     setShowEditModal(true);
   }
 
@@ -226,13 +283,49 @@ export default function ClientProfilePage({
   }
 
   async function saveEdit() {
+    setEditModalError(null);
+    if (editForm.date_of_birth) {
+      const dobVal = validateDateRange(editForm.date_of_birth, "Date of Birth");
+      if (!dobVal.isValid) {
+        setEditModalError(dobVal.error!);
+        toast.error(dobVal.error!);
+        return;
+      }
+    }
+    if (editForm.anniversary_date) {
+      const annivVal = validateDateRange(editForm.anniversary_date, "Anniversary date");
+      if (!annivVal.isValid) {
+        setEditModalError(annivVal.error!);
+        toast.error(annivVal.error!);
+        return;
+      }
+      if (editForm.date_of_birth && editForm.anniversary_date < editForm.date_of_birth) {
+        const err = "Anniversary date cannot be earlier than Date of Birth.";
+        setEditModalError(err);
+        toast.error(err);
+        return;
+      }
+    }
+    if (editForm.email && editForm.email.trim()) {
+      const emailCheck = validateEmail(editForm.email);
+      if (!emailCheck.isValid) {
+        const err = emailCheck.error || "Please enter a valid email address.";
+        setEditModalError(err);
+        toast.error(err);
+        return;
+      }
+    }
     setSaving(true);
     try {
       const headers = await authHeaders(true);
       const res = await fetch(`/api/clients/${id}`, {
         method: "PUT",
         headers,
-        body: JSON.stringify({ ...editForm, profile_pic: editForm.profile_pic }),
+        body: JSON.stringify({
+          ...editForm,
+          surname: (editForm.surname || "").trim().toUpperCase(),
+          profile_pic: editForm.profile_pic,
+        }),
       });
       if (!res.ok) {
         const e = await res.json().catch(() => ({}));
@@ -241,10 +334,13 @@ export default function ClientProfilePage({
       const data = await res.json();
       if (data.client) setClient(data.client);
       setShowEditModal(false);
+      setEditModalError(null);
       toast.success("Profile updated successfully!");
       fetchClient();
     } catch (e: any) {
-      toast.error(e?.message || "Failed to update client.");
+      const errMsg = e?.message || "Failed to update client.";
+      setEditModalError(errMsg);
+      toast.error(errMsg);
     } finally {
       setSaving(false);
     }
@@ -312,9 +408,20 @@ export default function ClientProfilePage({
 
   // Edit Family Member handler (Item 5 & 11)
   async function handleSaveFamilyEdit() {
+    setEditFamilyModalError(null);
     if (!editingFamilyMember || !editingFamilyMember.name.trim()) {
-      alert("Family member name is required.");
+      const err = "Family member name is required.";
+      setEditFamilyModalError(err);
+      toast.error(err);
       return;
+    }
+    if (editingFamilyMember.date_of_birth) {
+      const dobCheck = validateDateRange(editingFamilyMember.date_of_birth, "Date of Birth");
+      if (!dobCheck.isValid) {
+        setEditFamilyModalError(dobCheck.error!);
+        toast.error(dobCheck.error!);
+        return;
+      }
     }
     setSavingFamilyEdit(true);
     try {
@@ -323,10 +430,11 @@ export default function ClientProfilePage({
         method: "PUT",
         headers,
         body: JSON.stringify({
-          name: capitalizeWords(editingFamilyMember.name),
+          name: formatFamilyName(editingFamilyMember.name),
           relationship: editingFamilyMember.relationship,
           date_of_birth: editingFamilyMember.date_of_birth,
           phone: editingFamilyMember.phone,
+          occupation: editingFamilyMember.occupation || "",
         }),
       });
       if (!res.ok) {
@@ -335,9 +443,12 @@ export default function ClientProfilePage({
       }
       toast.success("Family member updated successfully!");
       setEditingFamilyMember(null);
+      setEditFamilyModalError(null);
       fetchClient();
     } catch (err: any) {
-      toast.error(err?.message || "Failed to update family member.");
+      const errMsg = err?.message || "Failed to update family member.";
+      setEditFamilyModalError(errMsg);
+      toast.error(errMsg);
     } finally {
       setSavingFamilyEdit(false);
     }
@@ -387,28 +498,6 @@ export default function ClientProfilePage({
     b < 1048576
       ? (b / 1024).toFixed(1) + " KB"
       : (b / 1048576).toFixed(1) + " MB";
-  const formatDate = (d: string) => {
-    try {
-      return new Date(d).toLocaleDateString("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
-    } catch {
-      return d;
-    }
-  };
-  const getAge = (dob: string) => {
-    const b = new Date(dob),
-      n = new Date();
-    let a = n.getFullYear() - b.getFullYear();
-    if (
-      n.getMonth() < b.getMonth() ||
-      (n.getMonth() === b.getMonth() && n.getDate() < b.getDate())
-    )
-      a--;
-    return a;
-  };
   const docColor = (t: string) =>
     ({
       PDF: "bg-[#EF4444]/10 text-[#EF4444]",
@@ -417,19 +506,33 @@ export default function ClientProfilePage({
     })[t] || "bg-[#14B86A]/10 text-[#14B86A]";
 
   async function addFamilyMember() {
+    setFamilyModalError(null);
     if (
       !familyForm.name ||
       !familyForm.date_of_birth ||
       !familyForm.relationship
-    )
+    ) {
+      const err = "Please provide Name, Date of Birth, and Relationship.";
+      setFamilyModalError(err);
+      toast.error(err);
       return;
+    }
+    const dobCheck = validateDateRange(familyForm.date_of_birth, "Date of Birth");
+    if (!dobCheck.isValid) {
+      setFamilyModalError(dobCheck.error!);
+      toast.error(dobCheck.error!);
+      return;
+    }
     setSaving(true);
     try {
       const headers = await authHeaders(true);
       const res = await fetch(`/api/clients/${id}/family`, {
         method: "POST",
         headers,
-        body: JSON.stringify(familyForm),
+        body: JSON.stringify({
+          ...familyForm,
+          name: formatFamilyName(familyForm.name),
+        }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -442,6 +545,7 @@ export default function ClientProfilePage({
         date_of_birth: "",
         relationship: "",
         phone: "",
+        occupation: "",
       });
       toast.success("Family member added.");
       if (data.family_member) {
@@ -586,6 +690,36 @@ async function deleteDocument(did: string) {
         </Link>
         <div className="flex items-center gap-2">
           <button
+            onClick={async () => {
+              if (!client) return;
+              const isInactive = client.status === "Inactive";
+              const newStatus = isInactive ? "Active" : "Inactive";
+              if (!confirm(isInactive ? `Reactivate client ${client.name}?` : `Deactivate client ${client.name}?`)) return;
+              try {
+                const headers = await authHeaders(true);
+                const res = await fetch(`/api/clients/${id}`, {
+                  method: "PUT",
+                  headers,
+                  body: JSON.stringify({ status: newStatus }),
+                });
+                if (res.ok) {
+                  setClient((prev) => (prev ? { ...prev, status: newStatus } : prev));
+                  toast.success(isInactive ? "Client reactivated!" : "Client marked as Inactive!");
+                  fetchClient();
+                }
+              } catch {
+                toast.error("Failed to update status");
+              }
+            }}
+            className={`px-3.5 h-10 rounded-xl text-xs font-bold transition-all ${
+              client?.status === "Inactive"
+                ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white"
+                : "bg-white border border-slate-200 text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            {client?.status === "Inactive" ? "Activate" : "Deactivate"}
+          </button>
+          <button
             onClick={() => setShowDocModal(true)}
             className="flex items-center gap-1.5 px-3.5 h-10 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95"
           >
@@ -625,6 +759,50 @@ async function deleteDocument(did: string) {
           </button>
         </div>
       </div>
+
+      {/* ── CKYC Pending Warning Banner ── */}
+      {client &&
+        !docs.some(
+          (d) =>
+            d.category === "KYC / Identity" ||
+            /ckyc|kyc|aadhaar|pan/i.test(d.name) ||
+            /ckyc|kyc|aadhaar|pan/i.test(d.file_name)
+        ) &&
+        client.status !== "Inactive" && (
+          <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 sm:px-6 py-3">
+            <div className="max-w-4xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-700 flex items-center justify-center text-sm font-bold shrink-0">
+                  ⚠️
+                </span>
+                <div>
+                  <p className="text-xs font-bold text-amber-900">
+                    CKYC Documents Pending — Automatic Pending Status
+                  </p>
+                  <p className="text-[11px] text-amber-700">
+                    Client CKYC / Identity document (Aadhaar, PAN) has not been uploaded yet. Upload KYC document to mark client Active.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setDocForm({
+                    name: `${client.name} Aadhaar / CKYC Document`,
+                    file_name: "",
+                    file_size: 0,
+                    file_url: "",
+                    family_member_id: "",
+                    category: "KYC / Identity",
+                  });
+                  setShowDocModal(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-all shrink-0 shadow-xs"
+              >
+                + Upload CKYC Now
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* ── Hero / Profile Header ────────────────────────────────── */}
       <div className="bg-white border-b border-slate-100">
@@ -678,7 +856,7 @@ async function deleteDocument(did: string) {
                     </h1>
                     {client.surname && (
                       <span className="text-2xl sm:text-[28px] font-bold text-[#005A87]">
-                        {capitalizeWords(client.surname)}
+                        {(client.surname || "").toUpperCase()}
                       </span>
                     )}
                   </div>
@@ -688,7 +866,7 @@ async function deleteDocument(did: string) {
                     {client.surname && (
                       <>
                         <span>•</span>
-                        <span>Surname: <strong className="text-[#005A87]">{capitalizeWords(client.surname)}</strong></span>
+                        <span>Surname: <strong className="text-[#005A87]">{(client.surname || "").toUpperCase()}</strong></span>
                       </>
                     )}
                   </div>
@@ -697,11 +875,19 @@ async function deleteDocument(did: string) {
                       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${
                         client.status === "Active"
                           ? "bg-[#14B86A]/10 text-[#14B86A]"
+                          : client.status === "Inactive"
+                          ? "bg-slate-100 text-slate-600 border border-slate-200"
                           : "bg-[#F59E0B]/10 text-[#F59E0B]"
                       }`}
                     >
                       <span
-                        className={`w-1.5 h-1.5 rounded-full ${client.status === "Active" ? "bg-[#14B86A]" : "bg-[#F59E0B]"}`}
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          client.status === "Active"
+                            ? "bg-[#14B86A]"
+                            : client.status === "Inactive"
+                            ? "bg-slate-400"
+                            : "bg-[#F59E0B]"
+                        }`}
                       />
                       {client.status}
                     </span>
@@ -877,7 +1063,7 @@ async function deleteDocument(did: string) {
           <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
             {[
               { label: "First Name", value: capitalizeWords(client.name) },
-              { label: "Surname", value: capitalizeWords(client.surname || "") || "—" },
+              { label: "Surname", value: (client.surname || "").toUpperCase() || "—" },
               { label: "Marital Status", value: client.marital_status },
               { label: "Alternate Mobile", value: client.alternate_mobile },
               {
@@ -1132,11 +1318,26 @@ async function deleteDocument(did: string) {
         {activeTab === "docs" && (
           <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
             <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
-              <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
-                Documents
-              </h2>
+              <div>
+                <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
+                  Documents
+                </h2>
+                <p className="text-[11px] text-[#6B7280]">
+                  Separate documents for {client.name} and each family member
+                </p>
+              </div>
               <button
-                onClick={() => setShowDocModal(true)}
+                onClick={() => {
+                  setDocForm({
+                    name: "",
+                    file_name: "",
+                    file_size: 0,
+                    file_url: "",
+                    family_member_id: docFilterMember !== "all" && docFilterMember !== "client" ? docFilterMember : "",
+                    category: "",
+                  });
+                  setShowDocModal(true);
+                }}
                 className="flex items-center gap-1.5 px-3.5 h-9 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95"
               >
                 <svg
@@ -1152,9 +1353,48 @@ async function deleteDocument(did: string) {
                     d="M12 4v16m8-8H4"
                   />
                 </svg>
-                Upload
+                Upload Document
               </button>
             </div>
+
+            {/* Separate Document Filter Bar by Member */}
+            <div className="px-5 py-2.5 bg-[#F7F9FC] border-b border-slate-100 flex items-center gap-2 overflow-x-auto">
+              <span className="text-[11px] font-bold text-[#6B7280] shrink-0 mr-1">Filter By:</span>
+              <button
+                onClick={() => setDocFilterMember("all")}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                  docFilterMember === "all"
+                    ? "bg-[#005A87] text-white shadow-xs"
+                    : "bg-white text-[#6B7280] hover:text-[#1F2937] border border-slate-200"
+                }`}
+              >
+                All Documents ({docs.length})
+              </button>
+              <button
+                onClick={() => setDocFilterMember("client")}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                  docFilterMember === "client"
+                    ? "bg-[#005A87] text-white shadow-xs"
+                    : "bg-white text-[#6B7280] hover:text-[#1F2937] border border-slate-200"
+                }`}
+              >
+                Client: {capitalizeWords(client.name)} ({docs.filter((d) => !d.family_member_id).length})
+              </button>
+              {family.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setDocFilterMember(f.id)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                    docFilterMember === f.id
+                      ? "bg-[#7C6CF6] text-white shadow-xs"
+                      : "bg-white text-[#6B7280] hover:text-[#1F2937] border border-slate-200"
+                  }`}
+                >
+                  {f.name} ({docs.filter((d) => d.family_member_id === f.id).length})
+                </button>
+              ))}
+            </div>
+
             {docs.length === 0 ? (
               <div className="py-16 text-center px-5">
                 <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
@@ -1173,7 +1413,7 @@ async function deleteDocument(did: string) {
                   </svg>
                 </div>
                 <p className="text-[13px] font-semibold text-[#1F2937] mb-2">
-                  No documents yet
+                  No documents uploaded yet
                 </p>
                 <button
                   onClick={() => setShowDocModal(true)}
@@ -1184,117 +1424,133 @@ async function deleteDocument(did: string) {
               </div>
             ) : (
               <div className="divide-y divide-slate-50">
-                {docs.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F9FC] transition-colors group"
-                  >
-                    <div
-                      className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${docColor(doc.file_type)}`}
-                    >
-                      {doc.file_type}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">
-                        {doc.name}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-[11px] text-[#6B7280] font-medium truncate">
-                          {doc.file_name}
-                        </p>
-                        {doc.family_member_id && (
-                          <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-1.5 py-0.5 rounded shrink-0">
-                            {family.find((f) => f.id === doc.family_member_id)
-                              ?.name || "Family"}
-                          </span>
-                        )}
+                {docs
+                  .filter((d) => {
+                    if (docFilterMember === "all") return true;
+                    if (docFilterMember === "client") return !d.family_member_id;
+                    return d.family_member_id === docFilterMember;
+                  })
+                  .map((doc) => {
+                    const famMember = family.find((f) => f.id === doc.family_member_id);
+                    return (
+                      <div
+                        key={doc.id}
+                        className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F9FC] transition-colors group"
+                      >
+                        <div
+                          className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${docColor(doc.file_type)}`}
+                        >
+                          {doc.file_type}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-bold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">
+                            {doc.name}
+                          </p>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <p className="text-[11px] text-[#6B7280] font-medium truncate">
+                              {doc.file_name}
+                            </p>
+                            {/* Distinct separate owner indicator */}
+                            {famMember ? (
+                              <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded shrink-0">
+                                Family: {famMember.name}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2 py-0.5 rounded shrink-0">
+                                Self: {capitalizeWords(client.name)}
+                              </span>
+                            )}
+                            {doc.category && (
+                              <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                                {doc.category}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 hidden sm:block">
+                          <p className="text-[11px] font-semibold text-[#6B7280]">
+                            {formatSize(doc.file_size)}
+                          </p>
+                          <p className="text-[10px] text-slate-300 font-medium">
+                            {formatDate(doc.created_at)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+                          {/* View In-App */}
+                          <button
+                            type="button"
+                            onClick={() => setViewingDoc(doc)}
+                            title="View Document in App"
+                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
+                          >
+                            <svg
+                              className="w-3.5 h-3.5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                              />
+                              <circle
+                                cx="12"
+                                cy="12"
+                                r="3"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                              />
+                            </svg>
+                          </button>
+
+                          {/* Download */}
+                          <a
+                            href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
+                            download={doc.file_name}
+                            title="Download"
+                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all"
+                          >
+                            <svg
+                              className="w-3.5 h-3.5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                              />
+                            </svg>
+                          </a>
+
+                          {/* Delete */}
+                          <button
+                            onClick={() => deleteDocument(doc.id)}
+                            title="Delete"
+                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
+                          >
+                            <svg
+                              className="w-3.5 h-3.5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right shrink-0 hidden sm:block">
-                      <p className="text-[11px] font-semibold text-[#6B7280]">
-                        {formatSize(doc.file_size)}
-                      </p>
-                      <p className="text-[10px] text-slate-300 font-medium">
-                        {formatDate(doc.created_at)}
-                      </p>
-                    </div>
-                   <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
-
-  {/* View In-App */}
-  <button
-    type="button"
-    onClick={() => setViewingDoc(doc)}
-    title="View Document in App"
-    className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
-  >
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-      />
-      <circle
-        cx="12"
-        cy="12"
-        r="3"
-        stroke="currentColor"
-        strokeWidth={2}
-      />
-    </svg>
-  </button>
-
-  {/* Download */}
-  <a
-    href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
-    download={doc.file_name}
-    title="Download"
-    className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all"
-  >
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-      />
-    </svg>
-  </a>
-
-  {/* Delete */}
-  <button
-    onClick={() => deleteDocument(doc.id)}
-    title="Delete"
-    className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
-  >
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      strokeWidth={2}
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-      />
-    </svg>
-  </button>
-
-</div>
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -1304,9 +1560,14 @@ async function deleteDocument(did: string) {
         {activeTab === "family" && (
           <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
             <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
-              <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
-                Family Members
-              </h2>
+              <div>
+                <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
+                  Family Members
+                </h2>
+                <p className="text-[11px] text-[#6B7280]">
+                  Manage family details, occupations, and separate document uploads
+                </p>
+              </div>
               <button
                 onClick={() => setShowFamilyModal(true)}
                 className="flex items-center gap-1.5 px-3.5 h-9 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95"
@@ -1324,7 +1585,7 @@ async function deleteDocument(did: string) {
                     d="M12 4v16m8-8H4"
                   />
                 </svg>
-                Add
+                Add Member
               </button>
             </div>
             {family.length === 0 ? (
@@ -1359,35 +1620,62 @@ async function deleteDocument(did: string) {
                 {family.map((fm) => (
                   <div
                     key={fm.id}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-[#F7F9FC] transition-colors group"
+                    className="flex flex-col sm:flex-row sm:items-center gap-4 px-5 py-4 hover:bg-[#F7F9FC] transition-colors group"
                   >
-                    <div
-                      className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(fm.name)} flex items-center justify-center text-white font-bold text-sm shrink-0`}
-                    >
-                      {fm.name[0]?.toUpperCase()}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors">
-                        {fm.name}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded uppercase tracking-wider">
-                          {fm.relationship}
-                        </span>
-                        <span className="text-[10px] text-[#6B7280] font-medium">
-                          Age {getAge(fm.date_of_birth)}
-                        </span>
-                        <span className="text-[10px] text-[#6B7280] font-medium">
-                          · {formatDate(fm.date_of_birth)}
-                        </span>
-                        {fm.phone && (
-                          <span className="text-[10px] text-[#6B7280] font-medium hidden sm:block">
-                            · {fm.phone}
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <div
+                        className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(fm.name)} flex items-center justify-center text-white font-bold text-sm shrink-0`}
+                      >
+                        {fm.name[0]?.toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors">
+                          {formatFamilyName(fm.name)}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded uppercase tracking-wider">
+                            {fm.relationship}
                           </span>
-                        )}
+                          <span className="text-[11px] text-[#6B7280] font-medium">
+                            Age {getAge(fm.date_of_birth)} ({formatDate(fm.date_of_birth)})
+                          </span>
+                          {fm.occupation && (
+                            <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                              <span>💼</span> {fm.occupation}
+                            </span>
+                          )}
+                          {fm.phone && (
+                            <span className="text-[11px] text-[#6B7280] font-medium">
+                              · {fm.phone}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                      {/* Separate Upload Document for this Family Member */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDocForm({
+                            name: `${formatFamilyName(fm.name)} Document`,
+                            file_name: "",
+                            file_size: 0,
+                            file_url: "",
+                            family_member_id: fm.id,
+                            category: "KYC / Identity",
+                          });
+                          setShowDocModal(true);
+                        }}
+                        title={`Upload Document for ${formatFamilyName(fm.name)}`}
+                        className="h-8 px-2.5 flex items-center gap-1 rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all text-[11px] font-bold shadow-2xs"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                        </svg>
+                        Upload Doc
+                      </button>
+
                       <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2 py-1 rounded-lg">
                         {
                           docs.filter((d) => d.family_member_id === fm.id)
@@ -1395,19 +1683,21 @@ async function deleteDocument(did: string) {
                         }{" "}
                         docs
                       </span>
-                      {/* View Family Details (Item 5 & 11) */}
+
+                      {/* View Profile */}
                       <button
                         type="button"
                         onClick={() => setViewingFamilyMember(fm)}
-                        title="View Family Details"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
+                        title={`View ${formatFamilyName(fm.name)}'s Profile`}
+                        className="h-8 px-2.5 flex items-center gap-1 rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all text-[11px] font-bold"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
+                        <span>Profile</span>
                       </button>
-                      {/* Edit Family Details (Item 5 & 11) */}
+
+                      {/* Edit Family Details */}
                       <button
                         type="button"
                         onClick={() => setEditingFamilyMember(fm)}
@@ -1418,6 +1708,7 @@ async function deleteDocument(did: string) {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                         </svg>
                       </button>
+
                       {/* Delete */}
                       <button
                         onClick={() => deleteFamilyMember(fm.id)}
@@ -1452,7 +1743,7 @@ async function deleteDocument(did: string) {
         <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            onClick={() => setShowEditModal(false)}
+            onClick={requestCloseEditModal}
           />
           <div className="relative bg-white w-full sm:max-w-xl rounded-t-[28px] sm:rounded-[22px] shadow-2xl max-h-[95vh] overflow-y-auto">
             <div className="sticky top-0 bg-white/95 backdrop-blur border-b border-slate-100 px-6 py-4 flex items-center justify-between z-10 rounded-t-[28px] sm:rounded-t-[22px]">
@@ -1465,7 +1756,7 @@ async function deleteDocument(did: string) {
                 </p>
               </div>
               <button
-                onClick={() => setShowEditModal(false)}
+                onClick={requestCloseEditModal}
                 className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
               >
                 <svg
@@ -1485,6 +1776,26 @@ async function deleteDocument(did: string) {
             </div>
 
             <div className="px-6 py-5 space-y-4">
+              {/* Alert Message Banner (on the same layer) */}
+              {editModalError && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start justify-between gap-2.5 shadow-xs">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">⚠️</span>
+                    <div>
+                      <p className="font-bold text-rose-900">Please correct the following:</p>
+                      <p className="mt-0.5 text-rose-700 font-medium">{editModalError}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditModalError(null)}
+                    className="w-5 h-5 rounded-lg text-rose-400 hover:text-rose-700 flex items-center justify-center shrink-0 font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               {/* Profile pic section */}
               <div className="flex items-center gap-4 p-4 bg-[#F7F9FC] rounded-2xl">
                 {editForm.profile_pic ? (
@@ -1557,9 +1868,10 @@ async function deleteDocument(did: string) {
                     type="text"
                     value={editForm.surname || ""}
                     onChange={(e) =>
-                      setEditForm({ ...editForm, surname: sanitizeAlphabetsOnly(e.target.value) })
+                      setEditForm({ ...editForm, surname: sanitizeAlphabetsOnly(e.target.value).toUpperCase() })
                     }
-                    className={inputCls}
+                    placeholder="e.g. KUMAR"
+                    className={`${inputCls} uppercase`}
                   />
                 </div>
               </div>
@@ -1596,21 +1908,52 @@ async function deleteDocument(did: string) {
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Email</label>
+                <label className={labelCls}>Email (Gmail)</label>
                 <input
                   type="email"
                   value={editForm.email || ""}
                   onChange={(e) =>
                     setEditForm({ ...editForm, email: e.target.value })
                   }
-                  className={inputCls}
+                  className={`${inputCls} ${
+                    editForm.email && !validateEmail(editForm.email).isValid
+                      ? "!border-rose-400 !bg-rose-50/20 text-rose-900"
+                      : ""
+                  }`}
+                  placeholder="client@gmail.com"
                 />
+                {editForm.email && !validateEmail(editForm.email).isValid && (
+                  <div className="mt-1.5 space-y-1">
+                    <p className="text-[11px] font-semibold text-rose-600 flex items-center gap-1.5 bg-rose-50 border border-rose-200/80 rounded-xl px-2.5 py-1.5">
+                      <svg className="w-3.5 h-3.5 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      {validateEmail(editForm.email).error}
+                    </p>
+                    {validateEmail(editForm.email).suggestion && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            email: validateEmail(editForm.email).suggestion!,
+                          }))
+                        }
+                        className="text-[11px] font-bold text-[#005A87] hover:underline flex items-center gap-1 px-1 py-0.5"
+                      >
+                        💡 Suggested: <span className="underline font-extrabold">{validateEmail(editForm.email).suggestion}</span> (Click to fix)
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Date of Birth</label>
                   <input
                     type="date"
+                    min="1900-01-01"
+                    max={new Date().toISOString().split("T")[0]}
                     value={editForm.date_of_birth || ""}
                     onChange={(e) =>
                       setEditForm({
@@ -1625,6 +1968,8 @@ async function deleteDocument(did: string) {
                   <label className={labelCls}>Anniversary Date</label>
                   <input
                     type="date"
+                    min="1900-01-01"
+                    max={new Date().toISOString().split("T")[0]}
                     value={editForm.anniversary_date || ""}
                     onChange={(e) =>
                       setEditForm({
@@ -1807,7 +2152,7 @@ async function deleteDocument(did: string) {
 
             <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-100 px-6 py-4 flex gap-3">
               <button
-                onClick={() => setShowEditModal(false)}
+                onClick={requestCloseEditModal}
                 className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC] transition-all"
               >
                 Cancel
@@ -1869,7 +2214,7 @@ async function deleteDocument(did: string) {
         <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            onClick={() => setShowFamilyModal(false)}
+            onClick={requestCloseFamilyModal}
           />
           <div className="relative bg-white w-full sm:max-w-md rounded-t-[28px] sm:rounded-[22px] shadow-2xl">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -1877,7 +2222,7 @@ async function deleteDocument(did: string) {
                 Add Family Member
               </h2>
               <button
-                onClick={() => setShowFamilyModal(false)}
+                onClick={requestCloseFamilyModal}
                 className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
               >
                 <svg
@@ -1896,6 +2241,26 @@ async function deleteDocument(did: string) {
               </button>
             </div>
             <div className="px-6 py-5 space-y-4">
+              {/* Alert Message Banner (on the same layer) */}
+              {familyModalError && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start justify-between gap-2.5 shadow-xs">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">⚠️</span>
+                    <div>
+                      <p className="font-bold text-rose-900">Please correct the following:</p>
+                      <p className="mt-0.5 text-rose-700 font-medium">{familyModalError}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setFamilyModalError(null)}
+                    className="w-5 h-5 rounded-lg text-rose-400 hover:text-rose-700 flex items-center justify-center shrink-0 font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               <div>
                 <label className={labelCls}>Full Name *</label>
                 <input
@@ -1904,8 +2269,11 @@ async function deleteDocument(did: string) {
                   onChange={(e) =>
                     setFamilyForm({ ...familyForm, name: sanitizeAlphabetsOnly(e.target.value) })
                   }
+                  onBlur={(e) =>
+                    setFamilyForm({ ...familyForm, name: formatFamilyName(e.target.value) })
+                  }
                   className={inputCls}
-                  placeholder="e.g. Priya Sharma"
+                  placeholder="e.g. Ramya"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1913,6 +2281,8 @@ async function deleteDocument(did: string) {
                   <label className={labelCls}>Date of Birth *</label>
                   <input
                     type="date"
+                    min="1900-01-01"
+                    max={new Date().toISOString().split("T")[0]}
                     value={familyForm.date_of_birth}
                     onChange={(e) =>
                       setFamilyForm({
@@ -1944,22 +2314,36 @@ async function deleteDocument(did: string) {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className={labelCls}>Phone</label>
-                <input
-                  type="tel"
-                  value={familyForm.phone}
-                  onChange={(e) =>
-                    setFamilyForm({ ...familyForm, phone: e.target.value })
-                  }
-                  className={inputCls}
-                  placeholder="Optional"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Phone</label>
+                  <input
+                    type="tel"
+                    value={familyForm.phone}
+                    onChange={(e) =>
+                      setFamilyForm({ ...familyForm, phone: e.target.value })
+                    }
+                    className={inputCls}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Occupation</label>
+                  <input
+                    type="text"
+                    value={familyForm.occupation || ""}
+                    onChange={(e) =>
+                      setFamilyForm({ ...familyForm, occupation: e.target.value })
+                    }
+                    className={inputCls}
+                    placeholder="e.g. Teacher, Engineer"
+                  />
+                </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
               <button
-                onClick={() => setShowFamilyModal(false)}
+                onClick={requestCloseFamilyModal}
                 className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC]"
               >
                 Cancel
@@ -1990,9 +2374,12 @@ async function deleteDocument(did: string) {
           />
           <div className="relative bg-white w-full sm:max-w-md rounded-t-[28px] sm:rounded-[22px] shadow-2xl">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-[16px] font-bold text-[#1F2937]">
-                Upload Document
-              </h2>
+              <div>
+                <h2 className="text-[16px] font-bold text-[#1F2937]">
+                  Upload Document
+                </h2>
+                <p className="text-xs text-[#6B7280]">Upload client or family member records</p>
+              </div>
               <button
                 onClick={() => setShowDocModal(false)}
                 className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
@@ -2014,6 +2401,26 @@ async function deleteDocument(did: string) {
             </div>
             <div className="px-6 py-5 space-y-4">
               <div>
+                <label className={labelCls}>Document Belongs To *</label>
+                <select
+                  value={docForm.family_member_id}
+                  onChange={(e) =>
+                    setDocForm({ ...docForm, family_member_id: e.target.value })
+                  }
+                  className={`${inputCls} font-bold text-[#005A87] bg-sky-50/60 border-sky-200`}
+                >
+                  <option value="">👤 Client: {client?.name} {client?.surname}</option>
+                  {family.map((f) => (
+                    <option key={f.id} value={f.id}>
+                      👥 Family Member: {f.name} ({f.relationship})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-[#6B7280] mt-1">
+                  Upload separately for {client?.name} or select a family member
+                </p>
+              </div>
+              <div>
                 <label className={labelCls}>Document Name *</label>
                 <input
                   type="text"
@@ -2022,7 +2429,7 @@ async function deleteDocument(did: string) {
                     setDocForm({ ...docForm, name: e.target.value })
                   }
                   className={inputCls}
-                  placeholder="e.g. LIC Term Policy"
+                  placeholder="e.g. Aadhaar Card, LIC Policy, Health Card"
                 />
               </div>
               <div>
@@ -2085,23 +2492,6 @@ async function deleteDocument(did: string) {
                     {(docForm.file_size / 1024).toFixed(1)} KB
                   </p>
                 )}
-              </div>
-              <div>
-                <label className={labelCls}>Assign to Family Member</label>
-                <select
-                  value={docForm.family_member_id}
-                  onChange={(e) =>
-                    setDocForm({ ...docForm, family_member_id: e.target.value })
-                  }
-                  className={inputCls}
-                >
-                  <option value="">Client (Self)</option>
-                  {family.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name} ({f.relationship})
-                    </option>
-                  ))}
-                </select>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
@@ -2264,63 +2654,218 @@ async function deleteDocument(did: string) {
         </div>
       )}
 
-      {/* ── View Family Member Modal (Item 5 & 11) ───────────────── */}
+      {/* ── Separate Family Member Profile Modal ───────────────── */}
       {viewingFamilyMember && (
         <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
             onClick={() => setViewingFamilyMember(null)}
           />
-          <div className="relative bg-white w-full sm:max-w-md rounded-t-[28px] sm:rounded-[22px] shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h2 className="text-[16px] font-bold text-[#1F2937]">Family Member Details</h2>
-                <p className="text-xs text-[#6B7280]">View saved family record</p>
+          <div className="relative bg-white w-full sm:max-w-xl rounded-t-[28px] sm:rounded-[22px] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            {/* Profile Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-[#F7F9FC]/70">
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${getGradient(viewingFamilyMember.name)} flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0`}
+                >
+                  {viewingFamilyMember.name[0]?.toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h2 className="text-base font-bold text-[#1F2937] truncate">
+                      {formatFamilyName(viewingFamilyMember.name)}
+                    </h2>
+                    <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
+                      {viewingFamilyMember.relationship}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#6B7280] truncate">
+                    Family Profile · Client: {capitalizeWords(client?.name)} {(client?.surname || "").toUpperCase()}
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setViewingFamilyMember(null)}
-                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
+                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-200/60 text-[#6B7280] transition-colors shrink-0"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
-              <div className="flex items-center gap-3 p-3 bg-[#F7F9FC] rounded-2xl">
-                <div
-                  className={`w-12 h-12 rounded-xl bg-gradient-to-br ${getGradient(viewingFamilyMember.name)} flex items-center justify-center text-white font-bold text-lg`}
-                >
-                  {viewingFamilyMember.name[0]?.toUpperCase()}
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-[#1F2937]">{viewingFamilyMember.name}</h3>
-                  <span className="text-[11px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded uppercase">
-                    {viewingFamilyMember.relationship}
-                  </span>
+
+            {/* Profile Content */}
+            <div className="p-6 space-y-5 overflow-y-auto flex-1">
+              {/* Individual Details Grid */}
+              <div>
+                <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-wider mb-2.5">
+                  Individual Details
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-[#F7F9FC] p-3 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Date of Birth</p>
+                    <p className="text-[13px] font-bold text-[#1F2937]">{formatDate(viewingFamilyMember.date_of_birth)}</p>
+                  </div>
+                  <div className="bg-[#F7F9FC] p-3 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Age</p>
+                    <p className="text-[13px] font-bold text-[#1F2937]">{getAge(viewingFamilyMember.date_of_birth)} years</p>
+                  </div>
+                  <div className="bg-[#F7F9FC] p-3 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Phone Number</p>
+                    <p className="text-[13px] font-bold text-[#1F2937]">
+                      {viewingFamilyMember.phone ? (
+                        <a href={`tel:${viewingFamilyMember.phone}`} className="text-[#005A87] hover:underline">
+                          {viewingFamilyMember.phone}
+                        </a>
+                      ) : (
+                        <span className="text-slate-400 font-normal">Not provided</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="bg-[#F7F9FC] p-3 rounded-2xl border border-slate-100">
+                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Occupation</p>
+                    <p className="text-[13px] font-bold text-[#1F2937]">
+                      {viewingFamilyMember.occupation || <span className="text-slate-400 font-normal">Not specified</span>}
+                    </p>
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Date of Birth</p>
-                  <p className="text-[13px] font-bold text-[#1F2937]">{formatDate(viewingFamilyMember.date_of_birth)}</p>
+
+              {/* Dedicated Document Management Section */}
+              <div>
+                <div className="flex items-center justify-between mb-2.5">
+                  <div>
+                    <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">
+                      Documents for {formatFamilyName(viewingFamilyMember.name)}
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      Manage documents uploaded specifically for this member
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocForm({
+                        name: `${formatFamilyName(viewingFamilyMember.name)} Document`,
+                        file_name: "",
+                        file_size: 0,
+                        file_url: "",
+                        family_member_id: viewingFamilyMember.id,
+                        category: "KYC / Identity",
+                      });
+                      setShowDocModal(true);
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#005A87] text-white text-xs font-bold hover:bg-[#00476b] transition-all shadow-sm"
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                    </svg>
+                    Upload Doc
+                  </button>
                 </div>
-                <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Age</p>
-                  <p className="text-[13px] font-bold text-[#1F2937]">{getAge(viewingFamilyMember.date_of_birth)} years</p>
-                </div>
-              </div>
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-100">
-                <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Phone Number</p>
-                <p className="text-[13px] font-bold text-[#1F2937]">{viewingFamilyMember.phone || "Not provided"}</p>
+
+                {/* Member's Documents List */}
+                {(() => {
+                  const memberDocs = docs.filter((d) => d.family_member_id === viewingFamilyMember.id);
+                  if (memberDocs.length === 0) {
+                    return (
+                      <div className="p-6 text-center bg-[#F7F9FC] rounded-2xl border border-dashed border-slate-200">
+                        <p className="text-xs font-semibold text-slate-600 mb-1">
+                          No documents uploaded for {formatFamilyName(viewingFamilyMember.name)} yet
+                        </p>
+                        <p className="text-[11px] text-slate-400 mb-3">
+                          Upload identity proof, medical records, or insurance policies under their name.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocForm({
+                              name: `${formatFamilyName(viewingFamilyMember.name)} Document`,
+                              file_name: "",
+                              file_size: 0,
+                              file_url: "",
+                              family_member_id: viewingFamilyMember.id,
+                              category: "KYC / Identity",
+                            });
+                            setShowDocModal(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-[#005A87] hover:bg-[#DDF3FF] transition-all"
+                        >
+                          Upload First Document →
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="space-y-2">
+                      {memberDocs.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 hover:border-[#0E7AC7] transition-all group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${docColor(doc.file_type)}`}>
+                              {doc.file_type}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[13px] font-bold text-[#1F2937] truncate">{doc.name}</p>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
+                                <span>{doc.category || "Document"}</span>
+                                <span>·</span>
+                                <span>{formatSize(doc.file_size)}</span>
+                                <span>·</span>
+                                <span>{formatDate(doc.created_at)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            <button
+                              type="button"
+                              onClick={() => setViewingDoc(doc)}
+                              title="View Document"
+                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </button>
+                            <a
+                              href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
+                              download={doc.file_name}
+                              title="Download"
+                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => deleteDocument(doc.id)}
+                              title="Delete"
+                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#F7F9FC] text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
+
+            {/* Profile Footer */}
+            <div className="px-6 py-4 border-t border-slate-100 flex gap-3 shrink-0 bg-[#F7F9FC]/70">
               <button
                 onClick={() => setViewingFamilyMember(null)}
-                className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC]"
+                className="flex-1 h-11 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-white transition-all"
               >
-                Close
+                Close Profile
               </button>
               <button
                 onClick={() => {
@@ -2328,7 +2873,7 @@ async function deleteDocument(did: string) {
                   setViewingFamilyMember(null);
                   setEditingFamilyMember(m);
                 }}
-                className="flex-1 h-12 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all flex items-center justify-center gap-1.5"
+                className="flex-1 h-11 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all flex items-center justify-center gap-1.5 shadow-sm"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -2345,7 +2890,7 @@ async function deleteDocument(did: string) {
         <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            onClick={() => setEditingFamilyMember(null)}
+            onClick={requestCloseEditFamilyModal}
           />
           <div className="relative bg-white w-full sm:max-w-md rounded-t-[28px] sm:rounded-[22px] shadow-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -2354,7 +2899,7 @@ async function deleteDocument(did: string) {
                 <p className="text-xs text-[#6B7280]">Modify saved family details</p>
               </div>
               <button
-                onClick={() => setEditingFamilyMember(null)}
+                onClick={requestCloseEditFamilyModal}
                 className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] text-[#6B7280]"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -2363,6 +2908,26 @@ async function deleteDocument(did: string) {
               </button>
             </div>
             <div className="px-6 py-5 space-y-4">
+              {/* Alert Message Banner (on the same layer) */}
+              {editFamilyModalError && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start justify-between gap-2.5 shadow-xs">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">⚠️</span>
+                    <div>
+                      <p className="font-bold text-rose-900">Please correct the following:</p>
+                      <p className="mt-0.5 text-rose-700 font-medium">{editFamilyModalError}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditFamilyModalError(null)}
+                    className="w-5 h-5 rounded-lg text-rose-400 hover:text-rose-700 flex items-center justify-center shrink-0 font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
               <div>
                 <label className={labelCls}>Full Name *</label>
                 <input
@@ -2374,6 +2939,12 @@ async function deleteDocument(did: string) {
                       name: sanitizeAlphabetsOnly(e.target.value),
                     })
                   }
+                  onBlur={(e) =>
+                    setEditingFamilyMember({
+                      ...editingFamilyMember,
+                      name: formatFamilyName(e.target.value),
+                    })
+                  }
                   className={inputCls}
                 />
               </div>
@@ -2382,6 +2953,8 @@ async function deleteDocument(did: string) {
                   <label className={labelCls}>Date of Birth *</label>
                   <input
                     type="date"
+                    min="1900-01-01"
+                    max={new Date().toISOString().split("T")[0]}
                     value={editingFamilyMember.date_of_birth}
                     onChange={(e) =>
                       setEditingFamilyMember({
@@ -2413,25 +2986,42 @@ async function deleteDocument(did: string) {
                   </select>
                 </div>
               </div>
-              <div>
-                <label className={labelCls}>Phone</label>
-                <input
-                  type="tel"
-                  value={editingFamilyMember.phone || ""}
-                  onChange={(e) =>
-                    setEditingFamilyMember({
-                      ...editingFamilyMember,
-                      phone: e.target.value.replace(/\D/g, ""),
-                    })
-                  }
-                  className={inputCls}
-                  placeholder="Optional"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Phone</label>
+                  <input
+                    type="tel"
+                    value={editingFamilyMember.phone || ""}
+                    onChange={(e) =>
+                      setEditingFamilyMember({
+                        ...editingFamilyMember,
+                        phone: e.target.value.replace(/\D/g, ""),
+                      })
+                    }
+                    className={inputCls}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Occupation</label>
+                  <input
+                    type="text"
+                    value={editingFamilyMember.occupation || ""}
+                    onChange={(e) =>
+                      setEditingFamilyMember({
+                        ...editingFamilyMember,
+                        occupation: e.target.value,
+                      })
+                    }
+                    className={inputCls}
+                    placeholder="e.g. Teacher, Engineer"
+                  />
+                </div>
               </div>
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3">
               <button
-                onClick={() => setEditingFamilyMember(null)}
+                onClick={requestCloseEditFamilyModal}
                 className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC]"
               >
                 Cancel
@@ -2442,6 +3032,43 @@ async function deleteDocument(did: string) {
                 className="flex-1 h-12 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all disabled:opacity-50 active:scale-95"
               >
                 {savingFamilyEdit ? "Saving…" : "Save Changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Discard Changes Confirmation Modal ────────────────────── */}
+      {showDiscardConfirm && (
+        <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs"
+            onClick={() => setShowDiscardConfirm(false)}
+          />
+          <div className="relative bg-white rounded-[24px] w-full max-w-sm p-6 shadow-2xl border border-slate-100 text-center animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-600 flex items-center justify-center mx-auto mb-4 text-xl shadow-2xs">
+              ⚠️
+            </div>
+            <h3 className="text-[17px] font-bold text-[#1F2937] mb-1.5">
+              Discard Unsaved Changes?
+            </h3>
+            <p className="text-[12px] text-[#6B7280] leading-relaxed mb-6 font-medium">
+              You have unsaved changes in this form. Exiting now will discard your progress. Are you sure you want to exit?
+            </p>
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={handleConfirmDiscard}
+                className="flex-1 h-11 rounded-2xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-[12px] font-bold transition-all"
+              >
+                Discard Changes
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDiscardConfirm(false)}
+                className="flex-1 h-11 rounded-2xl bg-[#005A87] hover:bg-[#00476b] text-white text-[12px] font-bold transition-all shadow-sm"
+              >
+                Continue Editing
               </button>
             </div>
           </div>

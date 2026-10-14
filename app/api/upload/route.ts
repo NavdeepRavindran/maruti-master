@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../lib/supabaseClient";
 
 export async function POST(req: NextRequest) {
-  if (!supabaseAdmin) return NextResponse.json({ error: "Server misconfigured" }, { status: 500 });
-
   try {
     const formData = await req.formData();
     const file = formData.get("file") as File;
@@ -14,6 +12,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
 
+    if (!supabaseAdmin) {
+      return NextResponse.json({ error: "Server misconfiguration: missing Supabase credentials" }, { status: 500 });
+    }
+
     const ext = file.name.split(".").pop();
     const path = `${folder}/${id}.${ext}`;
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -22,19 +24,19 @@ export async function POST(req: NextRequest) {
       .from("profile-photos")
       .upload(path, buffer, { contentType: file.type, upsert: true });
 
-    if (uploadError) return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    if (uploadError) throw uploadError;
 
     const { data } = supabaseAdmin.storage.from("profile-photos").getPublicUrl(path);
     const photoUrl = `${data.publicUrl}?t=${Date.now()}`;
 
     if (folder === "clients") {
-      await supabaseAdmin.from("clients").update({ photo_url: photoUrl }).eq("id", id);
+      await supabaseAdmin.from("clients").update({ profile_pic: photoUrl }).eq("id", id);
     } else if (folder === "family") {
       await supabaseAdmin.from("family_members").update({ photo_url: photoUrl }).eq("id", id);
     }
 
     return NextResponse.json({ photoUrl });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Upload failed" }, { status: 500 });
   }
 }

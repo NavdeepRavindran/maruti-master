@@ -17,6 +17,8 @@ export default function SettingsPage() {
   const [portal, setPortal] = useState({ enableClientPortal: true, require2FA: false });
   const [passwordForm, setPasswordForm] = useState({ current: "", newPass: "", confirm: "" });
 
+
+
   const handleSave = async () => {
     setSaving(true);
     // Mock save delay
@@ -217,6 +219,8 @@ export default function SettingsPage() {
                 </div>
               </div>
             )}
+
+
 
           </div>
         </div>

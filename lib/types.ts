@@ -38,6 +38,8 @@ export interface Client {
   // Computed/joined fields
   family_count?: number;
   document_count?: number;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
 }
 
 export interface FamilyMember {
@@ -46,6 +48,7 @@ export interface FamilyMember {
   name: string;
   date_of_birth: string;
   relationship: string;
+  occupation?: string;
   phone?: string;
   created_at: string;
 }

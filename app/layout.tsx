@@ -42,7 +42,17 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         {children}
-        <Toaster position="top-right" />
+        <Toaster
+          position="top-right"
+          containerStyle={{
+            zIndex: 999999,
+          }}
+          toastOptions={{
+            style: {
+              zIndex: 999999,
+            },
+          }}
+        />
       </body>
     </html>
   );

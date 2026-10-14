@@ -2,13 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
-// import { supabase } from "@/lib/supabaseClient";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-
-const supabase = createClient();
 
 export default function LoginPage() {
   const router = useRouter();
+  const supabase = createClient();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -22,7 +22,7 @@ export default function LoginPage() {
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
-        email,
+        email: email.trim(),
         password,
       });
 
@@ -36,16 +36,14 @@ export default function LoginPage() {
       setMessageType("success");
       setMessage(
         `Welcome back, ${
-          data.user?.user_metadata?.name || data.user?.email || "user"
+          data.user?.user_metadata?.name || data.user?.email || "Agent"
         }! Redirecting...`
       );
 
-      // Full page navigation so Supabase finishes writing session to
-      // localStorage before the dashboard mounts and calls getSession()
+      // Navigate to dashboard
       window.location.href = "/dashboard";
-    } catch (err) {
-      console.error("Login error:", err);
-      setMessage("Connection error. Please try again.");
+    } catch (err: any) {
+      setMessage(err?.message || "An unexpected error occurred.");
       setMessageType("error");
       setIsLoading(false);
     }
@@ -114,7 +112,7 @@ export default function LoginPage() {
           </div>
 
           {/* Header */}
-          <div className="mb-7">
+          <div className="mb-6">
             <p className="text-xs font-semibold tracking-widest text-[#4f8ef7] uppercase mb-2">
               Agent &amp; Admin Portal
             </p>
@@ -147,9 +145,6 @@ export default function LoginPage() {
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className="text-xs font-medium text-slate-500">Password</label>
-                <a href="#" className="text-xs font-medium text-[#4f8ef7] hover:underline">
-                  Forgot password?
-                </a>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
@@ -168,23 +163,11 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Remember me */}
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="remember"
-                className="w-4 h-4 rounded border-slate-300 accent-[#4f8ef7]"
-              />
-              <label htmlFor="remember" className="text-sm text-slate-500">
-                Remember me
-              </label>
-            </div>
-
             {/* Submit */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full h-11 bg-[#0f1f3d] hover:bg-[#1a3a6e] active:scale-[0.99] text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full h-11 bg-[#0f1f3d] hover:bg-[#1a3a6e] active:scale-[0.99] text-white rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-all duration-200 disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             >
               {isLoading ? (
                 <>
@@ -192,14 +175,14 @@ export default function LoginPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                   </svg>
-                  Authenticating...
+                  Signing in...
                 </>
               ) : (
                 <>
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
-                  Sign in to portal
+                  Sign in to Portal
                 </>
               )}
             </button>
@@ -218,7 +201,17 @@ export default function LoginPage() {
             </div>
           )}
 
-          <p className="text-center mt-6 text-[10px] text-slate-300 uppercase tracking-widest">
+          {/* Switch to Client Portal */}
+          <div className="mt-5 pt-4 border-t border-slate-100 text-center">
+            <Link
+              href="/client-login"
+              className="text-xs font-bold text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1"
+            >
+              Go to Client Portal Login →
+            </Link>
+          </div>
+
+          <p className="text-center mt-4 text-[10px] text-slate-300 uppercase tracking-widest">
             © 2026 Maruthi Insure Care · All Rights Reserved
           </p>
         </div>

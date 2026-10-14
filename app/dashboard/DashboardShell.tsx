@@ -21,25 +21,31 @@ export default function DashboardShell({ children }: { children: React.ReactNode
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const supabase = createClient();
 
-  // Load user from real Supabase session
+  // Load user from Supabase session
   const loadUser = useCallback(async () => {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    const authUser = session?.user;
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      const authUser = session?.user;
 
-    if (error || !session || !authUser) {
+      if (error || !session || !authUser) {
+        setUser(null);
+        setLoading(false);
+        window.location.replace("/login");
+        return;
+      }
+
+      setUser({
+        name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Agent",
+        email: authUser.email,
+        role: authUser.user_metadata?.role || "Agent",
+        persona: authUser.user_metadata?.persona,
+      });
+      setLoading(false);
+    } catch {
       setUser(null);
       setLoading(false);
       window.location.replace("/login");
-      return;
     }
-
-    setUser({
-      name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Agent",
-      email: authUser.email,
-      role: authUser.user_metadata?.role || "Agent",
-      persona: authUser.user_metadata?.persona,
-    });
-    setLoading(false);
   }, [supabase]);
 
   const handleSignOut = useCallback(async () => {

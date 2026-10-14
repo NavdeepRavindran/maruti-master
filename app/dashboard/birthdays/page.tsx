@@ -203,11 +203,12 @@ export default function BirthdaysPage() {
   async function fetchBirthdays(signal: AbortSignal) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      const token = session?.access_token;
+      if (!token) return;
 
       const r = await fetch(`/api/birthdays?range=${range}`, { 
         signal,
-        headers: { Authorization: `Bearer ${session.access_token}` } 
+        headers: { Authorization: `Bearer ${token}` } 
       });
       const d = await r.json();
       if (!signal.aborted) {
@@ -222,11 +223,12 @@ export default function BirthdaysPage() {
   async function fetchAnniversaries(signal: AbortSignal) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      const token = session?.access_token;
+      if (!token) return;
 
       const r = await fetch(`/api/anniversaries?range=${range}`, { 
         signal,
-        headers: { Authorization: `Bearer ${session.access_token}` } 
+        headers: { Authorization: `Bearer ${token}` } 
       });
       const d = await r.json();
       if (!signal.aborted) {

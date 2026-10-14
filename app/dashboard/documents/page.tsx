@@ -14,6 +14,8 @@ interface DocData {
   client_id: string;
   file_url?: string;
   category?: DocCategory;
+  family_member_id?: string;
+  family_member_name?: string;
 }
 
 type DocCategory =
@@ -76,9 +78,10 @@ export default function DocumentsPage() {
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadForm, setUploadForm] = useState({
-    name: "", file_name: "", file_size: 0, file_url: "", client_id: "",
+    name: "", file_name: "", file_size: 0, file_url: "", client_id: "", family_member_id: "",
     category: "" as DocCategory | "",
   });
+  const [clientFamily, setClientFamily] = useState<{ id: string; name: string; relationship: string }[]>([]);
 
   useEffect(() => {
     const t = setTimeout(fetchDocs, 300);
@@ -89,23 +92,41 @@ export default function DocumentsPage() {
   async function fetchClients() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      const token = session?.access_token;
+      if (!token) return;
       const res = await fetch("/api/clients", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       setClients(data.clients || []);
     } catch (e) { console.error(e); }
   }
 
+  async function handleClientSelect(cid: string) {
+    setUploadForm(prev => ({ ...prev, client_id: cid, family_member_id: "" }));
+    setClientFamily([]);
+    if (!cid) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const res = await fetch(`/api/clients/${cid}/family`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await res.json();
+      setClientFamily(d.family || []);
+    } catch {}
+  }
+
   async function fetchDocs() {
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setLoading(false); return; }
+      const token = session?.access_token;
+      if (!token) return;
       const params = search ? `?search=${encodeURIComponent(search)}` : "";
       const res = await fetch(`/api/documents${params}`, {
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
       setDocs(data.documents || []);
@@ -116,10 +137,11 @@ export default function DocumentsPage() {
     if (!confirm("Delete this document?")) return;
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+      const token = session?.access_token;
+      if (!token) return;
       await fetch(`/api/documents/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       fetchDocs();
     } catch { }
@@ -131,22 +153,27 @@ export default function DocumentsPage() {
     setUploading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setUploading(false); return; }
+      const token = session?.access_token;
+      if (!token) return;
 
       const formData = new FormData();
       formData.append("file", selectedFile);
       formData.append("client_id", uploadForm.client_id);
+      if (uploadForm.family_member_id) {
+        formData.append("family_member_id", uploadForm.family_member_id);
+      }
       formData.append("name", uploadForm.name);
       formData.append("category", uploadForm.category);
       const res = await fetch("/api/documents", {
         method: "POST",
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
       if (res.ok) {
         setShowUploadModal(false);
-        setUploadForm({ name: "", file_name: "", file_size: 0, file_url: "", client_id: "", category: "" });
+        setUploadForm({ name: "", file_name: "", file_size: 0, file_url: "", client_id: "", family_member_id: "", category: "" });
         setSelectedFile(null);
+        setClientFamily([]);
         fetchDocs();
       } else {
         const error = await res.json();
@@ -822,7 +849,18 @@ export default function DocumentsPage() {
                         </div>
                       </div>
                       <div className="dp-card-name">{doc.name}</div>
-                      <div className="dp-card-owner">👤 {doc.client_name || "—"}</div>
+                      <div className="dp-card-owner" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
+                        <span>👤 {doc.client_name || "—"}</span>
+                        {doc.family_member_name ? (
+                          <span style={{ fontSize: "10px", background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                            👥 {doc.family_member_name}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: "10px", background: "#f1f5f9", color: "#64748b", padding: "1px 5px", borderRadius: "4px", fontWeight: 600 }}>
+                            Self
+                          </span>
+                        )}
+                      </div>
                       {/* Category pill */}
                       <div style={{ marginBottom: 8 }}>
                         <span className="dp-cat-pill" style={{ background: cat.bg, color: cat.color }}>
@@ -855,7 +893,16 @@ export default function DocumentsPage() {
                           </span>
                         </div>
                       </div>
-                      <div className="dp-list-col-owner">{doc.client_name || "—"}</div>
+                      <div className="dp-list-col-owner">
+                        <div style={{ fontWeight: 600, color: "#1e293b" }}>{doc.client_name || "—"}</div>
+                        {doc.family_member_name ? (
+                          <span style={{ display: "inline-block", fontSize: "10px", background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", padding: "1px 6px", borderRadius: "4px", fontWeight: 700, marginTop: "2px" }}>
+                            👥 {doc.family_member_name}
+                          </span>
+                        ) : (
+                          <span style={{ fontSize: "10px", color: "#94a3b8" }}>Self</span>
+                        )}
+                      </div>
                       <div className="dp-list-col-date">{formatDate(doc.created_at)}</div>
                       <div className="dp-list-col-size">{formatSize(doc.file_size)}</div>
                       <div className="dp-list-actions">
@@ -971,16 +1018,38 @@ export default function DocumentsPage() {
             </div>
 
             <div className="dp-field">
-              <label className="dp-field-label">Client</label>
+              <label className="dp-field-label">Client *</label>
               <select
                 className="dp-field-select"
                 value={uploadForm.client_id}
-                onChange={e => setUploadForm({ ...uploadForm, client_id: e.target.value })}
+                onChange={e => handleClientSelect(e.target.value)}
               >
                 <option value="">Select a Client</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
+
+            {uploadForm.client_id && (
+              <div className="dp-field">
+                <label className="dp-field-label">Document Belongs To (Separate Upload)</label>
+                <select
+                  className="dp-field-select"
+                  style={{ borderColor: "#bfdbfe", background: "#f8fafc", fontWeight: 600, color: "#1e3a8a" }}
+                  value={uploadForm.family_member_id}
+                  onChange={e => setUploadForm({ ...uploadForm, family_member_id: e.target.value })}
+                >
+                  <option value="">👤 Client (Self / Primary)</option>
+                  {clientFamily.map(f => (
+                    <option key={f.id} value={f.id}>
+                      👥 Family Member: {f.name} ({f.relationship})
+                    </option>
+                  ))}
+                </select>
+                <p style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
+                  Upload document separately for the primary client or select a specific family member
+                </p>
+              </div>
+            )}
 
             <div className="dp-field">
               <label className="dp-field-label">Document Name</label>

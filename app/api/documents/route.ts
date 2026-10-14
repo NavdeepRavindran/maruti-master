@@ -5,28 +5,30 @@ import { supabaseAdmin, supabaseAuth } from "../../../lib/supabaseClient";
 async function getAuthUser(request: Request) {
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
+  try {
+    const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
+    if (error || !user) return null;
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 // GET /api/documents
 export async function GET(request: Request) {
-  if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
-  }
-
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
   const { searchParams } = new URL(request.url);
-  const clientId = searchParams.get("client_id");
+  const clientId = searchParams.get("client_id") || undefined;
   const familyMemberId = searchParams.get("family_member_id");
   const search = searchParams.get("search")?.toLowerCase() || "";
 
   try {
+    if (!supabaseAdmin) throw new Error("No supabaseAdmin");
+
     let query = supabaseAdmin
       .from("documents")
       .select("*, clients(name)")
@@ -46,34 +48,36 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ documents, total: documents.length });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Failed to fetch documents" }, { status: 500 });
   }
 }
 
 // POST /api/documents
 export async function POST(request: Request) {
-  if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Supabase admin not configured" }, { status: 500 });
-  }
-
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
   }
 
+  let formData: FormData | null = null;
   try {
-    const formData = await request.formData().catch(() => null);
-    if (!formData) return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
+    formData = await request.formData();
+  } catch {
+    return NextResponse.json({ error: "Invalid form data" }, { status: 400 });
+  }
 
-    const file = formData.get("file") as File;
-    const client_id = formData.get("client_id") as string;
-    const family_member_id = formData.get("family_member_id") as string | null;
-    const name = formData.get("name") as string;
-    const category = formData.get("category") as string;
+  const file = formData.get("file") as File;
+  const client_id = formData.get("client_id") as string;
+  const family_member_id = formData.get("family_member_id") as string | null;
+  const name = formData.get("name") as string;
+  const category = formData.get("category") as string;
 
-    if (!file || !client_id || !name || !category) {
-      return NextResponse.json({ error: "Client ID, name, category, and file are required." }, { status: 400 });
-    }
+  if (!file || !client_id || !name || !category) {
+    return NextResponse.json({ error: "Client ID, name, category, and file are required." }, { status: 400 });
+  }
+
+  try {
+    if (!supabaseAdmin) throw new Error("No supabaseAdmin");
 
     const fileExt = file.name.split(".").pop();
     const fileName = `${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
@@ -111,7 +115,7 @@ export async function POST(request: Request) {
     if (error) throw error;
     return NextResponse.json({ document: data }, { status: 201 });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Failed to upload document" }, { status: 500 });
   }
 }
 

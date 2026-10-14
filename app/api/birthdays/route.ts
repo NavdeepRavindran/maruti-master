@@ -27,16 +27,16 @@ interface BirthdayEntry {
 async function getAuthUser(request: Request) {
   const token = request.headers.get("authorization")?.replace("Bearer ", "");
   if (!token) return null;
-  const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
-  if (error || !user) return null;
-  return user;
+  try {
+    const { data: { user }, error } = await supabaseAuth.auth.getUser(token);
+    if (error || !user) return null;
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(request: Request) {
-  if (!supabaseAdmin) {
-    return NextResponse.json({ error: "Supabase client not initialized" }, { status: 500 });
-  }
-
   const user = await getAuthUser(request);
   if (!user) {
     return NextResponse.json({ error: "Unauthorised" }, { status: 401 });
@@ -46,17 +46,24 @@ export async function GET(request: Request) {
   const range = searchParams.get("range") || "month";
 
   try {
-    const { data: clients } = await supabaseAdmin
+    if (!supabaseAdmin) throw new Error("No supabaseAdmin");
+
+    const { data: clients, error: cErr } = await supabaseAdmin
       .from("clients")
       .select("id, name, date_of_birth, phone")
       .not("date_of_birth", "is", null)
+      .eq("is_deleted", false)
       .order("name");
 
-    const { data: familyMembers } = await supabaseAdmin
+    if (cErr) throw cErr;
+
+    const { data: familyMembers, error: fErr } = await supabaseAdmin
       .from("family_members")
       .select("id, client_id, name, date_of_birth, relationship, phone, clients(name)")
       .not("date_of_birth", "is", null)
       .order("name");
+
+    if (fErr) throw fErr;
 
     const entries: BirthdayEntry[] = [];
 
@@ -89,7 +96,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ birthdays: filtered, stats: getStats(entries) });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Failed to fetch birthdays" }, { status: 500 });
   }
 }
 

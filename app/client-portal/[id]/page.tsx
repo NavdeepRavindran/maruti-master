@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { formatFamilyName } from "@/lib/formatUtils";
 
 interface ClientData {
   id: string;
@@ -184,7 +185,7 @@ export default function ClientPortalDashboard() {
                         {member.name[0]}
                       </div>
                       <div>
-                        <div className="font-bold text-slate-700">{member.name}</div>
+                        <div className="font-bold text-slate-700">{formatFamilyName(member.name)}</div>
                         <div className="text-xs font-bold text-slate-400">{member.relationship}</div>
                       </div>
                     </div>

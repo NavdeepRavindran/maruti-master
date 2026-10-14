@@ -2,8 +2,18 @@
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import Link from "next/link";
+import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
-import { capitalizeWords, sanitizeAlphabetsOnly, FAMILY_RELATIONSHIPS } from "@/lib/formatUtils";
+import {
+  capitalizeWords,
+  sanitizeAlphabetsOnly,
+  formatFamilyName,
+  FAMILY_RELATIONSHIPS,
+  getRecycleBinRetention,
+  formatDate,
+  validateDateRange,
+} from "@/lib/formatUtils";
+import { validateEmail, getEmailError } from "@/lib/emailValidator";
 
 export interface FormFamilyMember {
   id?: string;
@@ -11,6 +21,7 @@ export interface FormFamilyMember {
   relationship: string;
   date_of_birth: string;
   phone: string;
+  occupation?: string;
 }
 
 interface ClientData {
@@ -36,6 +47,8 @@ interface ClientData {
   occupation?: string;
   notes?: string;
   status: string;
+  is_deleted?: boolean;
+  deleted_at?: string;
   family_count?: number;
   document_count?: number;
   created_at: string;
@@ -49,6 +62,7 @@ const IC = {
   Eye:       () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>,
   Edit:      () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>,
   Trash:     () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>,
+  Restore:   () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>,
   Close:     () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>,
   Doc:       () => <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>,
   Users:     () => <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}><path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>,
@@ -137,6 +151,33 @@ export default function ClientsPage() {
   const [familyMembers, setFamilyMembers] = useState<FormFamilyMember[]>([]);
   const [saving, setSaving]         = useState(false);
   const [total, setTotal]           = useState(0);
+  const [modalError, setModalError] = useState<string | null>(null);
+
+  // Discard Confirmation Modal state (prevents accidental closing on outside clicks)
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+
+  const requestCloseModal = () => {
+    const hasContent = Boolean(
+      formData.name ||
+      formData.surname ||
+      formData.phone ||
+      formData.email ||
+      formData.date_of_birth ||
+      formData.pinCode ||
+      familyMembers.length > 0 ||
+      editingClient
+    );
+    if (hasContent) {
+      setShowDiscardConfirm(true);
+    } else {
+      closeModal();
+    }
+  };
+
+  const handleConfirmDiscard = () => {
+    setShowDiscardConfirm(false);
+    closeModal();
+  };
 
   // Real-time Duplicate Client Detection
   const trimmedPhone = (formData.phone || "").trim();
@@ -175,6 +216,10 @@ export default function ClientsPage() {
     trimmedEmail.includes("@") &&
     duplicateClient.email?.trim().toLowerCase() === trimmedEmail
   );
+
+  const emailValidation = useMemo(() => {
+    return formData.email ? validateEmail(formData.email) : null;
+  }, [formData.email]);
 async function fetchPincode(pin: string) {
   try {
     console.log("Fetching PIN:", pin);
@@ -212,9 +257,8 @@ setForm(prev => ({
     setLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { setLoading(false); return; }
-
-      const token = session.access_token;
+      const token = session?.access_token;
+      if (!token) return;
       const p = new URLSearchParams();
       if (search) p.set("search", search);
       if (filter !== "all") p.set("status", filter);
@@ -241,8 +285,8 @@ setForm(prev => ({
       (async () => {
         try {
           const { data: { session } } = await supabase.auth.getSession();
-          if (!session) return;
-          const token = session.access_token;
+          const token = session?.access_token;
+          if (!token) return;
           const res = await fetch("/api/clients", {
             headers: { Authorization: `Bearer ${token}` },
           });
@@ -271,46 +315,92 @@ setForm(prev => ({
   };
 
   const handleSave = async () => {
+    setModalError(null);
     if (!editingClient && duplicateClient) {
-      alert(`Duplicate client identified! A client with this mobile number or email already exists (${duplicateClient.name} ${duplicateClient.surname || ""}). Cannot add duplicate client.`);
+      const msg = `Duplicate client identified! A client with this mobile number or email already exists (${duplicateClient.name} ${duplicateClient.surname || ""}). Cannot add duplicate client.`;
+      setModalError(msg);
+      toast.error(msg);
       return;
     }
     if (!formData.name.trim()) {
-      alert("Please enter Full Name.");
+      const msg = "Please enter Full Name.";
+      setModalError(msg);
+      toast.error(msg);
       return;
     }
     if (!formData.surname.trim()) {
-      alert("Please enter Surname.");
+      const msg = "Please enter Surname.";
+      setModalError(msg);
+      toast.error(msg);
       return;
     }
     const phoneValid = /^\d{10}$/.test(formData.phone.trim());
     if (!phoneValid) {
-      alert("Please enter a valid 10-digit mobile number.");
+      const msg = "Please enter a valid 10-digit mobile number.";
+      setModalError(msg);
+      toast.error(msg);
       return;
     }
-    if (!formData.email.trim() || !formData.email.includes("@")) {
-      alert("Please enter a valid email address.");
+    const emailCheck = validateEmail(formData.email);
+    if (!emailCheck.isValid) {
+      const msg = emailCheck.error || "Please enter a valid email address.";
+      setModalError(msg);
+      toast.error(msg);
       return;
     }
     if (!formData.date_of_birth) {
-      alert("Please select Date of Birth.");
+      const msg = "Please select Date of Birth.";
+      setModalError(msg);
+      toast.error(msg);
       return;
+    }
+    const dobCheck = validateDateRange(formData.date_of_birth, "Date of Birth");
+    if (!dobCheck.isValid) {
+      const msg = dobCheck.error || "Please select a valid Date of Birth.";
+      setModalError(msg);
+      toast.error(msg);
+      return;
+    }
+    if (formData.anniversaryDate) {
+      const annivCheck = validateDateRange(formData.anniversaryDate, "Anniversary date");
+      if (!annivCheck.isValid) {
+        const msg = annivCheck.error || "Please select a valid Anniversary date.";
+        setModalError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (formData.date_of_birth && formData.anniversaryDate < formData.date_of_birth) {
+        const msg = "Anniversary date cannot be earlier than Date of Birth.";
+        setModalError(msg);
+        toast.error(msg);
+        return;
+      }
+    }
+    // Validate family members' dates of birth if provided
+    for (const fm of familyMembers) {
+      if (fm.date_of_birth) {
+        const fmDobCheck = validateDateRange(fm.date_of_birth, `${fm.name || "Family member"}'s Date of Birth`);
+        if (!fmDobCheck.isValid) {
+          const msg = fmDobCheck.error || "Invalid family member date of birth.";
+          setModalError(msg);
+          toast.error(msg);
+          return;
+        }
+      }
     }
     const pinValid = /^\d{6}$/.test(formData.pinCode.trim());
     if (!pinValid) {
-      alert("Please enter a valid 6-digit PIN code.");
+      const msg = "Please enter a valid 6-digit PIN code.";
+      setModalError(msg);
+      toast.error(msg);
       return;
     }
 
     setSaving(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        alert("Session expired. Please log in again.");
-        setSaving(false);
-        return;
-      }
-      const token = session.access_token;
+      const token = session?.access_token;
+      if (!token) return;
       const authHeaders = {
         "Content-Type": "application/json",
         Authorization: `Bearer ${token}`,
@@ -319,7 +409,7 @@ setForm(prev => ({
       const payload = {
         ...formData,
         name: capitalizeWords(formData.name),
-        surname: capitalizeWords(formData.surname),
+        surname: formData.surname.trim().toUpperCase(),
       };
 
       let targetClientId = editingClient?.id;
@@ -359,10 +449,11 @@ setForm(prev => ({
         for (const fm of familyMembers) {
           if (!fm.name.trim()) continue;
           const fmPayload = {
-            name: capitalizeWords(fm.name),
+            name: formatFamilyName(fm.name),
             relationship: fm.relationship || "Other",
             date_of_birth: fm.date_of_birth || "2000-01-01",
             phone: fm.phone || null,
+            occupation: fm.occupation || "",
           };
           if (fm.id) {
             await fetch(`/api/clients/${targetClientId}/family/${fm.id}`, {
@@ -383,28 +474,102 @@ setForm(prev => ({
       closeModal();
       await fetchClients();
     } catch (err: any) {
-      alert(err?.message || "An error occurred while saving client details.");
+      const errMsg = err?.message || "An error occurred while saving client details.";
+      setModalError(errMsg);
+      toast.error(errMsg);
     } finally {
       setSaving(false);
     }
   };
 
+  const [recycleCount, setRecycleCount] = useState(0);
+
+  const fetchRecycleCount = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/clients?status=recycle_bin", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const d = await res.json();
+        setRecycleCount(d.total || d.clients?.length || 0);
+      }
+    } catch { /* silent */ }
+  }, [supabase]);
+
+  useEffect(() => {
+    fetchRecycleCount();
+  }, [fetchRecycleCount]);
+
   const handleDelete = async (id: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-
-      const token = session.access_token;
-      await fetch(`/api/clients/${id}`, {
+      const token = session?.access_token;
+      if (!token) return;
+      const res = await fetch(`/api/clients/${id}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (res.ok) {
+        toast.success("Client moved to Recycle Bin.");
+      }
       fetchClients();
+      fetchRecycleCount();
     } catch { /* silent */ }
     setDeleteConfirm(null);
   };
 
+  const handleRestore = async (id: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const res = await fetch(`/api/clients/${id}/restore`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success("Client restored successfully!");
+        fetchClients();
+        fetchRecycleCount();
+      }
+    } catch { /* silent */ }
+  };
+
+  const handlePermanentDelete = async (id: string) => {
+    if (!confirm("Permanently delete this client and all associated documents? This action CANNOT be undone.")) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const res = await fetch(`/api/clients/${id}?permanent=true`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        toast.success("Client permanently deleted.");
+        fetchClients();
+        fetchRecycleCount();
+      }
+    } catch { /* silent */ }
+  };
+
+  const handleEmptyRecycleBin = async () => {
+    if (!confirm("Permanently delete ALL clients in the Recycle Bin? This action CANNOT be undone.")) return;
+    try {
+      const res = await fetch("/api/clients/recycle-bin", { method: "DELETE" });
+      if (res.ok) {
+        toast.success("Recycle Bin emptied.");
+        fetchClients();
+        fetchRecycleCount();
+      }
+    } catch { /* silent */ }
+  };
+
   const openEdit = async (c: ClientData | any) => {
+    setModalError(null);
     setEditing(c);
 
     let firstName = c.name || "";
@@ -417,7 +582,7 @@ setForm(prev => ({
 
     setForm({
       name: capitalizeWords(firstName),
-      surname: capitalizeWords(surname),
+      surname: (surname || "").trim().toUpperCase(),
       phone: c.phone || "",
       alternateMobile: c.alternateMobile || c.alternate_mobile || "",
       email: c.email || "",
@@ -440,8 +605,8 @@ setForm(prev => ({
     // Also load family members for this client
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
-      const token = session.access_token;
+      const token = session?.access_token;
+      if (!token) return;
       const res = await fetch(`/api/clients/${c.id}/family`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -459,21 +624,65 @@ setForm(prev => ({
   const closeModal = () => {
     setShowAdd(false);
     setEditing(null);
+    setModalError(null);
     setForm(defaultForm);
     setFamilyMembers([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const formatDob = (d: string) => new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+  const formatDob = (d: string) => formatDate(d);
 
   const inputCls = "w-full px-4 py-3 rounded-2xl bg-[#F7F9FC] border border-slate-200 focus:bg-white focus:border-[#0E7AC7] focus:ring-2 focus:ring-[#DDF3FF] outline-none transition-all text-[13px] font-semibold text-[#1F2937] placeholder:text-slate-400 placeholder:font-normal";
   const labelCls = "block text-xs font-semibold text-[#6B7280] mb-1.5";
 
-  const statusStyle = (status: string) =>
-    status === "Active"
-      ? "bg-[#14B86A]/10 text-[#14B86A]"
-      : "bg-[#F59E0B]/10 text-[#F59E0B]";
-  const statusDot = (status: string) => status === "Active" ? "bg-[#14B86A]" : "bg-[#F59E0B]";
+  const toggleClientStatus = async (c: ClientData) => {
+    const isInactive = c.status === "Inactive";
+    const newStatus = isInactive ? "Active" : "Inactive";
+    const msg = isInactive
+      ? `Reactivate client ${c.name} ${(c.surname || "")}?`
+      : `Deactivate client ${c.name} ${(c.surname || "")}? They will be moved to the Inactive list.`;
+    if (!confirm(msg)) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) return;
+      const res = await fetch(`/api/clients/${c.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (res.ok) {
+        await fetchClients();
+      }
+    } catch {
+      /* silent */
+    }
+  };
+
+  const statusStyle = (status: string) => {
+    if (status === "Active") return "bg-[#14B86A]/10 text-[#14B86A]";
+    if (status === "Inactive") return "bg-slate-100 text-slate-600 border border-slate-200/60";
+    return "bg-[#F59E0B]/10 text-[#F59E0B]";
+  };
+  const statusDot = (status: string) => {
+    if (status === "Active") return "bg-[#14B86A]";
+    if (status === "Inactive") return "bg-slate-400";
+    return "bg-[#F59E0B]";
+  };
+
+  const statusCounts = useMemo(() => {
+    const pool = allClients.length > 0 ? allClients : clients;
+    return {
+      all: total || pool.length,
+      Active: pool.filter((c) => c.status === "Active").length,
+      Pending: pool.filter((c) => c.status === "Pending").length,
+      Inactive: pool.filter((c) => c.status === "Inactive").length,
+    };
+  }, [allClients, clients, total]);
 
   return (
     <div className="min-h-screen bg-[#F7F9FC]">
@@ -520,22 +729,66 @@ setForm(prev => ({
               className="w-full pl-11 pr-4 h-12 bg-white border border-slate-200 rounded-2xl text-[13px] font-medium text-[#1F2937] placeholder:text-slate-400 focus:outline-none focus:border-[#0E7AC7] focus:ring-2 focus:ring-[#DDF3FF] transition-all shadow-sm"
             />
           </div>
-          <div className="flex items-center gap-1.5 p-1.5 bg-white border border-slate-200 rounded-2xl shadow-sm shrink-0">
-            {["all", "Active", "Pending"].map(f => (
+          <div className="flex items-center gap-1.5 p-1.5 bg-white border border-slate-200 rounded-2xl shadow-sm shrink-0 overflow-x-auto">
+            {[
+              { key: "all", label: "All", count: statusCounts.all },
+              { key: "Active", label: "Active", count: statusCounts.Active },
+              { key: "Pending", label: "Pending", count: statusCounts.Pending },
+              { key: "Inactive", label: "Inactive", count: statusCounts.Inactive },
+              { key: "recycle_bin", label: "Recycle Bin", icon: "🗑️", count: recycleCount },
+            ].map(tab => (
               <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`flex-1 sm:flex-none px-4 h-9 rounded-xl text-xs font-bold transition-all ${
-                  filter === f
-                    ? "bg-[#005A87] text-white shadow-sm"
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
+                className={`flex-1 sm:flex-none px-3.5 sm:px-4 h-9 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
+                  filter === tab.key
+                    ? tab.key === "recycle_bin"
+                      ? "bg-rose-700 text-white shadow-sm"
+                      : "bg-[#005A87] text-white shadow-sm"
                     : "text-[#6B7280] hover:text-[#1F2937] hover:bg-[#F7F9FC]"
                 }`}
               >
-                {f === "all" ? "All" : f}
+                {tab.icon && <span className="text-xs">{tab.icon}</span>}
+                <span>{tab.label}</span>
+                <span
+                  className={`text-[10px] px-1.5 py-0.5 rounded-md font-bold ${
+                    filter === tab.key ? "bg-white/20 text-white" : "bg-[#F7F9FC] text-slate-500"
+                  }`}
+                >
+                  {tab.count}
+                </span>
               </button>
             ))}
           </div>
         </div>
+
+        {/* ── Recycle Bin Notice Banner ────────────────────────────── */}
+        {filter === "recycle_bin" && (
+          <div className="p-4 rounded-2xl bg-rose-50/80 border border-rose-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-3">
+              <span className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center text-lg shrink-0">🗑️</span>
+              <div>
+                <div className="flex items-center gap-2">
+                  <p className="text-[13px] font-bold text-rose-950">Recycle Bin</p>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-200/80 text-rose-800">
+                    3-Month Retention Policy
+                  </span>
+                </div>
+                <p className="text-xs text-rose-700 mt-0.5">
+                  Deleted clients are retained for up to 3 months (90 days). Any records beyond 3 months are automatically and permanently purged.
+                </p>
+              </div>
+            </div>
+            {clients.length > 0 && (
+              <button
+                onClick={handleEmptyRecycleBin}
+                className="px-3.5 h-9 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shrink-0 self-end sm:self-center shadow-xs"
+              >
+                Empty Recycle Bin
+              </button>
+            )}
+          </div>
+        )}
 
         {/* ── MOBILE CARDS ────────────────────────────────────────── */}
         <div className="lg:hidden space-y-3">
@@ -570,10 +823,22 @@ setForm(prev => ({
                       Born {formatDob(c.date_of_birth)}
                     </div>
                   </div>
-                  <span className={`shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${statusStyle(c.status)}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${statusDot(c.status)}`} />
-                    {c.status}
-                  </span>
+                  {filter === "recycle_bin" ? (
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                        Deleted
+                      </span>
+                      <span className="text-[10px] font-semibold text-rose-600">
+                        ⏳ {getRecycleBinRetention(c.deleted_at).label}
+                      </span>
+                    </div>
+                  ) : (
+                    <span className={`shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${statusStyle(c.status)}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${statusDot(c.status)}`} />
+                      {c.status}
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-2 mb-3">
@@ -593,20 +858,47 @@ setForm(prev => ({
                   </div>
                 </div>
 
-                <div className="flex gap-2 pt-3 border-t border-slate-100">
-                  <Link href={`/dashboard/clients/${c.id}`}
-                    className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-[#DDF3FF] text-[#005A87] text-xs font-bold hover:bg-[#005A87] hover:text-white transition-all">
-                    <IC.Eye /> View
-                  </Link>
-                  <button onClick={() => openEdit(c)}
-                    className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-[#F7F9FC] text-[#1F2937] text-xs font-bold hover:bg-slate-200 transition-all">
-                    <IC.Edit /> Edit
-                  </button>
-                  <button onClick={() => setDeleteConfirm(c.id)}
-                    className="w-11 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all">
-                    <IC.Trash />
-                  </button>
-                </div>
+                {filter === "recycle_bin" ? (
+                  <div className="flex gap-2 pt-3 border-t border-slate-100">
+                    <button
+                      onClick={() => handleRestore(c.id)}
+                      className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-600 hover:text-white transition-all shadow-2xs"
+                    >
+                      <IC.Restore /> Restore
+                    </button>
+                    <button
+                      onClick={() => handlePermanentDelete(c.id)}
+                      className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-rose-50 text-rose-700 text-xs font-bold hover:bg-rose-600 hover:text-white transition-all shadow-2xs"
+                    >
+                      <IC.Trash /> Delete Forever
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 pt-3 border-t border-slate-100">
+                    <Link href={`/dashboard/clients/${c.id}`}
+                      className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-[#DDF3FF] text-[#005A87] text-xs font-bold hover:bg-[#005A87] hover:text-white transition-all">
+                      <IC.Eye /> View
+                    </Link>
+                    <button onClick={() => openEdit(c)}
+                      className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-[#F7F9FC] text-[#1F2937] text-xs font-bold hover:bg-slate-200 transition-all">
+                      <IC.Edit /> Edit
+                    </button>
+                    <button onClick={() => toggleClientStatus(c)}
+                      className={`px-2.5 h-10 flex items-center justify-center rounded-xl text-xs font-bold transition-all ${
+                        c.status === "Inactive"
+                          ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white"
+                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      }`}
+                      title={c.status === "Inactive" ? "Activate" : "Deactivate"}>
+                      {c.status === "Inactive" ? "Activate" : "Deactivate"}
+                    </button>
+                    <button onClick={() => setDeleteConfirm(c.id)}
+                      className="w-10 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
+                      title="Move to Recycle Bin">
+                      <IC.Trash />
+                    </button>
+                  </div>
+                )}
               </div>
             ))
           )}
@@ -661,7 +953,7 @@ setForm(prev => ({
                     <div className="min-w-0">
                       <Link href={`/dashboard/clients/${c.id}`} className="text-[13px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors truncate block">
                         <span>{capitalizeWords(c.name)}</span>{" "}
-                        <span className="text-[#0E7AC7] font-semibold">{capitalizeWords(c.surname || "")}</span>
+                        <span className="text-[#0E7AC7] font-semibold">{(c.surname || "").toUpperCase()}</span>
                       </Link>
                       <div className="flex items-center gap-1 text-[11px] text-[#6B7280] font-medium mt-0.5">
                         <IC.Calendar /> {formatDob(c.date_of_birth)}
@@ -678,11 +970,23 @@ setForm(prev => ({
                   </div>
 
                   {/* Status */}
-                  <div className="col-span-1 flex justify-center">
-                    <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold ${statusStyle(c.status)}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot(c.status)} ${c.status === "Active" ? "animate-pulse" : ""}`} />
-                      {c.status}
-                    </span>
+                  <div className="col-span-1 flex flex-col items-center justify-center gap-1">
+                    {filter === "recycle_bin" ? (
+                      <>
+                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                          Deleted
+                        </span>
+                        <span className="text-[10px] font-semibold text-rose-600 whitespace-nowrap">
+                          ⏳ {getRecycleBinRetention(c.deleted_at).label}
+                        </span>
+                      </>
+                    ) : (
+                      <span className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold ${statusStyle(c.status)}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot(c.status)} ${c.status === "Active" ? "animate-pulse" : ""}`} />
+                        {c.status}
+                      </span>
+                    )}
                   </div>
 
                   {/* Family */}
@@ -701,22 +1005,54 @@ setForm(prev => ({
                   </div>
 
                   {/* Actions */}
-                  <div className="col-span-2 flex items-center justify-end gap-1.5">
-                    <Link href={`/dashboard/clients/${c.id}`}
-                      className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#005A87] hover:text-white transition-all"
-                      title="View">
-                      <IC.Eye />
-                    </Link>
-                    <button onClick={() => openEdit(c)}
-                      className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#1F2937] hover:text-white transition-all"
-                      title="Edit">
-                      <IC.Edit />
-                    </button>
-                    <button onClick={() => setDeleteConfirm(c.id)}
-                      className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
-                      title="Delete">
-                      <IC.Trash />
-                    </button>
+                  <div className="col-span-2 flex items-center justify-end gap-1">
+                    {filter === "recycle_bin" ? (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={() => handleRestore(c.id)}
+                          className="h-8 px-2.5 flex items-center gap-1 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[11px] font-bold transition-all shadow-xs"
+                          title="Restore Client"
+                        >
+                          <IC.Restore /> Restore
+                        </button>
+                        <button
+                          onClick={() => handlePermanentDelete(c.id)}
+                          className="h-8 px-2 flex items-center gap-1 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white text-[11px] font-bold transition-all shadow-xs"
+                          title="Delete Forever"
+                        >
+                          <IC.Trash /> Delete Forever
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => toggleClientStatus(c)}
+                          className={`h-8 px-2 flex items-center justify-center rounded-xl text-[11px] font-bold transition-all ${
+                            c.status === "Inactive"
+                              ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white"
+                              : "bg-[#F7F9FC] text-[#6B7280] hover:bg-slate-200 hover:text-[#1F2937]"
+                          }`}
+                          title={c.status === "Inactive" ? "Activate Client" : "Deactivate Client"}
+                        >
+                          {c.status === "Inactive" ? "Activate" : "Deactivate"}
+                        </button>
+                        <Link href={`/dashboard/clients/${c.id}`}
+                          className="w-8 h-8 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#005A87] hover:text-white transition-all"
+                          title="View">
+                          <IC.Eye />
+                        </Link>
+                        <button onClick={() => openEdit(c)}
+                          className="w-8 h-8 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#1F2937] hover:text-white transition-all"
+                          title="Edit">
+                          <IC.Edit />
+                        </button>
+                        <button onClick={() => setDeleteConfirm(c.id)}
+                          className="w-8 h-8 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
+                          title="Move to Recycle Bin">
+                          <IC.Trash />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               ))
@@ -745,16 +1081,18 @@ setForm(prev => ({
             <div className="w-12 h-12 rounded-2xl bg-[#EF4444]/10 flex items-center justify-center mx-auto mb-4 text-[#EF4444]">
               <IC.Trash />
             </div>
-            <h3 className="text-[16px] font-bold text-[#1F2937] text-center mb-1">Delete Client?</h3>
-            <p className="text-[12px] text-[#6B7280] text-center font-medium mb-5">This will permanently remove the client, all their documents and family members. This cannot be undone.</p>
+            <h3 className="text-[16px] font-bold text-[#1F2937] text-center mb-1">Move to Recycle Bin?</h3>
+            <p className="text-[12px] text-[#6B7280] text-center font-medium mb-5">
+              This client will be stored in the Recycle Bin for 3 months (90 days). You can restore them anytime during this period before they are permanently deleted.
+            </p>
             <div className="flex gap-3">
               <button onClick={() => setDeleteConfirm(null)}
                 className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC] transition-colors">
                 Cancel
               </button>
               <button onClick={() => handleDelete(deleteConfirm)}
-                className="flex-1 h-12 rounded-2xl bg-[#EF4444] text-white text-[13px] font-bold hover:bg-[#dc2626] transition-colors active:scale-95">
-                Delete
+                className="flex-1 h-12 rounded-2xl bg-[#EF4444] text-white text-[13px] font-bold hover:bg-[#dc2626] transition-colors active:scale-95 flex items-center justify-center gap-1.5">
+                <IC.Trash /> Move to Bin
               </button>
             </div>
           </div>
@@ -764,7 +1102,7 @@ setForm(prev => ({
       {/* ── Add / Edit Modal ─────────────────────────────────────── */}
       {showAddModal && (
         <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={closeModal} />
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onClick={requestCloseModal} />
           <div className="relative bg-white w-full sm:max-w-xl rounded-t-[28px] sm:rounded-[22px] shadow-2xl max-h-[95vh] overflow-y-auto">
 
             {/* Modal Header */}
@@ -773,13 +1111,33 @@ setForm(prev => ({
                 <h2 className="text-[16px] font-bold text-[#1F2937]">{editingClient ? "Edit Client" : "Add New Client"}</h2>
                 <p className="text-xs text-[#6B7280] font-medium">{editingClient ? "Update client information" : "Register a new insurance client"}</p>
               </div>
-              <button onClick={closeModal} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] transition-colors text-[#6B7280]">
+              <button onClick={requestCloseModal} className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-[#F7F9FC] transition-colors text-[#6B7280]">
                 <IC.Close />
               </button>
             </div>
 
             {/* Form */}
             <div className="px-6 py-5 space-y-4">
+
+              {/* Alert Message Banner (on the same layer) */}
+              {modalError && (
+                <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-semibold flex items-start justify-between gap-2.5 shadow-xs">
+                  <div className="flex items-start gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 text-xs font-bold mt-0.5">⚠️</span>
+                    <div>
+                      <p className="font-bold text-rose-900">Please correct the following:</p>
+                      <p className="mt-0.5 text-rose-700 font-medium">{modalError}</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setModalError(null)}
+                    className="w-5 h-5 rounded-lg text-rose-400 hover:text-rose-700 flex items-center justify-center shrink-0 font-bold"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
               {/* Duplicate Notice */}
               {!editingClient && duplicateClient && (
@@ -877,9 +1235,9 @@ setForm(prev => ({
                   <input
                     type="text"
                     value={formData.surname}
-                    onChange={e => setForm({...formData, surname: sanitizeAlphabetsOnly(e.target.value)})}
-                    placeholder="Last Name"
-                    className={inputCls}
+                    onChange={e => setForm({...formData, surname: sanitizeAlphabetsOnly(e.target.value).toUpperCase()})}
+                    placeholder="e.g. KUMAR"
+                    className={`${inputCls} uppercase`}
                   />
                 </div>
               </div>
@@ -908,29 +1266,68 @@ setForm(prev => ({
               </div>
 
               <div>
-                <label className={labelCls}>Email Address <span className="text-[#EF4444]">*</span></label>
+                <label className={labelCls}>Email (Gmail) <span className="text-[#EF4444]">*</span></label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={e => setForm({...formData, email: e.target.value})}
-                  placeholder="client@email.com"
-                  className={`${inputCls} ${!editingClient && isDuplicateEmail ? "!border-red-400 !bg-red-50/30 text-red-900" : ""}`}
+                  placeholder="client@gmail.com"
+                  className={`${inputCls} ${
+                    !editingClient && isDuplicateEmail
+                      ? "!border-red-400 !bg-red-50/30 text-red-900"
+                      : emailValidation && !emailValidation.isValid
+                      ? "!border-rose-400 !bg-rose-50/20 text-rose-900"
+                      : ""
+                  }`}
                 />
                 {!editingClient && isDuplicateEmail && (
                   <p className="text-[11px] font-medium text-red-600 mt-1">
                     Already exists with this email: {duplicateClient?.name} {duplicateClient?.surname || ""}
                   </p>
                 )}
+                {emailValidation && !emailValidation.isValid && (
+                  <div className="mt-1.5 space-y-1">
+                    <p className="text-[11px] font-semibold text-rose-600 flex items-center gap-1.5 bg-rose-50 border border-rose-200/80 rounded-xl px-2.5 py-1.5">
+                      <svg className="w-3.5 h-3.5 shrink-0 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                      {emailValidation.error}
+                    </p>
+                    {emailValidation.suggestion && (
+                      <button
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, email: emailValidation.suggestion! }))}
+                        className="text-[11px] font-bold text-[#005A87] hover:underline flex items-center gap-1 px-1 py-0.5"
+                      >
+                        💡 Suggested: <span className="underline font-extrabold">{emailValidation.suggestion}</span> (Click to fix)
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className={labelCls}>Date of Birth <span className="text-[#EF4444]">*</span></label>
-                  <input type="date" value={formData.date_of_birth} onChange={e => setForm({...formData, date_of_birth: e.target.value})} className={inputCls} />
+                  <input
+                    type="date"
+                    min="1900-01-01"
+                    max={new Date().toISOString().split("T")[0]}
+                    value={formData.date_of_birth}
+                    onChange={e => setForm({...formData, date_of_birth: e.target.value})}
+                    className={inputCls}
+                  />
                 </div>
                 <div>
                   <label className={labelCls}>Anniversary Date</label>
-                  <input type="date" value={formData.anniversaryDate} onChange={e => setForm({...formData, anniversaryDate: e.target.value})} className={inputCls} />
+                  <input
+                    type="date"
+                    min="1900-01-01"
+                    max={new Date().toISOString().split("T")[0]}
+                    value={formData.anniversaryDate}
+                    onChange={e => setForm({...formData, anniversaryDate: e.target.value})}
+                    className={inputCls}
+                  />
                 </div>
               </div>
 
@@ -1094,7 +1491,7 @@ setForm(prev => ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setFamilyMembers(prev => [...prev, { name: "", relationship: "Wife", date_of_birth: "", phone: "" }])}
+                    onClick={() => setFamilyMembers(prev => [...prev, { name: "", relationship: "Wife", date_of_birth: "", phone: "", occupation: "" }])}
                     className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#005A87] text-white text-xs font-bold hover:bg-[#00476b] transition-all shadow-sm"
                   >
                     + Add Member
@@ -1122,10 +1519,14 @@ setForm(prev => ({
                             <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Full Name *</label>
                             <input
                               type="text"
-                              placeholder="Name"
+                              placeholder="Name (e.g. Ramya)"
                               value={fm.name}
                               onChange={e => {
                                 const val = sanitizeAlphabetsOnly(e.target.value);
+                                setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, name: val } : m));
+                              }}
+                              onBlur={e => {
+                                const val = formatFamilyName(e.target.value);
                                 setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, name: val } : m));
                               }}
                               className="w-full px-3 py-2 rounded-xl bg-[#F7F9FC] border border-slate-200 text-xs font-semibold text-[#1F2937]"
@@ -1150,11 +1551,13 @@ setForm(prev => ({
                             </select>
                           </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <div>
                             <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Date of Birth</label>
                             <input
                               type="date"
+                              min="1900-01-01"
+                              max={new Date().toISOString().split("T")[0]}
                               value={fm.date_of_birth}
                               onChange={e => {
                                 const val = e.target.value;
@@ -1177,6 +1580,19 @@ setForm(prev => ({
                               className="w-full px-3 py-2 rounded-xl bg-[#F7F9FC] border border-slate-200 text-xs font-semibold text-[#1F2937]"
                             />
                           </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Occupation</label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Teacher, Engineer"
+                              value={fm.occupation || ""}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, occupation: val } : m));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl bg-[#F7F9FC] border border-slate-200 text-xs font-semibold text-[#1F2937]"
+                            />
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1192,7 +1608,7 @@ setForm(prev => ({
 
             {/* Modal Footer */}
             <div className="sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-100 px-6 py-4 flex gap-3">
-              <button onClick={closeModal}
+              <button onClick={requestCloseModal}
                 className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC] transition-all active:scale-95">
                 Cancel
               </button>
@@ -1213,6 +1629,43 @@ setForm(prev => ({
                     {editingClient ? "Update Client" : "Add Client"}
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Discard Changes Confirmation Modal ────────────────────── */}
+      {showDiscardConfirm && (
+        <div className="fixed inset-0 z-[10005] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-slate-950/60 backdrop-blur-xs"
+            onClick={() => setShowDiscardConfirm(false)}
+          />
+          <div className="relative bg-white rounded-[24px] w-full max-w-sm p-6 shadow-2xl border border-slate-100 text-center animate-in fade-in zoom-in-95 duration-150">
+            <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-600 flex items-center justify-center mx-auto mb-4 text-xl shadow-2xs">
+              ⚠️
+            </div>
+            <h3 className="text-[17px] font-bold text-[#1F2937] mb-1.5">
+              Discard Unsaved Changes?
+            </h3>
+            <p className="text-[12px] text-[#6B7280] leading-relaxed mb-6 font-medium">
+              You have unsaved changes in this form. Exiting now will discard your progress. Are you sure you want to exit?
+            </p>
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={handleConfirmDiscard}
+                className="flex-1 h-11 rounded-2xl border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 text-[12px] font-bold transition-all"
+              >
+                Discard Changes
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDiscardConfirm(false)}
+                className="flex-1 h-11 rounded-2xl bg-[#005A87] hover:bg-[#00476b] text-white text-[12px] font-bold transition-all shadow-sm"
+              >
+                Continue Editing
               </button>
             </div>
           </div>

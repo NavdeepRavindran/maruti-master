@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../../../lib/supabaseClient";
+import { formatFamilyName, validateDateRange } from "@/lib/formatUtils";
 
 // PUT /api/clients/[id]/family/[fid]
 export async function PUT(
@@ -10,49 +11,39 @@ export async function PUT(
   const body = await request.json().catch(() => null);
 
   if (!body) {
-    return NextResponse.json(
-      { error: "Invalid body" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
 
-  const admin = supabaseAdmin;
-
-  if (!admin) {
-    return NextResponse.json(
-      { error: "Supabase Admin client not initialized" },
-      { status: 500 }
-    );
+  if (body.date_of_birth) {
+    const dobVal = validateDateRange(body.date_of_birth, "Date of birth");
+    if (!dobVal.isValid) {
+      return NextResponse.json({ error: dobVal.error }, { status: 400 });
+    }
   }
 
   try {
-    const { data, error } = await admin
+    if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized");
+
+    const updatePayload: Record<string, any> = {};
+    if (body.name !== undefined) updatePayload.name = formatFamilyName(body.name);
+    if (body.relationship !== undefined) updatePayload.relationship = body.relationship;
+    if (body.date_of_birth !== undefined) updatePayload.date_of_birth = body.date_of_birth;
+    if (body.phone !== undefined) updatePayload.phone = body.phone;
+    if (body.occupation !== undefined) updatePayload.occupation = body.occupation;
+    if (body.notes !== undefined) updatePayload.notes = body.notes;
+
+    const { data, error } = await supabaseAdmin
       .from("family_members")
-      .update(body)
+      .update(updatePayload)
       .eq("id", fid)
       .eq("client_id", id)
       .select()
       .single();
 
-    if (error) {
-      console.error(error);
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      family_member: data,
-    });
-  } catch (err: unknown) {
-    console.error(err);
-    return NextResponse.json(
-      {
-        error: err instanceof Error ? err.message : "Internal Server Error",
-      },
-      { status: 500 }
-    );
+    if (error) throw error;
+    return NextResponse.json({ family_member: data });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to update family member" }, { status: 500 });
   }
 }
 
@@ -63,55 +54,19 @@ export async function DELETE(
 ) {
   const { id, fid } = await params;
 
-  const admin = supabaseAdmin;
-
-  if (!admin) {
-    return NextResponse.json(
-      { error: "Supabase Admin client not initialized" },
-      { status: 500 }
-    );
-  }
-
   try {
-    // Delete all documents belonging to this family member
-    const { error: docsError } = await admin
-      .from("documents")
-      .delete()
-      .eq("family_member_id", fid);
+    if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized");
 
-    if (docsError) {
-      console.error("Document Delete Error:", docsError);
-      return NextResponse.json(
-        { error: docsError.message },
-        { status: 500 }
-      );
-    }
-
-    // Delete family member
-    const { error: familyError } = await admin
+    await supabaseAdmin.from("documents").delete().eq("family_member_id", fid);
+    const { error: familyError } = await supabaseAdmin
       .from("family_members")
       .delete()
       .eq("id", fid)
       .eq("client_id", id);
 
-    if (familyError) {
-      console.error("Family Delete Error:", familyError);
-      return NextResponse.json(
-        { error: familyError.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({
-      success: true,
-    });
-  } catch (err: unknown) {
-    console.error(err);
-    return NextResponse.json(
-      {
-        error: err instanceof Error ? err.message : "Internal Server Error",
-      },
-      { status: 500 }
-    );
+    if (familyError) throw familyError;
+    return NextResponse.json({ success: true });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message || "Failed to delete family member" }, { status: 500 });
   }
 }
