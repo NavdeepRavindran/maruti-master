@@ -23,43 +23,87 @@ export default function DashboardShell({ children }: { children: React.ReactNode
 
   // Load user from real Supabase session
   const loadUser = useCallback(async () => {
-    const { data: { user: authUser }, error } = await supabase.auth.getUser();
+    const { data: { session }, error } = await supabase.auth.getSession();
+    const authUser = session?.user;
 
-    if (error || !authUser) {
-      router.push("/login");
+    if (error || !session || !authUser) {
+      setUser(null);
       setLoading(false);
+      window.location.replace("/login");
       return;
     }
 
     setUser({
-      name: authUser.user_metadata?.name,
+      name: authUser.user_metadata?.name || authUser.email?.split("@")[0] || "Agent",
       email: authUser.email,
       role: authUser.user_metadata?.role || "Agent",
       persona: authUser.user_metadata?.persona,
     });
     setLoading(false);
-  }, [router, supabase]);
+  }, [supabase]);
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      if (typeof window !== "undefined") {
+        sessionStorage.clear();
+
+        // Clear all Supabase and authentication tokens from localStorage
+        const keysToRemove = Object.keys(localStorage).filter(
+          (k) => k.startsWith("sb-") || k.includes("supabase") || k.includes("token") || k.includes("auth")
+        );
+        keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+        // Clear all cookies
+        document.cookie.split(";").forEach((cookie) => {
+          const eqPos = cookie.indexOf("=");
+          const name = eqPos > -1 ? cookie.substring(0, eqPos).trim() : cookie.trim();
+          if (name) {
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;`;
+            document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=${window.location.hostname};`;
+          }
+        });
+      }
+
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.error("Sign out error:", err);
+    } finally {
+      setUser(null);
+      // Replace history state to prevent back button from re-entering admin page
+      window.location.replace("/login");
+    }
+  }, [supabase]);
 
   useEffect(() => {
     loadUser();
 
+    // Re-verify session when user navigates using Back/Forward cache (bfcache)
+    const handlePageShow = () => {
+      loadUser();
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "SIGNED_OUT") {
-        router.push("/login");
+        setUser(null);
+        window.location.replace("/login");
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, [loadUser, supabase, router]);
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      subscription.unsubscribe();
+    };
+  }, [loadUser, supabase]);
 
   // Auto-logout on inactivity (FR-02)
   const resetTimer = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(async () => {
-      await supabase.auth.signOut();
-      router.push("/login");
+      await handleSignOut();
     }, INACTIVITY_TIMEOUT);
-  }, [router, supabase]);
+  }, [handleSignOut]);
 
   useEffect(() => {
     const events = ["mousedown", "mousemove", "keypress", "scroll", "touchstart"];
@@ -70,11 +114,6 @@ export default function DashboardShell({ children }: { children: React.ReactNode
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, [resetTimer]);
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-  };
 
   if (loading) {
     return (

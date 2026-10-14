@@ -47,8 +47,14 @@ export default function ClientPortalDashboard() {
   }
 
   const handleLogout = async () => {
-    await fetch("/api/auth/client-logout", { method: "POST" });
-    router.push("/client-login");
+    try {
+      await fetch("/api/auth/client-logout", { method: "POST" });
+    } catch { /* silent */ }
+    if (typeof window !== "undefined") {
+      sessionStorage.clear();
+      localStorage.removeItem("client_auth");
+    }
+    window.location.replace("/client-login");
   };
 
   const formatDate = (dateString?: string) => {
