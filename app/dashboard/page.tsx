@@ -123,18 +123,28 @@ export default function DashboardPage() {
         fetch("/api/birthdays?range=week",     { headers }),
         fetch("/api/anniversaries?range=week", { headers }),
       ]);
-      const c = await cR.json(), d = await dR.json(), b = await bR.json(), a = await aR.json();
+      const c = await cR.json().catch(() => ({ clients: [], total: 0 }));
+      const d = await dR.json().catch(() => ({ documents: [], total: 0 }));
+      const b = await bR.json().catch(() => ({ birthdays: [], stats: {} }));
+      const a = await aR.json().catch(() => ({ anniversaries: [], stats: {} }));
+
+      const clientList: ClientItem[] = Array.isArray(c) ? c : (c.clients || []);
+      const totalClientsCount = typeof c.total === "number" ? c.total : clientList.length;
+
+      const docList: DocumentItem[] = Array.isArray(d) ? d : (d.documents || []);
+      const totalDocsCount = typeof d.total === "number" ? d.total : docList.length;
+
       setStats({
-        totalClients:          c.total            || (c.clients?.length) || 0,
-        totalDocuments:        d.total            || (d.documents?.length) || 0,
+        totalClients:          totalClientsCount,
+        totalDocuments:        totalDocsCount,
         upcomingBirthdays:     b.stats?.thisWeek  || 0,
         todayBirthdays:        b.stats?.today     || 0,
         todayAnniversaries:    a.stats?.today     || 0,
         upcomingAnniversaries: a.stats?.thisWeek  || 0,
       });
       setBirthdays((b.birthdays || []).slice(0, 5));
-      setRecentDocs((d.documents || []).slice(0, 5));
-      const sortedClients = [...(c.clients || [])].sort(
+      setRecentDocs(docList.slice(0, 5));
+      const sortedClients = [...clientList].sort(
         (clA: ClientItem, clB: ClientItem) =>
           new Date(clB.created_at || 0).getTime() - new Date(clA.created_at || 0).getTime()
       );
@@ -308,64 +318,8 @@ export default function DashboardPage() {
         {/* Main grid */}
         <div className="grid lg:grid-cols-5 gap-5 sm:gap-6">
 
-          {/* Documents & Recent Clients — 3 cols */}
+          {/* Clients & Documents — 3 cols */}
           <div className="lg:col-span-3 flex flex-col gap-5 sm:gap-6">
-
-            {/* Documents */}
-            <div className="bg-white rounded-[22px] border border-slate-100 shadow-sm overflow-hidden">
-              <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-[#7C6CF6]/10 text-[#7C6CF6] flex items-center justify-center"><IC.Doc /></div>
-                  <div>
-                    <h2 className="text-[15px] font-bold text-[#1F2937]">Recent Documents</h2>
-                    <p className="text-xs text-[#6B7280] font-medium leading-none mt-1">Latest uploads across clients</p>
-                  </div>
-                </div>
-                <Link href="/dashboard/documents" className="flex items-center gap-1 text-xs font-bold text-[#005A87] hover:text-[#0E7AC7] transition-colors shrink-0">
-                  View all <IC.ChevronRight />
-                </Link>
-              </div>
-              <div className="hidden sm:grid grid-cols-12 px-6 py-2.5 bg-[#F7F9FC]">
-                {["Name", "Client", "Size", "Uploaded"].map((h, i) => (
-                  <span key={h} className={`text-[10px] font-bold uppercase tracking-widest text-[#6B7280] ${i === 0 ? "col-span-5" : i === 1 ? "col-span-3" : i === 2 ? "col-span-2 text-right" : "col-span-2 text-right"}`}>{h}</span>
-                ))}
-              </div>
-              <div className="divide-y divide-slate-50">
-                {loading ? (
-                  [1,2,3,4].map(i => (
-                    <div key={i} className="flex items-center gap-3 px-5 sm:px-6 py-4">
-                      <Skeleton className="w-10 h-10 shrink-0" />
-                      <div className="flex-1 space-y-1.5"><Skeleton className="h-3 w-2/5" /><Skeleton className="h-2.5 w-1/4" /></div>
-                      <Skeleton className="h-2.5 w-16 hidden sm:block" />
-                    </div>
-                  ))
-                ) : recentDocs.length === 0 ? (
-                  <div className="py-16 text-center px-5">
-                    <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]"><IC.Folder /></div>
-                    <p className="text-sm font-semibold text-[#1F2937]">No documents yet</p>
-                    <Link href="/dashboard/documents" className="text-xs text-[#005A87] font-bold hover:underline mt-1 inline-block">Upload your first →</Link>
-                  </div>
-                ) : (
-                  recentDocs.map((doc, i) => {
-                    const m = getDocMeta(doc.file_type);
-                    return (
-                      <div key={i} className="grid sm:grid-cols-12 items-center px-5 sm:px-6 py-3.5 gap-1 sm:gap-0 hover:bg-[#F7F9FC] transition-colors group">
-                        <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${m.bg}`}>
-                            <span className={`text-[9px] font-bold leading-none ${m.text}`}>{doc.file_type}</span>
-                          </div>
-                          <p className="text-sm font-semibold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">{doc.file_name}</p>
-                        </div>
-                        <p className="sm:col-span-3 hidden sm:block text-[13px] text-[#6B7280] font-medium truncate pl-1">{doc.client_name || "—"}</p>
-                        <p className="sm:col-span-2 hidden sm:block text-xs text-[#6B7280] font-medium text-right">{formatSize(doc.file_size)}</p>
-                        <p className="sm:col-span-2 hidden sm:block text-xs text-[#6B7280] font-medium text-right">{formatTime(doc.created_at)}</p>
-                        <p className="sm:hidden text-xs text-[#6B7280] font-medium pl-[52px] -mt-1">{formatSize(doc.file_size)} · {formatTime(doc.created_at)}{doc.client_name ? ` · ${doc.client_name}` : ""}</p>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
 
             {/* Recently Added Clients */}
             <div className="bg-white rounded-[22px] border border-slate-100 shadow-sm overflow-hidden">
@@ -467,6 +421,62 @@ export default function DashboardPage() {
                           <span>· {formatTime(client.created_at)}</span>
                         </div>
                       </Link>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Recent Documents */}
+            <div className="bg-white rounded-[22px] border border-slate-100 shadow-sm overflow-hidden">
+              <div className="flex items-center justify-between px-5 sm:px-6 py-4 sm:py-5 border-b border-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#7C6CF6]/10 text-[#7C6CF6] flex items-center justify-center"><IC.Doc /></div>
+                  <div>
+                    <h2 className="text-[15px] font-bold text-[#1F2937]">Recent Documents</h2>
+                    <p className="text-xs text-[#6B7280] font-medium leading-none mt-1">Latest uploads across clients</p>
+                  </div>
+                </div>
+                <Link href="/dashboard/documents" className="flex items-center gap-1 text-xs font-bold text-[#005A87] hover:text-[#0E7AC7] transition-colors shrink-0">
+                  View all <IC.ChevronRight />
+                </Link>
+              </div>
+              <div className="hidden sm:grid grid-cols-12 px-6 py-2.5 bg-[#F7F9FC]">
+                {["Name", "Client", "Size", "Uploaded"].map((h, i) => (
+                  <span key={h} className={`text-[10px] font-bold uppercase tracking-widest text-[#6B7280] ${i === 0 ? "col-span-5" : i === 1 ? "col-span-3" : i === 2 ? "col-span-2 text-right" : "col-span-2 text-right"}`}>{h}</span>
+                ))}
+              </div>
+              <div className="divide-y divide-slate-50">
+                {loading ? (
+                  [1,2,3,4].map(i => (
+                    <div key={i} className="flex items-center gap-3 px-5 sm:px-6 py-4">
+                      <Skeleton className="w-10 h-10 shrink-0" />
+                      <div className="flex-1 space-y-1.5"><Skeleton className="h-3 w-2/5" /><Skeleton className="h-2.5 w-1/4" /></div>
+                      <Skeleton className="h-2.5 w-16 hidden sm:block" />
+                    </div>
+                  ))
+                ) : recentDocs.length === 0 ? (
+                  <div className="py-16 text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]"><IC.Folder /></div>
+                    <p className="text-sm font-semibold text-[#1F2937]">No documents yet</p>
+                    <Link href="/dashboard/documents" className="text-xs text-[#005A87] font-bold hover:underline mt-1 inline-block">Upload your first →</Link>
+                  </div>
+                ) : (
+                  recentDocs.map((doc, i) => {
+                    const m = getDocMeta(doc.file_type);
+                    return (
+                      <div key={i} className="grid sm:grid-cols-12 items-center px-5 sm:px-6 py-3.5 gap-1 sm:gap-0 hover:bg-[#F7F9FC] transition-colors group">
+                        <div className="sm:col-span-5 flex items-center gap-3 min-w-0">
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${m.bg}`}>
+                            <span className={`text-[9px] font-bold leading-none ${m.text}`}>{doc.file_type}</span>
+                          </div>
+                          <p className="text-sm font-semibold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">{doc.file_name}</p>
+                        </div>
+                        <p className="sm:col-span-3 hidden sm:block text-[13px] text-[#6B7280] font-medium truncate pl-1">{doc.client_name || "—"}</p>
+                        <p className="sm:col-span-2 hidden sm:block text-xs text-[#6B7280] font-medium text-right">{formatSize(doc.file_size)}</p>
+                        <p className="sm:col-span-2 hidden sm:block text-xs text-[#6B7280] font-medium text-right">{formatTime(doc.created_at)}</p>
+                        <p className="sm:hidden text-xs text-[#6B7280] font-medium pl-[52px] -mt-1">{formatSize(doc.file_size)} · {formatTime(doc.created_at)}{doc.client_name ? ` · ${doc.client_name}` : ""}</p>
+                      </div>
                     );
                   })
                 )}

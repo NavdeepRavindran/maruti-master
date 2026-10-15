@@ -22,26 +22,45 @@ export async function GET(
 
     if (error || !client) throw error || new Error("Client not found");
 
-    const { data: family } = await supabaseAdmin
-      .from("family_members")
-      .select("*")
-      .eq("client_id", id)
-      .order("created_at", { ascending: true });
+    let family: any[] = [];
+    try {
+      const { data } = await supabaseAdmin
+        .from("family_members")
+        .select("*")
+        .eq("client_id", id);
+      if (data) family = data;
+    } catch {}
 
-    const { data: docs } = await supabaseAdmin
-      .from("documents")
-      .select("*")
-      .eq("client_id", id)
-      .order("created_at", { ascending: false });
+    let docs: any[] = [];
+    try {
+      const { data } = await supabaseAdmin
+        .from("documents")
+        .select("*")
+        .eq("client_id", id);
+      if (data) docs = data;
+    } catch {}
+
+    const rawSurname = client.surname || client.fatherName || client.father_name || "";
+    const surname = rawSurname ? rawSurname.toUpperCase() : "";
 
     return NextResponse.json({
       client: {
         ...client,
-        family_count: family?.length || 0,
-        document_count: docs?.length || 0,
+        surname,
+        fullName: `${client.name || ""}${surname ? " " + surname : ""}`.trim(),
+        alternate_mobile: client.alternate_mobile || client.alternateMobile || "",
+        alternateMobile: client.alternate_mobile || client.alternateMobile || "",
+        pin_code: client.pin_code || client.pinCode || "",
+        pinCode: client.pin_code || client.pinCode || "",
+        date_of_birth: client.date_of_birth || client.dob || "",
+        anniversary_date: client.anniversary_date || client.anniversaryDate || "",
+        clientloginid: client.clientloginid || client.clientLoginId || client.phone || "",
+        plain_password: client.plain_password || client.plainPassword || client.temporarypassword || "",
+        family_count: family.length,
+        document_count: docs.length,
       },
-      family_members: family || [],
-      documents: docs || [],
+      family_members: family,
+      documents: docs,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Client not found" }, { status: 404 });
@@ -164,7 +183,13 @@ export async function DELETE(
         .from("clients")
         .update({ is_deleted: true, deleted_at: new Date().toISOString() })
         .eq("id", id);
-      if (error) throw error;
+      if (error) {
+        await supabaseAdmin.from("documents").delete().eq("client_id", id);
+        await supabaseAdmin.from("family_members").delete().eq("client_id", id);
+        const { error: delErr } = await supabaseAdmin.from("clients").delete().eq("id", id);
+        if (delErr) throw delErr;
+        return NextResponse.json({ success: true, message: "Client deleted successfully" });
+      }
       return NextResponse.json({ success: true, message: "Client moved to Recycle Bin" });
     }
   } catch (err: any) {

@@ -48,22 +48,36 @@ export async function GET(request: Request) {
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
 
-    const { data: clients, error: cErr } = await supabaseAdmin
+    const { data: rawClients, error: cErr } = await supabaseAdmin
       .from("clients")
-      .select("id, name, date_of_birth, phone")
+      .select("*")
       .not("date_of_birth", "is", null)
-      .eq("is_deleted", false)
       .order("name");
 
     if (cErr) throw cErr;
 
-    const { data: familyMembers, error: fErr } = await supabaseAdmin
-      .from("family_members")
-      .select("id, client_id, name, date_of_birth, relationship, phone, clients(name)")
-      .not("date_of_birth", "is", null)
-      .order("name");
+    const clients = (rawClients || []).filter(
+      (c: any) => !c.is_deleted || c.is_deleted === false || c.is_deleted === "false"
+    );
 
-    if (fErr) throw fErr;
+    let familyMembers: any[] = [];
+    try {
+      const { data: fData, error: fErr } = await supabaseAdmin
+        .from("family_members")
+        .select("id, client_id, name, date_of_birth, relationship, phone, clients(name)")
+        .not("date_of_birth", "is", null)
+        .order("name");
+
+      if (!fErr && fData) {
+        familyMembers = fData;
+      } else {
+        const { data: fDataFallback } = await supabaseAdmin
+          .from("family_members")
+          .select("id, client_id, name, date_of_birth, relationship, phone")
+          .not("date_of_birth", "is", null);
+        if (fDataFallback) familyMembers = fDataFallback;
+      }
+    } catch {}
 
     const entries: BirthdayEntry[] = [];
 

@@ -48,22 +48,26 @@ export async function GET(request: Request) {
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
 
-    const { data: clients, error } = await supabaseAdmin
+    const { data: rawClients, error } = await supabaseAdmin
       .from("clients")
-      .select("id, name, anniversary_date, phone")
+      .select("*")
       .not("anniversary_date", "is", null)
-      .eq("is_deleted", false)
       .order("name");
 
     if (error) throw error;
 
+    const clients = (rawClients || []).filter(
+      (c: any) => !c.is_deleted || c.is_deleted === false || c.is_deleted === "false"
+    );
+
     const entries: AnniversaryEntry[] = [];
 
     for (const client of clients || []) {
-      if (client.anniversary_date) {
+      const anniv = client.anniversary_date || client.anniversaryDate;
+      if (anniv) {
         entries.push({
           name: client.name,
-          date_of_birth: client.anniversary_date,
+          date_of_birth: anniv,
           relationship: "Client",
           phone: client.phone,
           client_id: client.id,

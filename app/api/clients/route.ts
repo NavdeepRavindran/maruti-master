@@ -90,7 +90,7 @@ export async function GET(request: Request) {
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
 
-    // Auto-purge soft-deleted clients older than 3 months (90 days) permanently
+    // Auto-purge soft-deleted clients older than 3 months (90 days) permanently if supported
     try {
       const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
       await supabaseAdmin
@@ -100,71 +100,114 @@ export async function GET(request: Request) {
         .lt("deleted_at", threeMonthsAgo);
     } catch {}
 
-    let query = supabaseAdmin
+    // Query clients table safely - select(*) never fails on missing column names
+    let { data, error } = await supabaseAdmin
       .from("clients")
-      .select(`
-        id, name, surname, phone, alternate_mobile, email,
-        date_of_birth, anniversary_date, address, city, state, pin_code,
-        gender, marital_status, occupation, notes,
-        status, clientloginid, profile_pic, created_at, is_deleted, deleted_at,
-        family_members(count),
-        documents(count)
-      `)
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (search) {
-      query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%,email.ilike.%${search}%`);
+    if (error) {
+      // Fallback without ordering in case created_at is not indexed or named differently
+      const fallback = await supabaseAdmin.from("clients").select("*");
+      if (fallback.error) {
+        throw fallback.error;
+      }
+      data = fallback.data;
     }
+
+    // Safely collect document and family member counts without fragile PostgREST relation joins
+    let docCounts: Record<string, number> = {};
+    let familyCounts: Record<string, number> = {};
+    try {
+      const { data: docs } = await supabaseAdmin.from("documents").select("client_id");
+      if (docs) {
+        for (const d of docs) {
+          if (d.client_id) docCounts[d.client_id] = (docCounts[d.client_id] || 0) + 1;
+        }
+      }
+    } catch {}
+
+    try {
+      const { data: fam } = await supabaseAdmin.from("family_members").select("client_id");
+      if (fam) {
+        for (const f of fam) {
+          if (f.client_id) familyCounts[f.client_id] = (familyCounts[f.client_id] || 0) + 1;
+        }
+      }
+    } catch {}
+
+    let filtered = data || [];
+
+    // Filter soft deletion safely in JavaScript
     if (status === "recycle_bin" || status === "deleted") {
-      query = query.eq("is_deleted", true);
+      filtered = filtered.filter((c: any) => c.is_deleted === true || c.is_deleted === "true");
     } else {
-      query = query.or("is_deleted.is.null,is_deleted.eq.false");
+      filtered = filtered.filter((c: any) => !c.is_deleted || c.is_deleted === false || c.is_deleted === "false");
       if (status && status !== "all") {
-        query = query.eq("status", status);
+        filtered = filtered.filter((c: any) => (c.status || "Active").toLowerCase() === status.toLowerCase());
       }
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      throw error;
+    // Filter search safely in JavaScript
+    if (search) {
+      const s = search.toLowerCase();
+      filtered = filtered.filter((c: any) => {
+        const nameMatch = (c.name || "").toLowerCase().includes(s);
+        const surnameMatch = (c.surname || c.fatherName || c.father_name || "").toLowerCase().includes(s);
+        const phoneMatch = (c.phone || "").toLowerCase().includes(s);
+        const emailMatch = (c.email || "").toLowerCase().includes(s);
+        return nameMatch || surnameMatch || phoneMatch || emailMatch;
+      });
     }
 
-    const clients = (data || []).map((c: any) => ({
-      id: c.id,
-      name: c.name,
-      surname: (c.surname || "").toUpperCase(),
-      fullName: `${c.name || ""}${c.surname ? " " + c.surname.toUpperCase() : ""}`.trim(),
-      phone: c.phone,
-      alternate_mobile: c.alternate_mobile || "",
-      alternateMobile: c.alternate_mobile || "",
-      email: c.email || "",
-      date_of_birth: c.date_of_birth,
-      anniversary_date: c.anniversary_date || "",
-      anniversaryDate: c.anniversary_date || "",
-      address: c.address || "",
-      city: c.city || "",
-      state: c.state || "",
-      pin_code: c.pin_code || "",
-      pinCode: c.pin_code || "",
-      gender: c.gender || "",
-      marital_status: c.marital_status || "",
-      maritalStatus: c.marital_status || "",
-      occupation: c.occupation || "",
-      notes: c.notes || "",
-      status: c.status,
-      clientLoginId: c.clientloginid,
-      profile_pic: c.profile_pic || null,
-      created_at: c.created_at,
-      is_deleted: Boolean(c.is_deleted),
-      deleted_at: c.deleted_at || null,
-      family_count: c.family_members?.[0]?.count ?? 0,
-      document_count: c.documents?.[0]?.count ?? 0,
-    }));
+    const clients = filtered.map((c: any) => {
+      const rawSurname = c.surname || c.fatherName || c.father_name || "";
+      const surname = rawSurname ? rawSurname.toUpperCase() : "";
+      const fullName = `${c.name || ""}${surname ? " " + surname : ""}`.trim();
+      const phone = c.phone || "";
+      const altMobile = c.alternate_mobile || c.alternateMobile || c.alt_phone || "";
+      const email = c.email || "";
+      const dob = c.date_of_birth || c.dob || "";
+      const anniv = c.anniversary_date || c.anniversaryDate || "";
+      const pin = c.pin_code || c.pinCode || c.pincode || "";
+
+      return {
+        id: c.id,
+        name: c.name || "",
+        surname,
+        fullName,
+        phone,
+        alternate_mobile: altMobile,
+        alternateMobile: altMobile,
+        email,
+        date_of_birth: dob,
+        anniversary_date: anniv,
+        anniversaryDate: anniv,
+        address: c.address || "",
+        city: c.city || "",
+        state: c.state || "",
+        pin_code: pin,
+        pinCode: pin,
+        gender: c.gender || "",
+        marital_status: c.marital_status || c.maritalStatus || "",
+        maritalStatus: c.marital_status || c.maritalStatus || "",
+        occupation: c.occupation || "",
+        notes: c.notes || "",
+        status: c.status || "Active",
+        clientLoginId: c.clientloginid || c.clientLoginId || phone,
+        profile_pic: c.profile_pic || null,
+        created_at: c.created_at || new Date().toISOString(),
+        is_deleted: Boolean(c.is_deleted),
+        deleted_at: c.deleted_at || null,
+        family_count: familyCounts[c.id] ?? (c.family_members?.[0]?.count ?? 0),
+        document_count: docCounts[c.id] ?? (c.documents?.[0]?.count ?? 0),
+      };
+    });
 
     return NextResponse.json({ clients, total: clients.length });
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to fetch clients" }, { status: 500 });
+    console.error("GET /api/clients error:", err);
+    return NextResponse.json({ error: err.message || "Failed to fetch clients", clients: [], total: 0 }, { status: 500 });
   }
 }
 

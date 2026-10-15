@@ -24,24 +24,27 @@ export async function POST(request: Request) {
 
     const { data: client, error } = await supabaseAdmin
       .from("clients")
-      .select("id, plain_password, temporarypassword, status, is_deleted")
+      .select("*")
       .or(`clientloginid.eq.${id},phone.eq.${id}`)
       .maybeSingle();
 
-    if (error || !client || client.is_deleted || client.status === "Inactive") {
+    if (error || !client || client.is_deleted === true || client.status === "Inactive") {
       return NextResponse.json({ error: "Invalid login credentials." }, { status: 401 });
     }
 
     // Check password against plain_password or temporarypassword (plain or hashed)
+    const plainPwd = client.plain_password || client.plainPassword;
+    const tempPwd = client.temporarypassword || client.temporaryPassword;
+
     let isMatch = false;
-    if (client.plain_password && client.plain_password === pwd) {
+    if (plainPwd && plainPwd === pwd) {
       isMatch = true;
-    } else if (client.temporarypassword) {
-      if (client.temporarypassword === pwd) {
+    } else if (tempPwd) {
+      if (tempPwd === pwd) {
         isMatch = true;
       } else {
         try {
-          isMatch = await bcrypt.compare(pwd, client.temporarypassword);
+          isMatch = await bcrypt.compare(pwd, tempPwd);
         } catch {}
       }
     }
