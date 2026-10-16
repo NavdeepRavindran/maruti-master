@@ -292,14 +292,15 @@ export default function ClientProfilePage({
         return;
       }
     }
-    if (editForm.anniversary_date) {
-      const annivVal = validateDateRange(editForm.anniversary_date, "Anniversary date");
+    const anniv = (editForm.anniversary_date || "").trim();
+    if (anniv) {
+      const annivVal = validateDateRange(anniv, "Anniversary date");
       if (!annivVal.isValid) {
         setEditModalError(annivVal.error!);
         toast.error(annivVal.error!);
         return;
       }
-      if (editForm.date_of_birth && editForm.anniversary_date < editForm.date_of_birth) {
+      if (editForm.date_of_birth && anniv < editForm.date_of_birth) {
         const err = "Anniversary date cannot be earlier than Date of Birth.";
         setEditModalError(err);
         toast.error(err);
@@ -323,6 +324,9 @@ export default function ClientProfilePage({
         headers,
         body: JSON.stringify({
           ...editForm,
+          anniversary_date: anniv || null,
+          anniversaryDate: anniv || null,
+          notes: editForm.notes ?? "",
           surname: (editForm.surname || "").trim().toUpperCase(),
           profile_pic: editForm.profile_pic,
         }),
@@ -693,8 +697,19 @@ async function deleteDocument(did: string) {
             onClick={async () => {
               if (!client) return;
               const isInactive = client.status === "Inactive";
-              const newStatus = isInactive ? "Active" : "Inactive";
-              if (!confirm(isInactive ? `Reactivate client ${client.name}?` : `Deactivate client ${client.name}?`)) return;
+              const hasKyc = docs.some(
+                (d) =>
+                  d.category === "KYC / Identity" ||
+                  /ckyc|kyc|aadhaar|pan/i.test(d.name) ||
+                  /ckyc|kyc|aadhaar|pan/i.test(d.file_name)
+              );
+              const newStatus = isInactive ? (hasKyc ? "Active" : "Pending") : "Inactive";
+              const confirmMsg = isInactive
+                ? (hasKyc
+                    ? `Reactivate client ${client.name}?`
+                    : `Client ${client.name} does not have KYC uploaded yet. Move them to Pending?`)
+                : `Deactivate client ${client.name}?`;
+              if (!confirm(confirmMsg)) return;
               try {
                 const headers = await authHeaders(true);
                 const res = await fetch(`/api/clients/${id}`, {
@@ -704,7 +719,13 @@ async function deleteDocument(did: string) {
                 });
                 if (res.ok) {
                   setClient((prev) => (prev ? { ...prev, status: newStatus } : prev));
-                  toast.success(isInactive ? "Client reactivated!" : "Client marked as Inactive!");
+                  if (!isInactive) {
+                    toast.success("Client marked as Inactive!");
+                  } else if (hasKyc) {
+                    toast.success("Client reactivated to Active!");
+                  } else {
+                    toast("Client moved to Pending (KYC document required to become Active).", { icon: "ℹ️" });
+                  }
                   fetchClient();
                 }
               } catch {
@@ -924,6 +945,19 @@ async function deleteDocument(did: string) {
                     {formatDate(client.date_of_birth)}
                   </p>
                 </div>
+                {(client.anniversary_date || (client as any).anniversaryDate) && (
+                  <>
+                    <div className="w-px bg-slate-100" />
+                    <div>
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">
+                        Anniversary
+                      </p>
+                      <p className="text-[16px] font-bold text-[#EC4899] mt-0.5">
+                        {formatDate(client.anniversary_date || (client as any).anniversaryDate)}
+                      </p>
+                    </div>
+                  </>
+                )}
                 <div className="w-px bg-slate-100" />
                 <div>
                   <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">
@@ -1068,9 +1102,9 @@ async function deleteDocument(did: string) {
               { label: "Alternate Mobile", value: client.alternate_mobile },
               {
                 label: "Anniversary",
-                value: client.anniversary_date
-                  ? formatDate(client.anniversary_date)
-                  : null,
+                value: (client.anniversary_date || (client as any).anniversaryDate)
+                  ? formatDate(client.anniversary_date || (client as any).anniversaryDate)
+                  : "—",
               },
               { label: "City", value: client.city },
               { label: "State", value: client.state },
@@ -1965,7 +1999,24 @@ async function deleteDocument(did: string) {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Anniversary Date</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className={labelCls}>Anniversary Date</label>
+                    {editForm.anniversary_date && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditForm((prev) => ({
+                            ...prev,
+                            anniversary_date: "",
+                          }))
+                        }
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                        title="Reset anniversary date to empty"
+                      >
+                        ✕ Clear
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="date"
                     min="1900-01-01"

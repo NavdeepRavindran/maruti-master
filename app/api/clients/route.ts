@@ -29,8 +29,8 @@ const clientSchema = z.object({
       });
     }
   }),
-  anniversaryDate: z.string().optional().superRefine((val, ctx) => {
-    if (!val) return;
+  anniversaryDate: z.string().optional().nullable().superRefine((val, ctx) => {
+    if (!val || val.trim() === "") return;
     const res = validateDateRange(val, "Anniversary date");
     if (!res.isValid) {
       ctx.addIssue({
@@ -51,7 +51,7 @@ const clientSchema = z.object({
   profile_pic: z.string().optional(),
 }).refine(
   (data) => {
-    if (!data.anniversaryDate) return true;
+    if (!data.anniversaryDate || data.anniversaryDate.trim() === "") return true;
     const today = new Date().toISOString().split("T")[0];
     if (data.anniversaryDate > today) return false;
     if (data.date_of_birth && data.anniversaryDate < data.date_of_birth) return false;
@@ -118,11 +118,23 @@ export async function GET(request: Request) {
     // Safely collect document and family member counts without fragile PostgREST relation joins
     let docCounts: Record<string, number> = {};
     let familyCounts: Record<string, number> = {};
+    let hasKyc: Record<string, boolean> = {};
     try {
-      const { data: docs } = await supabaseAdmin.from("documents").select("client_id");
+      const { data: docs } = await supabaseAdmin.from("documents").select("client_id, category, name, file_name");
       if (docs) {
         for (const d of docs) {
-          if (d.client_id) docCounts[d.client_id] = (docCounts[d.client_id] || 0) + 1;
+          if (d.client_id) {
+            docCounts[d.client_id] = (docCounts[d.client_id] || 0) + 1;
+            const isKyc = (
+              d.category === "KYC / Identity" ||
+              d.category === "KYC" ||
+              /ckyc|kyc|aadhaar|pan/i.test(d.name || "") ||
+              /ckyc|kyc|aadhaar|pan/i.test(d.file_name || "")
+            );
+            if (isKyc) {
+              hasKyc[d.client_id] = true;
+            }
+          }
         }
       }
     } catch {}
@@ -136,6 +148,13 @@ export async function GET(request: Request) {
       }
     } catch {}
 
+    const getComputedStatus = (c: any) => {
+      if (c.status === "Inactive") return "Inactive";
+      if (c.status === "Active") return "Active";
+      // If KYC document is uploaded, client is Active, otherwise Pending
+      return hasKyc[c.id] ? "Active" : "Pending";
+    };
+
     let filtered = data || [];
 
     // Filter soft deletion safely in JavaScript
@@ -144,7 +163,7 @@ export async function GET(request: Request) {
     } else {
       filtered = filtered.filter((c: any) => !c.is_deleted || c.is_deleted === false || c.is_deleted === "false");
       if (status && status !== "all") {
-        filtered = filtered.filter((c: any) => (c.status || "Active").toLowerCase() === status.toLowerCase());
+        filtered = filtered.filter((c: any) => getComputedStatus(c).toLowerCase() === status.toLowerCase());
       }
     }
 
@@ -193,7 +212,7 @@ export async function GET(request: Request) {
         maritalStatus: c.marital_status || c.maritalStatus || "",
         occupation: c.occupation || "",
         notes: c.notes || "",
-        status: c.status || "Active",
+        status: getComputedStatus(c),
         clientLoginId: c.clientloginid || c.clientLoginId || phone,
         profile_pic: c.profile_pic || null,
         created_at: c.created_at || new Date().toISOString(),

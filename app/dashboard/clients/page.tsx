@@ -144,6 +144,7 @@ export default function ClientsPage() {
     name: "", surname: "", phone: "", alternateMobile: "", email: "", date_of_birth: "",
     anniversaryDate: "", gender: "", maritalStatus: "", occupation: "",
     address: "", town: "", city: "", state: "", pinCode: "", notes: "",
+    status: "Active",
     profile_pic: "", // base64 data URL
   };
 
@@ -152,6 +153,15 @@ export default function ClientsPage() {
   const [saving, setSaving]         = useState(false);
   const [total, setTotal]           = useState(0);
   const [modalError, setModalError] = useState<string | null>(null);
+
+  // Helper for auth headers
+  const getAuthTokenAndHeaders = useCallback(async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token || null;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return { token, headers };
+  }, [supabase]);
 
   // Discard Confirmation Modal state (prevents accidental closing on outside clicks)
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
@@ -253,18 +263,31 @@ setForm(prev => ({
     }
   }, []);
 
+  const fetchAllClientsSummary = useCallback(async () => {
+    try {
+      const { token, headers } = await getAuthTokenAndHeaders();
+      if (!token) return;
+      const res = await fetch("/api/clients", { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.clients) setAllClients(data.clients);
+      }
+    } catch { /* silent */ }
+  }, [getAuthTokenAndHeaders]);
+
+  useEffect(() => {
+    fetchAllClientsSummary();
+  }, [fetchAllClientsSummary]);
+
   const fetchClients = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { token, headers } = await getAuthTokenAndHeaders();
       if (!token) return;
       const p = new URLSearchParams();
       if (search) p.set("search", search);
       if (filter !== "all") p.set("status", filter);
-      const res = await fetch(`/api/clients?${p}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`/api/clients?${p}`, { headers });
       const data = await res.json();
       setClients(data.clients || []);
       setTotal(data.total || (data.clients?.length) || 0);
@@ -272,7 +295,7 @@ setForm(prev => ({
         setAllClients(data.clients || []);
       }
     } catch { /* silent */ } finally { setLoading(false); }
-  }, [search, filter, supabase]);
+  }, [search, filter, getAuthTokenAndHeaders]);
 
   useEffect(() => {
     const t = setTimeout(fetchClients, 300);
@@ -282,22 +305,9 @@ setForm(prev => ({
   // Ensure allClients is available when Add Modal opens
   useEffect(() => {
     if (showAddModal && allClients.length === 0) {
-      (async () => {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          const token = session?.access_token;
-          if (!token) return;
-          const res = await fetch("/api/clients", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.clients) setAllClients(data.clients);
-          }
-        } catch { /* silent */ }
-      })();
+      fetchAllClientsSummary();
     }
-  }, [showAddModal, allClients.length, supabase]);
+  }, [showAddModal, allClients.length, fetchAllClientsSummary]);
 
   // ── Profile pic handler ──────────────────────────────────────────────────
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -361,15 +371,16 @@ setForm(prev => ({
       toast.error(msg);
       return;
     }
-    if (formData.anniversaryDate) {
-      const annivCheck = validateDateRange(formData.anniversaryDate, "Anniversary date");
+    const anniv = (formData.anniversaryDate || "").trim();
+    if (anniv) {
+      const annivCheck = validateDateRange(anniv, "Anniversary date");
       if (!annivCheck.isValid) {
         const msg = annivCheck.error || "Please select a valid Anniversary date.";
         setModalError(msg);
         toast.error(msg);
         return;
       }
-      if (formData.date_of_birth && formData.anniversaryDate < formData.date_of_birth) {
+      if (formData.date_of_birth && anniv < formData.date_of_birth) {
         const msg = "Anniversary date cannot be earlier than Date of Birth.";
         setModalError(msg);
         toast.error(msg);
@@ -398,16 +409,22 @@ setForm(prev => ({
 
     setSaving(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) return;
+      const { token, headers } = await getAuthTokenAndHeaders();
+      if (!token) {
+        toast.error("Authentication missing. Please log in.");
+        return;
+      }
       const authHeaders = {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        ...headers,
       };
 
       const payload = {
         ...formData,
+        anniversaryDate: anniv || null,
+        anniversary_date: anniv || null,
+        notes: formData.notes ?? "",
+        status: formData.status || "Active",
         name: capitalizeWords(formData.name),
         surname: formData.surname.trim().toUpperCase(),
       };
@@ -473,6 +490,8 @@ setForm(prev => ({
 
       closeModal();
       await fetchClients();
+      await fetchAllClientsSummary();
+      await fetchRecycleCount();
     } catch (err: any) {
       const errMsg = err?.message || "An error occurred while saving client details.";
       setModalError(errMsg);
@@ -486,18 +505,17 @@ setForm(prev => ({
 
   const fetchRecycleCount = useCallback(async () => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { token, headers } = await getAuthTokenAndHeaders();
       if (!token) return;
       const res = await fetch("/api/clients?status=recycle_bin", {
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       if (res.ok) {
         const d = await res.json();
         setRecycleCount(d.total || d.clients?.length || 0);
       }
     } catch { /* silent */ }
-  }, [supabase]);
+  }, [getAuthTokenAndHeaders]);
 
   useEffect(() => {
     fetchRecycleCount();
@@ -505,17 +523,23 @@ setForm(prev => ({
 
   const handleDelete = async (id: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { token, headers } = await getAuthTokenAndHeaders();
       if (!token) return;
+
+      // Optimistically update lists and counts in real time
+      setClients(prev => prev.filter(c => c.id !== id));
+      setAllClients(prev => prev.map(c => c.id === id ? { ...c, is_deleted: true } : c));
+      setRecycleCount(prev => prev + 1);
+
       const res = await fetch(`/api/clients/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       if (res.ok) {
         toast.success("Client moved to Recycle Bin.");
       }
       fetchClients();
+      fetchAllClientsSummary();
       fetchRecycleCount();
     } catch { /* silent */ }
     setDeleteConfirm(null);
@@ -523,16 +547,22 @@ setForm(prev => ({
 
   const handleRestore = async (id: string) => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { token, headers } = await getAuthTokenAndHeaders();
       if (!token) return;
+
+      // Optimistically update lists and counts in real time
+      setClients(prev => prev.filter(c => c.id !== id));
+      setAllClients(prev => prev.map(c => c.id === id ? { ...c, is_deleted: false } : c));
+      setRecycleCount(prev => Math.max(0, prev - 1));
+
       const res = await fetch(`/api/clients/${id}/restore`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       if (res.ok) {
         toast.success("Client restored successfully!");
         fetchClients();
+        fetchAllClientsSummary();
         fetchRecycleCount();
       }
     } catch { /* silent */ }
@@ -541,16 +571,16 @@ setForm(prev => ({
   const handlePermanentDelete = async (id: string) => {
     if (!confirm("Permanently delete this client and all associated documents? This action CANNOT be undone.")) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { token, headers } = await getAuthTokenAndHeaders();
       if (!token) return;
       const res = await fetch(`/api/clients/${id}?permanent=true`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       if (res.ok) {
         toast.success("Client permanently deleted.");
         fetchClients();
+        fetchAllClientsSummary();
         fetchRecycleCount();
       }
     } catch { /* silent */ }
@@ -559,10 +589,15 @@ setForm(prev => ({
   const handleEmptyRecycleBin = async () => {
     if (!confirm("Permanently delete ALL clients in the Recycle Bin? This action CANNOT be undone.")) return;
     try {
-      const res = await fetch("/api/clients/recycle-bin", { method: "DELETE" });
+      const { headers } = await getAuthTokenAndHeaders();
+      const res = await fetch("/api/clients/recycle-bin", {
+        method: "DELETE",
+        headers,
+      });
       if (res.ok) {
         toast.success("Recycle Bin emptied.");
         fetchClients();
+        fetchAllClientsSummary();
         fetchRecycleCount();
       }
     } catch { /* silent */ }
@@ -599,20 +634,28 @@ setForm(prev => ({
       pinCode: c.pinCode || c.pin_code || "",
 
       notes: c.notes || "",
+      status: c.status || "Active",
       profile_pic: c.profile_pic || "",
     });
 
     // Also load family members for this client
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) return;
-      const res = await fetch(`/api/clients/${c.id}/family`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setFamilyMembers(data.family_members || []);
+      const { token, headers } = await getAuthTokenAndHeaders();
+      if (token) {
+        const res = await fetch(`/api/clients/${c.id}/family`, {
+          headers,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const rawFm = data.family_members || [];
+          setFamilyMembers(rawFm.map((fm: any) => ({
+            name: fm.name || "",
+            relationship: fm.relationship || "",
+            date_of_birth: fm.date_of_birth || "",
+            phone: fm.phone || "",
+            occupation: fm.occupation || "",
+          })));
+        }
       }
     } catch {
       setFamilyMembers([]);
@@ -637,27 +680,50 @@ setForm(prev => ({
 
   const toggleClientStatus = async (c: ClientData) => {
     const isInactive = c.status === "Inactive";
-    const newStatus = isInactive ? "Active" : "Inactive";
+    const hasKyc = Boolean(c.document_count && c.document_count > 0);
+    // If activating: if KYC not found, move to Pending, not to Active!
+    const newStatus = isInactive ? (hasKyc ? "Active" : "Pending") : "Inactive";
     const msg = isInactive
-      ? `Reactivate client ${c.name} ${(c.surname || "")}?`
+      ? (hasKyc
+          ? `Reactivate client ${c.name} ${(c.surname || "")}?`
+          : `Client ${c.name} ${(c.surname || "")} does not have KYC uploaded yet. Move them to Pending?`)
       : `Deactivate client ${c.name} ${(c.surname || "")}? They will be moved to the Inactive list.`;
     if (!confirm(msg)) return;
 
+    // Immediately update UI numbers and list in real time
+    setClients((prev) =>
+      prev.map((cl) => (cl.id === c.id ? { ...cl, status: newStatus } : cl))
+    );
+    setAllClients((prev) => {
+      const exists = prev.some((cl) => cl.id === c.id);
+      if (exists) {
+        return prev.map((cl) => (cl.id === c.id ? { ...cl, status: newStatus } : cl));
+      }
+      return [...prev, { ...c, status: newStatus }];
+    });
+
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
+      const { token, headers } = await getAuthTokenAndHeaders();
       if (!token) return;
       const res = await fetch(`/api/clients/${c.id}`, {
         method: "PUT",
         headers: {
+          ...headers,
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ status: newStatus }),
       });
       if (res.ok) {
-        await fetchClients();
+        if (!isInactive) {
+          toast.success("Client marked as Inactive!");
+        } else if (hasKyc) {
+          toast.success("Client reactivated to Active!");
+        } else {
+          toast("Client moved to Pending (KYC document required to become Active).", { icon: "ℹ️" });
+        }
       }
+      await fetchClients();
+      await fetchAllClientsSummary();
     } catch {
       /* silent */
     }
@@ -676,13 +742,22 @@ setForm(prev => ({
 
   const statusCounts = useMemo(() => {
     const pool = allClients.length > 0 ? allClients : clients;
+    const nonDeleted = pool.filter((c) => !c.is_deleted);
     return {
-      all: total || pool.length,
-      Active: pool.filter((c) => c.status === "Active").length,
-      Pending: pool.filter((c) => c.status === "Pending").length,
-      Inactive: pool.filter((c) => c.status === "Inactive").length,
+      all: nonDeleted.length,
+      Active: nonDeleted.filter((c) => c.status === "Active").length,
+      Pending: nonDeleted.filter((c) => c.status === "Pending").length,
+      Inactive: nonDeleted.filter((c) => c.status === "Inactive").length,
     };
-  }, [allClients, clients, total]);
+  }, [allClients, clients]);
+
+  const displayedClients = useMemo(() => {
+    return clients.filter((c) => {
+      if (filter === "all") return !c.is_deleted;
+      if (filter === "recycle_bin") return Boolean(c.is_deleted);
+      return !c.is_deleted && c.status?.toLowerCase() === filter.toLowerCase();
+    });
+  }, [clients, filter]);
 
   return (
     <div className="min-h-screen bg-[#F7F9FC]">
@@ -803,7 +878,7 @@ setForm(prev => ({
                 <div className="flex gap-2"><Skeleton className="h-9 flex-1 rounded-xl" /><Skeleton className="h-9 flex-1 rounded-xl" /><Skeleton className="h-9 w-11 rounded-xl" /></div>
               </div>
             ))
-          ) : clients.length === 0 ? (
+          ) : displayedClients.length === 0 ? (
             <div className="bg-white rounded-[22px] border border-slate-100 py-16 text-center px-5">
               <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
                 <IC.Empty />
@@ -812,7 +887,7 @@ setForm(prev => ({
               {!search && <button onClick={() => setShowAdd(true)} className="text-xs text-[#005A87] font-bold hover:underline mt-1 inline-block">Add your first client →</button>}
             </div>
           ) : (
-            clients.map(c => (
+            displayedClients.map(c => (
               <div key={c.id} className="bg-white rounded-[22px] border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex items-start gap-3 mb-3">
                   <ClientAvatar name={c.name} profile_pic={c.profile_pic} size="lg" />
@@ -931,7 +1006,7 @@ setForm(prev => ({
                   <div className="col-span-2 flex justify-end gap-1"><Skeleton className="h-8 w-8 rounded-lg" /><Skeleton className="h-8 w-8 rounded-lg" /><Skeleton className="h-8 w-8 rounded-lg" /></div>
                 </div>
               ))
-            ) : clients.length === 0 ? (
+            ) : displayedClients.length === 0 ? (
               <div className="py-20 text-center">
                 <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
                   <IC.Empty />
@@ -940,7 +1015,7 @@ setForm(prev => ({
                 {!search && <button onClick={() => setShowAdd(true)} className="text-xs text-[#005A87] font-bold hover:underline mt-1 inline-block">Add your first client →</button>}
               </div>
             ) : (
-              clients.map(c => (
+              displayedClients.map(c => (
                 <div key={c.id} className="grid grid-cols-12 items-center px-6 py-3.5 hover:bg-[#F7F9FC] transition-colors group">
                   {/* Client */}
                   <div className="col-span-4 flex items-center gap-3 min-w-0">
@@ -1319,7 +1394,19 @@ setForm(prev => ({
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>Anniversary Date</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className={labelCls}>Anniversary Date</label>
+                    {formData.anniversaryDate && (
+                      <button
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, anniversaryDate: "" }))}
+                        className="text-[11px] font-bold text-rose-600 hover:text-rose-700 hover:underline flex items-center gap-0.5 cursor-pointer"
+                        title="Reset anniversary date to empty"
+                      >
+                        ✕ Clear
+                      </button>
+                    )}
+                  </div>
                   <input
                     type="date"
                     min="1900-01-01"
@@ -1520,7 +1607,7 @@ setForm(prev => ({
                             <input
                               type="text"
                               placeholder="Name (e.g. Ramya)"
-                              value={fm.name}
+                              value={fm.name || ""}
                               onChange={e => {
                                 const val = sanitizeAlphabetsOnly(e.target.value);
                                 setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, name: val } : m));
@@ -1535,7 +1622,7 @@ setForm(prev => ({
                           <div>
                             <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Relationship *</label>
                             <select
-                              value={fm.relationship}
+                              value={fm.relationship || ""}
                               onChange={e => {
                                 const val = e.target.value;
                                 setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, relationship: val } : m));
@@ -1558,7 +1645,7 @@ setForm(prev => ({
                               type="date"
                               min="1900-01-01"
                               max={new Date().toISOString().split("T")[0]}
-                              value={fm.date_of_birth}
+                              value={fm.date_of_birth || ""}
                               onChange={e => {
                                 const val = e.target.value;
                                 setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, date_of_birth: val } : m));
@@ -1572,7 +1659,7 @@ setForm(prev => ({
                               type="tel"
                               maxLength={10}
                               placeholder="10 digits (Optional)"
-                              value={fm.phone}
+                              value={fm.phone || ""}
                               onChange={e => {
                                 const val = e.target.value.replace(/\D/g, "");
                                 setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, phone: val } : m));
@@ -1598,6 +1685,19 @@ setForm(prev => ({
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className={labelCls}>Status</label>
+                <select
+                  value={formData.status || "Active"}
+                  onChange={e => setForm({ ...formData, status: e.target.value as any })}
+                  className={inputCls}
+                >
+                  <option value="Active">Active</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Inactive">Inactive</option>
+                </select>
               </div>
 
               <div>

@@ -84,12 +84,12 @@ export async function PUT(
   }
 
   const anniv = body.anniversary_date ?? body.anniversaryDate;
-  if (anniv) {
-    const annivVal = validateDateRange(anniv, "Anniversary date");
+  if (anniv && typeof anniv === "string" && anniv.trim() !== "") {
+    const annivVal = validateDateRange(anniv.trim(), "Anniversary date");
     if (!annivVal.isValid) {
       return NextResponse.json({ error: annivVal.error }, { status: 400 });
     }
-    if (body.date_of_birth && anniv < body.date_of_birth) {
+    if (body.date_of_birth && anniv.trim() < body.date_of_birth) {
       return NextResponse.json(
         { error: "Anniversary date cannot be earlier than Date of Birth." },
         { status: 400 }
@@ -117,10 +117,15 @@ export async function PUT(
       }
       updatePayload.email = body.email.trim().toLowerCase();
     }
-    if (body.date_of_birth !== undefined) updatePayload.date_of_birth = body.date_of_birth;
-    if (body.anniversary_date !== undefined || body.anniversaryDate !== undefined) {
-      updatePayload.anniversary_date = body.anniversary_date ?? body.anniversaryDate;
+    if (body.date_of_birth !== undefined) updatePayload.date_of_birth = body.date_of_birth || null;
+    
+    // Safely convert empty string anniversary date to null for postgres
+    if (anniv && typeof anniv === "string" && anniv.trim() !== "") {
+      updatePayload.anniversary_date = anniv.trim();
+    } else if (body.anniversary_date !== undefined || body.anniversaryDate !== undefined) {
+      updatePayload.anniversary_date = null;
     }
+
     if (body.gender !== undefined) updatePayload.gender = body.gender;
     if (body.marital_status !== undefined || body.maritalStatus !== undefined) {
       updatePayload.marital_status = body.marital_status ?? body.maritalStatus;
@@ -132,9 +137,29 @@ export async function PUT(
     if (body.pin_code !== undefined || body.pinCode !== undefined) {
       updatePayload.pin_code = body.pin_code ?? body.pinCode;
     }
-    if (body.notes !== undefined) updatePayload.notes = body.notes;
+    if (body.notes !== undefined) updatePayload.notes = body.notes ?? "";
     if (body.profile_pic !== undefined) updatePayload.profile_pic = body.profile_pic;
-    if (body.status !== undefined) updatePayload.status = body.status;
+    if (body.status !== undefined) {
+      if (body.status === "Active") {
+        let hasKyc = false;
+        try {
+          const { data: docs } = await supabaseAdmin
+            .from("documents")
+            .select("category, name, file_name")
+            .eq("client_id", id);
+          hasKyc = (docs || []).some(
+            (d: any) =>
+              d.category === "KYC / Identity" ||
+              d.category === "KYC" ||
+              /ckyc|kyc|aadhaar|pan/i.test(d.name || "") ||
+              /ckyc|kyc|aadhaar|pan/i.test(d.file_name || "")
+          );
+        } catch {}
+        updatePayload.status = hasKyc ? "Active" : "Pending";
+      } else {
+        updatePayload.status = body.status;
+      }
+    }
 
     const { data, error } = await supabaseAdmin
       .from("clients")
@@ -179,16 +204,18 @@ export async function DELETE(
       if (error) throw error;
       return NextResponse.json({ success: true, message: "Client permanently deleted" });
     } else {
-      const { error } = await supabaseAdmin
+      let updateRes = await supabaseAdmin
         .from("clients")
         .update({ is_deleted: true, deleted_at: new Date().toISOString() })
         .eq("id", id);
-      if (error) {
-        await supabaseAdmin.from("documents").delete().eq("client_id", id);
-        await supabaseAdmin.from("family_members").delete().eq("client_id", id);
-        const { error: delErr } = await supabaseAdmin.from("clients").delete().eq("id", id);
-        if (delErr) throw delErr;
-        return NextResponse.json({ success: true, message: "Client deleted successfully" });
+      if (updateRes.error) {
+        updateRes = await supabaseAdmin
+          .from("clients")
+          .update({ is_deleted: true })
+          .eq("id", id);
+      }
+      if (updateRes.error) {
+        throw updateRes.error;
       }
       return NextResponse.json({ success: true, message: "Client moved to Recycle Bin" });
     }
