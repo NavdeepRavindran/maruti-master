@@ -16,6 +16,33 @@ export function formatSurname(str?: string): string {
   return sanitizeAlphabetsOnly(str).toUpperCase().trim();
 }
 
+/**
+ * Splits and formats a client's display name so that:
+ * - firstName is properly capitalized
+ * - surname is uppercase
+ * Handles legacy data or single-string full names gracefully.
+ */
+export function formatClientDisplayName(name?: string, surname?: string) {
+  let first = (name || "").trim();
+  let sur = (surname || "").trim();
+
+  // If surname is provided and first name accidentally ends with the surname,
+  // strip the duplicated surname from first name (e.g. "Sundaram A Ai SUNDARAM" with surname "SUNDARAM")
+  if (sur && first.toUpperCase().endsWith(" " + sur.toUpperCase())) {
+    first = first.substring(0, first.length - sur.length).trim();
+  } else if (!sur && first.includes(" ")) {
+    // If surname is empty but first name contains spaces, extract the last word as surname
+    const parts = first.split(/\s+/);
+    first = parts.slice(0, -1).join(" ") || parts[0];
+    sur = parts.slice(-1).join(" ");
+  }
+
+  return {
+    firstName: capitalizeWords(first),
+    surname: sur ? sur.toUpperCase() : "",
+  };
+}
+
 export function formatFamilyName(str?: string): string {
   if (!str) return "";
   return sanitizeAlphabetsOnly(str)
@@ -113,8 +140,20 @@ export function validateDateRange(
 }
 
 /**
+ * Checks whether a date string has a valid year >= 1900 and not in the future.
+ */
+export function isValidDateYear(d?: string | null): boolean {
+  if (!d) return false;
+  const parts = d.split("T")[0].split("-");
+  if (parts.length !== 3) return false;
+  const year = parseInt(parts[0], 10);
+  return !isNaN(year) && year >= 1900 && year <= new Date().getFullYear();
+}
+
+/**
  * Formats date strictly ensuring all 4 digits of the year are always displayed.
- * e.g. "01 Jan 1988", "15 Oct 2005" (never single/partial digits like "01 Jan 1").
+ * Enforces rule: dates before 1900 (e.g. 0001-01-01 dummy dates) return "-".
+ * e.g. "01 Jan 1988", "15 Oct 2005".
  */
 export function formatDate(d?: string | null): string {
   if (!d) return "-";
@@ -126,24 +165,28 @@ export function formatDate(d?: string | null): string {
       const mNum = parseInt(mStr, 10) - 1;
       const dNum = parseInt(dStr, 10);
       if (!isNaN(yNum) && !isNaN(mNum) && !isNaN(dNum) && mNum >= 0 && mNum <= 11) {
+        // Enforce valid year >= 1900: dummy dates like 0001-01-01 return "-"
+        if (yNum < 1900 || yNum > new Date().getFullYear()) {
+          return "-";
+        }
         const monthNames = [
           "Jan", "Feb", "Mar", "Apr", "May", "Jun",
           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
         ];
-        // Always 4 digits for year
         const padYear = String(yNum).padStart(4, "0");
         const padDay = String(dNum).padStart(2, "0");
         return `${padDay} ${monthNames[mNum]} ${padYear}`;
       }
     }
     const dt = new Date(d);
-    if (isNaN(dt.getTime())) return d;
+    if (isNaN(dt.getTime())) return "-";
+    if (dt.getFullYear() < 1900 || dt.getFullYear() > new Date().getFullYear()) return "-";
     const y = String(dt.getFullYear()).padStart(4, "0");
     const m = dt.toLocaleString("en-IN", { month: "short" });
     const day = String(dt.getDate()).padStart(2, "0");
     return `${day} ${m} ${y}`;
   } catch {
-    return d;
+    return "-";
   }
 }
 

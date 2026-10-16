@@ -6,12 +6,14 @@ import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 import {
   capitalizeWords,
+  formatClientDisplayName,
   sanitizeAlphabetsOnly,
   formatFamilyName,
   FAMILY_RELATIONSHIPS,
   getRecycleBinRetention,
   formatDate,
   validateDateRange,
+  isValidDateYear,
 } from "@/lib/formatUtils";
 import { validateEmail, getEmailError } from "@/lib/emailValidator";
 
@@ -244,7 +246,7 @@ async function fetchPincode(pin: string) {
 
 setForm(prev => ({
   ...prev,
-  town: data.town,   // ✅
+  town: data.town,
   city: data.city,
   state: data.state,
 }));
@@ -441,6 +443,7 @@ setForm(prev => ({
           const errData = await res.json().catch(() => ({}));
           throw new Error(errData.error || "Failed to update client.");
         }
+        toast.success("Client updated successfully!");
       } else {
         const res = await fetch("/api/clients", {
           method: "POST",
@@ -523,8 +526,7 @@ setForm(prev => ({
 
   const handleDelete = async (id: string) => {
     try {
-      const { token, headers } = await getAuthTokenAndHeaders();
-      if (!token) return;
+      const { headers } = await getAuthTokenAndHeaders();
 
       // Optimistically update lists and counts in real time
       setClients(prev => prev.filter(c => c.id !== id));
@@ -537,18 +539,23 @@ setForm(prev => ({
       });
       if (res.ok) {
         toast.success("Client moved to Recycle Bin.");
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to delete client");
       }
       fetchClients();
       fetchAllClientsSummary();
       fetchRecycleCount();
-    } catch { /* silent */ }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete client");
+      fetchClients();
+    }
     setDeleteConfirm(null);
   };
 
   const handleRestore = async (id: string) => {
     try {
-      const { token, headers } = await getAuthTokenAndHeaders();
-      if (!token) return;
+      const { headers } = await getAuthTokenAndHeaders();
 
       // Optimistically update lists and counts in real time
       setClients(prev => prev.filter(c => c.id !== id));
@@ -561,29 +568,40 @@ setForm(prev => ({
       });
       if (res.ok) {
         toast.success("Client restored successfully!");
-        fetchClients();
-        fetchAllClientsSummary();
-        fetchRecycleCount();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to restore client");
       }
-    } catch { /* silent */ }
+      fetchClients();
+      fetchAllClientsSummary();
+      fetchRecycleCount();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to restore client");
+      fetchClients();
+    }
   };
 
   const handlePermanentDelete = async (id: string) => {
     if (!confirm("Permanently delete this client and all associated documents? This action CANNOT be undone.")) return;
     try {
-      const { token, headers } = await getAuthTokenAndHeaders();
-      if (!token) return;
+      const { headers } = await getAuthTokenAndHeaders();
       const res = await fetch(`/api/clients/${id}?permanent=true`, {
         method: "DELETE",
         headers,
       });
       if (res.ok) {
         toast.success("Client permanently deleted.");
-        fetchClients();
-        fetchAllClientsSummary();
-        fetchRecycleCount();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to permanently delete client");
       }
-    } catch { /* silent */ }
+      fetchClients();
+      fetchAllClientsSummary();
+      fetchRecycleCount();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to permanently delete client");
+      fetchClients();
+    }
   };
 
   const handleEmptyRecycleBin = async () => {
@@ -596,33 +614,35 @@ setForm(prev => ({
       });
       if (res.ok) {
         toast.success("Recycle Bin emptied.");
-        fetchClients();
-        fetchAllClientsSummary();
-        fetchRecycleCount();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to empty Recycle Bin");
       }
-    } catch { /* silent */ }
+      fetchClients();
+      fetchAllClientsSummary();
+      fetchRecycleCount();
+    } catch (e: any) {
+      toast.error(e.message || "Failed to empty Recycle Bin");
+      fetchClients();
+    }
   };
 
   const openEdit = async (c: ClientData | any) => {
     setModalError(null);
     setEditing(c);
 
-    let firstName = c.name || "";
-    let surname = c.surname || "";
-    if (!surname && firstName.includes(" ")) {
-      const parts = firstName.trim().split(/\s+/);
-      firstName = parts[0];
-      surname = parts.slice(1).join(" ");
-    }
+    const { firstName, surname } = formatClientDisplayName(c.name, c.surname);
 
     setForm({
-      name: capitalizeWords(firstName),
-      surname: (surname || "").trim().toUpperCase(),
+      name: firstName,
+      surname: surname,
       phone: c.phone || "",
       alternateMobile: c.alternateMobile || c.alternate_mobile || "",
       email: c.email || "",
       date_of_birth: c.date_of_birth || "",
-      anniversaryDate: c.anniversaryDate || c.anniversary_date || "",
+      anniversaryDate: isValidDateYear(c.anniversaryDate || c.anniversary_date)
+        ? (c.anniversaryDate || c.anniversary_date)
+        : "",
       gender: c.gender || "",
       maritalStatus: c.maritalStatus || c.marital_status || "",
       occupation: c.occupation || "",
@@ -892,7 +912,17 @@ setForm(prev => ({
                 <div className="flex items-start gap-3 mb-3">
                   <ClientAvatar name={c.name} profile_pic={c.profile_pic} size="lg" />
                   <div className="flex-1 min-w-0">
-                    <Link href={`/dashboard/clients/${c.id}`} className="text-[15px] font-bold text-[#1F2937] hover:text-[#005A87] transition-colors truncate block">{c.name}</Link>
+                    {(() => {
+                      const { firstName, surname } = formatClientDisplayName(c.name, c.surname);
+                      return (
+                        <Link href={`/dashboard/clients/${c.id}`} className="text-[15px] font-bold truncate block hover:underline">
+                          <span className="text-black font-bold">{firstName}</span>{" "}
+                          {surname && (
+                            <span className="text-[#0E7AC7] font-semibold">{surname}</span>
+                          )}
+                        </Link>
+                      );
+                    })()}
                     <div className="flex items-center gap-1.5 text-xs text-[#6B7280] font-medium mt-0.5">
                       <IC.Calendar />
                       Born {formatDob(c.date_of_birth)}
@@ -1026,10 +1056,17 @@ setForm(prev => ({
                       className="group-hover:scale-105 transition-transform"
                     />
                     <div className="min-w-0">
-                      <Link href={`/dashboard/clients/${c.id}`} className="text-[13px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors truncate block">
-                        <span>{capitalizeWords(c.name)}</span>{" "}
-                        <span className="text-[#0E7AC7] font-semibold">{(c.surname || "").toUpperCase()}</span>
-                      </Link>
+                      {(() => {
+                        const { firstName, surname } = formatClientDisplayName(c.name, c.surname);
+                        return (
+                          <Link href={`/dashboard/clients/${c.id}`} className="text-[13px] font-bold truncate block hover:underline">
+                            <span className="text-black group-hover:text-black font-bold">{firstName}</span>{" "}
+                            {surname && (
+                              <span className="text-[#0E7AC7] group-hover:text-[#0E7AC7] font-semibold">{surname}</span>
+                            )}
+                          </Link>
+                        );
+                      })()}
                       <div className="flex items-center gap-1 text-[11px] text-[#6B7280] font-medium mt-0.5">
                         <IC.Calendar /> {formatDob(c.date_of_birth)}
                       </div>

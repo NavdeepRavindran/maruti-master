@@ -10,17 +10,38 @@ export async function POST(
 
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
-    const { data, error } = await supabaseAdmin
+    
+    let restoreRes = await supabaseAdmin
       .from("clients")
       .update({ is_deleted: false, deleted_at: null })
       .eq("id", id)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
+    if (restoreRes.error) {
+      restoreRes = await supabaseAdmin
+        .from("clients")
+        .update({ is_deleted: false })
+        .eq("id", id)
+        .select()
+        .maybeSingle();
+    }
+
+    // Also clean up [RECYCLE_BIN:...] from notes if present
+    const { data: clientData } = await supabaseAdmin
+      .from("clients")
+      .select("notes")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (clientData?.notes && clientData.notes.includes("[RECYCLE_BIN:")) {
+      const cleanedNotes = clientData.notes.replace(/\n?\[RECYCLE_BIN:[^\]]*\]/g, "").trim();
+      await supabaseAdmin.from("clients").update({ notes: cleanedNotes }).eq("id", id);
+    }
+
     return NextResponse.json({
       success: true,
-      client: data,
+      client: restoreRes.data || { id, is_deleted: false },
       message: "Client restored successfully from Recycle Bin",
     });
   } catch (err: any) {

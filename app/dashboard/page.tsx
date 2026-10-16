@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-// import { supabase } from "@/lib/supabaseClient";
 import { createClient } from "@/lib/supabase/client";
+import { formatClientDisplayName } from "@/lib/formatUtils";
 
 
 interface UserData { name?: string; email?: string; role?: string; }
@@ -367,8 +367,8 @@ export default function DashboardPage() {
                   </div>
                 ) : (
                   recentClients.map((client) => {
-                    const fullName = `${client.name} ${(client.surname || "").toUpperCase()}`.trim();
-                    const initials = client.name ? (client.name[0] + (client.surname ? client.surname[0] : "")).toUpperCase() : "CL";
+                    const { firstName, surname } = formatClientDisplayName(client.name, client.surname);
+                    const initials = firstName ? (firstName[0] + (surname ? surname[0] : "")).toUpperCase() : "CL";
                     return (
                       <Link
                         key={client.id}
@@ -380,8 +380,11 @@ export default function DashboardPage() {
                             {initials}
                           </div>
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">
-                              {fullName}
+                            <p className="text-sm font-semibold truncate">
+                              <span className="text-black group-hover:text-black font-bold">{firstName}</span>{" "}
+                              {surname && (
+                                <span className="text-[#0E7AC7] group-hover:text-[#0E7AC7] font-semibold">{surname}</span>
+                              )}
                             </p>
                             <p className="text-xs text-[#6B7280] font-medium truncate">
                               {client.occupation || "Client"}

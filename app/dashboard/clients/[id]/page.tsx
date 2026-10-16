@@ -6,12 +6,14 @@ import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 import {
   capitalizeWords,
+  formatClientDisplayName,
   sanitizeAlphabetsOnly,
   formatFamilyName,
   FAMILY_RELATIONSHIPS,
   formatDate,
   getAge,
   validateDateRange,
+  isValidDateYear,
 } from "@/lib/formatUtils";
 import { validateEmail } from "@/lib/emailValidator";
 
@@ -155,17 +157,16 @@ export default function ClientProfilePage({
   const picInputRef = useRef<HTMLInputElement>(null);
   const directPicInputRef = useRef<HTMLInputElement>(null);
 
-  // Password change modal state (Item 8)
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [newPasswordInput, setNewPasswordInput] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
 
-  // In-App Document Viewer state (Item 9)
   const [viewingDoc, setViewingDoc] = useState<DocData | null>(null);
 
-  // Family details view and edit state (Item 5 & 11)
   const [viewingFamilyMember, setViewingFamilyMember] = useState<FamilyMember | null>(null);
   const [editingFamilyMember, setEditingFamilyMember] = useState<FamilyMember | null>(null);
+  const [recycledFamily, setRecycledFamily] = useState<FamilyMember[]>([]);
+  const [familySubTab, setFamilySubTab] = useState<"active" | "recycle_bin">("active");
   const [savingFamilyEdit, setSavingFamilyEdit] = useState(false);
 
   // In-modal error banners (displayed directly on the same layer)
@@ -237,6 +238,8 @@ export default function ClientProfilePage({
       const data = await res.json();
       if (data.client) setClient(data.client);
       if (data.family_members) setFamily(data.family_members);
+      if (data.recycled_family_members) setRecycledFamily(data.recycled_family_members);
+      else setRecycledFamily([]);
       if (data.documents) setDocs(data.documents);
     } catch {
     } finally {
@@ -246,6 +249,8 @@ export default function ClientProfilePage({
 
   function openEdit() {
     if (!client) return;
+    const rawAnniv = client.anniversary_date || (client as any).anniversaryDate || "";
+    const cleanAnniv = isValidDateYear(rawAnniv) ? rawAnniv : "";
     setEditForm({
       name: client.name || "",
       surname: client.surname || "",
@@ -253,7 +258,7 @@ export default function ClientProfilePage({
       alternate_mobile: client.alternate_mobile || "",
       email: client.email || "",
       date_of_birth: client.date_of_birth || "",
-      anniversary_date: client.anniversary_date || "",
+      anniversary_date: cleanAnniv,
       gender: client.gender || "",
       marital_status: client.marital_status || "",
       occupation: client.occupation || "",
@@ -350,7 +355,6 @@ export default function ClientProfilePage({
     }
   }
 
-  // Direct photo upload handler (Item 3)
   async function handleDirectPhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -381,7 +385,6 @@ export default function ClientProfilePage({
     reader.readAsDataURL(file);
   }
 
-  // Custom password change handler (Item 8)
   async function handleSavePassword() {
     if (!newPasswordInput.trim() || newPasswordInput.trim().length < 4) {
       alert("Password must be at least 4 characters long.");
@@ -410,7 +413,6 @@ export default function ClientProfilePage({
     }
   }
 
-  // Edit Family Member handler (Item 5 & 11)
   async function handleSaveFamilyEdit() {
     setEditFamilyModalError(null);
     if (!editingFamilyMember || !editingFamilyMember.name.trim()) {
@@ -568,16 +570,70 @@ export default function ClientProfilePage({
   }
 
   async function deleteFamilyMember(fid: string) {
-    if (!confirm("Delete this family member and their documents?")) return;
+    if (!confirm("Move this family member to this client's Recycle Bin? You can restore them anytime.")) return;
     try {
       const headers = await authHeaders(false);
       const res = await fetch(`/api/clients/${id}/family/${fid}`, { method: "DELETE", headers });
       if (res.ok) {
-        setFamily((prev) => prev.filter((f) => f.id !== fid));
-        toast.success("Family member removed.");
+        toast.success("Family member moved to Recycle Bin.");
+        fetchClient();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to delete family member");
       }
-      fetchClient();
-    } catch {}
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete family member");
+    }
+  }
+
+  async function restoreFamilyMember(fid: string) {
+    try {
+      const headers = await authHeaders(true);
+      const res = await fetch(`/api/clients/${id}/family/${fid}/restore`, { method: "POST", headers });
+      if (res.ok) {
+        toast.success("Family member restored successfully!");
+        fetchClient();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to restore family member");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to restore family member");
+    }
+  }
+
+  async function permanentDeleteFamilyMember(fid: string) {
+    if (!confirm("Permanently delete this family member and their documents? This action CANNOT be undone.")) return;
+    try {
+      const headers = await authHeaders(false);
+      const res = await fetch(`/api/clients/${id}/family/${fid}?permanent=true`, { method: "DELETE", headers });
+      if (res.ok) {
+        toast.success("Family member permanently deleted.");
+        fetchClient();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to permanently delete family member");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete family member");
+    }
+  }
+
+  async function emptyFamilyRecycleBin() {
+    if (!confirm("Permanently delete ALL family members in this client's Recycle Bin? This action CANNOT be undone.")) return;
+    try {
+      const headers = await authHeaders(false);
+      const res = await fetch(`/api/clients/${id}/family/recycle-bin`, { method: "DELETE", headers });
+      if (res.ok) {
+        toast.success("Family Recycle Bin emptied.");
+        fetchClient();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to empty Recycle Bin");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to empty Recycle Bin");
+    }
   }
 
   async function addDocument() {
@@ -828,9 +884,7 @@ async function deleteDocument(did: string) {
       {/* ── Hero / Profile Header ────────────────────────────────── */}
       <div className="bg-white border-b border-slate-100">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          {/* Mobile: stacked, Desktop: row */}
           <div className="flex flex-col sm:flex-row sm:items-end gap-5">
-            {/* Avatar with Direct Photo Upload (Item 3) */}
             <div className="shrink-0 relative group">
               {client.profile_pic ? (
                 <img
@@ -867,30 +921,36 @@ async function deleteDocument(did: string) {
               />
             </div>
 
-            {/* Name + meta (Item 1 & Item 6) */}
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="flex items-baseline gap-2.5 flex-wrap">
-                    <h1 className="text-2xl sm:text-[28px] font-bold text-[#1F2937]">
-                      {capitalizeWords(client.name)}
-                    </h1>
-                    {client.surname && (
-                      <span className="text-2xl sm:text-[28px] font-bold text-[#005A87]">
-                        {(client.surname || "").toUpperCase()}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-[#6B7280] flex-wrap">
-                    <span>First Name: <strong className="text-[#1F2937]">{capitalizeWords(client.name)}</strong></span>
-                    {client.surname && (
+                  {(() => {
+                    const { firstName, surname } = formatClientDisplayName(client.name, client.surname);
+                    return (
                       <>
-                        <span>•</span>
-                        <span>Surname: <strong className="text-[#005A87]">{(client.surname || "").toUpperCase()}</strong></span>
+                        <div className="flex items-baseline gap-2.5 flex-wrap">
+                          <h1 className="text-2xl sm:text-[28px] font-bold text-black">
+                            {firstName}
+                          </h1>
+                          {surname && (
+                            <span className="text-2xl sm:text-[28px] font-bold text-[#0E7AC7]">
+                              {surname}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-[#6B7280] flex-wrap">
+                          <span>First Name: <strong className="text-black">{firstName}</strong></span>
+                          {surname && (
+                            <>
+                              <span>•</span>
+                              <span>Surname: <strong className="text-[#0E7AC7]">{surname}</strong></span>
+                            </>
+                          )}
+                        </div>
                       </>
-                    )}
-                  </div>
+                    );
+                  })()}
                   <div className="flex flex-wrap items-center gap-2 mt-3">
                     <span
                       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${
@@ -945,19 +1005,15 @@ async function deleteDocument(did: string) {
                     {formatDate(client.date_of_birth)}
                   </p>
                 </div>
-                {(client.anniversary_date || (client as any).anniversaryDate) && (
-                  <>
-                    <div className="w-px bg-slate-100" />
-                    <div>
-                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">
-                        Anniversary
-                      </p>
-                      <p className="text-[16px] font-bold text-[#EC4899] mt-0.5">
-                        {formatDate(client.anniversary_date || (client as any).anniversaryDate)}
-                      </p>
-                    </div>
-                  </>
-                )}
+                <div className="w-px bg-slate-100" />
+                <div>
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">
+                    Anniversary
+                  </p>
+                  <p className="text-[16px] font-bold text-[#1F2937] mt-0.5">
+                    {formatDate(client.anniversary_date || (client as any).anniversaryDate)}
+                  </p>
+                </div>
                 <div className="w-px bg-slate-100" />
                 <div>
                   <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">
@@ -1096,8 +1152,8 @@ async function deleteDocument(did: string) {
           </div>
           <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
             {[
-              { label: "First Name", value: capitalizeWords(client.name) },
-              { label: "Surname", value: (client.surname || "").toUpperCase() || "—" },
+              { label: "First Name", value: formatClientDisplayName(client.name, client.surname).firstName },
+              { label: "Surname", value: formatClientDisplayName(client.name, client.surname).surname || "—" },
               { label: "Marital Status", value: client.marital_status },
               { label: "Alternate Mobile", value: client.alternate_mobile },
               {
@@ -1117,7 +1173,7 @@ async function deleteDocument(did: string) {
                   <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest mb-1">
                     {label}
                   </p>
-                  <p className="text-[13px] font-bold text-[#1F2937] break-words">
+                  <p className={`text-[13px] font-bold break-words ${label === "Surname" ? "text-[#0E7AC7]" : "text-black"}`}>
                     {value}
                   </p>
                 </div>
@@ -1593,7 +1649,7 @@ async function deleteDocument(did: string) {
         {/* Family tab */}
         {activeTab === "family" && (
           <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
                   Family Members
@@ -1602,171 +1658,322 @@ async function deleteDocument(did: string) {
                   Manage family details, occupations, and separate document uploads
                 </p>
               </div>
-              <button
-                onClick={() => setShowFamilyModal(true)}
-                className="flex items-center gap-1.5 px-3.5 h-9 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95"
-              >
-                <svg
-                  className="w-3 h-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-                Add Member
-              </button>
-            </div>
-            {family.length === 0 ? (
-              <div className="py-16 text-center px-5">
-                <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Active / Recycle Bin Sub-tabs */}
+                <div className="flex items-center p-1 bg-[#F7F9FC] rounded-xl border border-slate-100 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setFamilySubTab("active")}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      familySubTab === "active"
+                        ? "bg-white text-[#005A87] shadow-xs"
+                        : "text-[#6B7280] hover:text-[#1F2937]"
+                    }`}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
-                    />
-                  </svg>
+                    Active Members ({family.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFamilySubTab("recycle_bin")}
+                    className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                      familySubTab === "recycle_bin"
+                        ? "bg-white text-rose-600 shadow-xs"
+                        : "text-[#6B7280] hover:text-[#1F2937]"
+                    }`}
+                  >
+                    <span>🗑️</span>
+                    <span>Recycle Bin ({recycledFamily.length})</span>
+                  </button>
                 </div>
-                <p className="text-[13px] font-semibold text-[#1F2937] mb-2">
-                  No family members yet
-                </p>
-                <button
-                  onClick={() => setShowFamilyModal(true)}
-                  className="text-xs text-[#005A87] font-bold hover:underline"
-                >
-                  Add first family member →
-                </button>
-              </div>
-            ) : (
-              <div className="divide-y divide-slate-50">
-                {family.map((fm) => (
-                  <div
-                    key={fm.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-4 px-5 py-4 hover:bg-[#F7F9FC] transition-colors group"
+
+                {familySubTab === "active" ? (
+                  <button
+                    onClick={() => setShowFamilyModal(true)}
+                    className="flex items-center gap-1.5 px-3.5 h-9 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95 shadow-xs"
                   >
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
-                      <div
-                        className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(fm.name)} flex items-center justify-center text-white font-bold text-sm shrink-0`}
+                    <svg
+                      className="w-3 h-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                    Add Member
+                  </button>
+                ) : (
+                  recycledFamily.length > 0 && (
+                    <button
+                      onClick={emptyFamilyRecycleBin}
+                      className="flex items-center gap-1 px-3 h-9 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+                      title="Permanently empty family recycle bin"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Empty Family Bin
+                    </button>
+                  )
+                )}
+              </div>
+            </div>
+
+            {/* Sub-tab 1: Active Family Members */}
+            {familySubTab === "active" && (
+              <>
+                {family.length === 0 ? (
+                  <div className="py-16 text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
                       >
-                        {fm.name[0]?.toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[14px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors">
-                          {formatFamilyName(fm.name)}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded uppercase tracking-wider">
-                            {fm.relationship}
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-[13px] font-semibold text-[#1F2937] mb-2">
+                      No active family members yet
+                    </p>
+                    <button
+                      onClick={() => setShowFamilyModal(true)}
+                      className="text-xs text-[#005A87] font-bold hover:underline"
+                    >
+                      Add first family member →
+                    </button>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-50">
+                    {family.map((fm) => (
+                      <div
+                        key={fm.id}
+                        className="flex flex-col sm:flex-row sm:items-center gap-4 px-5 py-4 hover:bg-[#F7F9FC] transition-colors group"
+                      >
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                          <div
+                            className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(fm.name)} flex items-center justify-center text-white font-bold text-sm shrink-0`}
+                          >
+                            {fm.name[0]?.toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors">
+                              {formatFamilyName(fm.name)}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded uppercase tracking-wider">
+                                {fm.relationship}
+                              </span>
+                              <span className="text-[11px] text-[#6B7280] font-medium">
+                                Age {getAge(fm.date_of_birth)} ({formatDate(fm.date_of_birth)})
+                              </span>
+                              {fm.occupation && (
+                                <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md flex items-center gap-1">
+                                  <span>💼</span> {fm.occupation}
+                                </span>
+                              )}
+                              {fm.phone && (
+                                <span className="text-[11px] text-[#6B7280] font-medium">
+                                  · {fm.phone}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                          {/* Separate Upload Document for this Family Member */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDocForm({
+                                name: `${formatFamilyName(fm.name)} Document`,
+                                file_name: "",
+                                file_size: 0,
+                                file_url: "",
+                                family_member_id: fm.id,
+                                category: "KYC / Identity",
+                              });
+                              setShowDocModal(true);
+                            }}
+                            title={`Upload Document for ${formatFamilyName(fm.name)}`}
+                            className="h-8 px-2.5 flex items-center gap-1 rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all text-[11px] font-bold shadow-2xs"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                            </svg>
+                            Upload Doc
+                          </button>
+
+                          <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2 py-1 rounded-lg">
+                            {
+                              docs.filter((d) => d.family_member_id === fm.id)
+                                .length
+                            }{" "}
+                            docs
                           </span>
-                          <span className="text-[11px] text-[#6B7280] font-medium">
-                            Age {getAge(fm.date_of_birth)} ({formatDate(fm.date_of_birth)})
-                          </span>
-                          {fm.occupation && (
-                            <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2.5 py-0.5 rounded-md flex items-center gap-1">
-                              <span>💼</span> {fm.occupation}
-                            </span>
-                          )}
-                          {fm.phone && (
-                            <span className="text-[11px] text-[#6B7280] font-medium">
-                              · {fm.phone}
-                            </span>
-                          )}
+
+                          {/* View Profile */}
+                          <button
+                            type="button"
+                            onClick={() => setViewingFamilyMember(fm)}
+                            title={`View ${formatFamilyName(fm.name)}'s Profile`}
+                            className="h-8 px-2.5 flex items-center gap-1 rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all text-[11px] font-bold"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                            </svg>
+                            <span>Profile</span>
+                          </button>
+
+                          {/* Edit Family Details */}
+                          <button
+                            type="button"
+                            onClick={() => setEditingFamilyMember(fm)}
+                            title="Edit Family Member"
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+
+                          {/* Move to Recycle Bin */}
+                          <button
+                            onClick={() => deleteFamilyMember(fm.id)}
+                            className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
+                            title="Move to Family Recycle Bin"
+                          >
+                            <svg
+                              className="w-3.5 h-3.5"
+                              fill="none"
+                              viewBox="0 0 24 24"
+                              stroke="currentColor"
+                              strokeWidth={2}
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                              />
+                            </svg>
+                          </button>
                         </div>
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                      {/* Separate Upload Document for this Family Member */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDocForm({
-                            name: `${formatFamilyName(fm.name)} Document`,
-                            file_name: "",
-                            file_size: 0,
-                            file_url: "",
-                            family_member_id: fm.id,
-                            category: "KYC / Identity",
-                          });
-                          setShowDocModal(true);
-                        }}
-                        title={`Upload Document for ${formatFamilyName(fm.name)}`}
-                        className="h-8 px-2.5 flex items-center gap-1 rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all text-[11px] font-bold shadow-2xs"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                        </svg>
-                        Upload Doc
-                      </button>
-
-                      <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2 py-1 rounded-lg">
-                        {
-                          docs.filter((d) => d.family_member_id === fm.id)
-                            .length
-                        }{" "}
-                        docs
-                      </span>
-
-                      {/* View Profile */}
-                      <button
-                        type="button"
-                        onClick={() => setViewingFamilyMember(fm)}
-                        title={`View ${formatFamilyName(fm.name)}'s Profile`}
-                        className="h-8 px-2.5 flex items-center gap-1 rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all text-[11px] font-bold"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                        </svg>
-                        <span>Profile</span>
-                      </button>
-
-                      {/* Edit Family Details */}
-                      <button
-                        type="button"
-                        onClick={() => setEditingFamilyMember(fm)}
-                        title="Edit Family Member"
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
-                      >
-                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                      </button>
-
-                      {/* Delete */}
-                      <button
-                        onClick={() => deleteFamilyMember(fm.id)}
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
-                        title="Delete Family Member"
-                      >
-                        <svg
-                          className="w-3.5 h-3.5"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                          strokeWidth={2}
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                          />
-                        </svg>
-                      </button>
-                    </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                )}
+              </>
+            )}
+
+            {/* Sub-tab 2: Client-Specific Family Recycle Bin */}
+            {familySubTab === "recycle_bin" && (
+              <>
+                {recycledFamily.length === 0 ? (
+                  <div className="py-16 text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-3 text-slate-400 text-2xl">
+                      🗑️
+                    </div>
+                    <p className="text-[14px] font-bold text-[#1F2937] mb-1">
+                      Family Recycle Bin is Empty
+                    </p>
+                    <p className="text-xs text-[#6B7280] max-w-sm mx-auto">
+                      When you remove a family member for this client, they will be kept here safely until permanently deleted. You can restore them anytime.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-50">
+                    <div className="px-5 py-2.5 bg-rose-50/50 border-b border-rose-100 flex items-center justify-between text-xs text-rose-700">
+                      <span className="font-semibold">
+                        {recycledFamily.length} {recycledFamily.length === 1 ? "family member" : "family members"} in this client&apos;s Recycle Bin
+                      </span>
+                      <span className="text-[11px] text-[#6B7280]">
+                        Restore anytime or delete permanently
+                      </span>
+                    </div>
+                    {recycledFamily.map((fm) => (
+                      <div
+                        key={fm.id}
+                        className="flex flex-col sm:flex-row sm:items-center gap-4 px-5 py-4 bg-slate-50/40 hover:bg-slate-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-4 flex-1 min-w-0 opacity-80">
+                          <div
+                            className="w-11 h-11 rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0"
+                          >
+                            {fm.name[0]?.toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-[14px] font-bold text-[#1F2937] line-through decoration-slate-400">
+                                {formatFamilyName(fm.name)}
+                              </p>
+                              <span className="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded uppercase tracking-wider">
+                                In Recycle Bin
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className="text-[10px] font-bold text-slate-600 bg-slate-200 px-2 py-0.5 rounded uppercase tracking-wider">
+                                {fm.relationship}
+                              </span>
+                              <span className="text-[11px] text-[#6B7280] font-medium">
+                                Age {getAge(fm.date_of_birth)} ({formatDate(fm.date_of_birth)})
+                              </span>
+                              {fm.occupation && (
+                                <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                  <span>💼</span> {fm.occupation}
+                                </span>
+                              )}
+                              {fm.phone && (
+                                <span className="text-[11px] text-[#6B7280] font-medium">
+                                  · {fm.phone}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                          {/* Restore Button */}
+                          <button
+                            type="button"
+                            onClick={() => restoreFamilyMember(fm.id)}
+                            className="h-8 px-3 flex items-center gap-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all text-[11px] font-bold shadow-xs"
+                            title="Restore this family member back to active list"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            Restore
+                          </button>
+
+                          {/* Delete Forever Button */}
+                          <button
+                            type="button"
+                            onClick={() => permanentDeleteFamilyMember(fm.id)}
+                            className="h-8 px-2.5 flex items-center gap-1 rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-all text-[11px] font-bold shadow-xs"
+                            title="Delete this family member forever"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                            Delete Forever
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
           </div>
         )}
@@ -2569,7 +2776,7 @@ async function deleteDocument(did: string) {
         </div>
       )}
 
-      {/* ── Change Password Modal (Item 8) ─────────────────────────── */}
+      {/* ── Change Password Modal ── */}
       {showPasswordModal && (
         <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
@@ -2622,7 +2829,7 @@ async function deleteDocument(did: string) {
         </div>
       )}
 
-      {/* ── In-App Document Viewer Modal (Item 9) ─────────────────── */}
+      {/* ── Document Viewer Modal ── */}
       {viewingDoc && (
         <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div
@@ -2731,7 +2938,15 @@ async function deleteDocument(did: string) {
                     </span>
                   </div>
                   <p className="text-xs text-[#6B7280] truncate">
-                    Family Profile · Client: {capitalizeWords(client?.name)} {(client?.surname || "").toUpperCase()}
+                    {(() => {
+                      const { firstName, surname } = formatClientDisplayName(client?.name, client?.surname);
+                      return (
+                        <>
+                          Family Profile · Client: <span className="text-black font-semibold">{firstName}</span>{" "}
+                          {surname && <span className="text-[#0E7AC7] font-semibold">{surname}</span>}
+                        </>
+                      );
+                    })()}
                   </p>
                 </div>
               </div>
@@ -2936,7 +3151,7 @@ async function deleteDocument(did: string) {
         </div>
       )}
 
-      {/* ── Edit Family Member Modal (Item 5 & 11) ────────────────── */}
+      {/* ── Edit Family Member Modal ── */}
       {editingFamilyMember && (
         <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div

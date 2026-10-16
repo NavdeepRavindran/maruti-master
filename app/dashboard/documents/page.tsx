@@ -89,14 +89,17 @@ export default function DocumentsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
+  async function getAuthHeaders(): Promise<Record<string, string> | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return null;
+    return { Authorization: `Bearer ${session.access_token}` };
+  }
+
   async function fetchClients() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) return;
-      const res = await fetch("/api/clients", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const headers = await getAuthHeaders();
+      if (!headers) return;
+      const res = await fetch("/api/clients", { headers });
       const data = await res.json();
       setClients(data.clients || []);
     } catch (e) { console.error(e); }
@@ -107,12 +110,9 @@ export default function DocumentsPage() {
     setClientFamily([]);
     if (!cid) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) return;
-      const res = await fetch(`/api/clients/${cid}/family`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const headers = await getAuthHeaders();
+      if (!headers) return;
+      const res = await fetch(`/api/clients/${cid}/family`, { headers });
       const d = await res.json();
       setClientFamily(d.family || []);
     } catch {}
@@ -121,13 +121,10 @@ export default function DocumentsPage() {
   async function fetchDocs() {
     setLoading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) return;
+      const headers = await getAuthHeaders();
+      if (!headers) return;
       const params = search ? `?search=${encodeURIComponent(search)}` : "";
-      const res = await fetch(`/api/documents${params}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`/api/documents${params}`, { headers });
       const data = await res.json();
       setDocs(data.documents || []);
     } catch { } finally { setLoading(false); }
@@ -136,12 +133,11 @@ export default function DocumentsPage() {
   async function deleteDoc(id: string) {
     if (!confirm("Delete this document?")) return;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) return;
+      const headers = await getAuthHeaders();
+      if (!headers) return;
       await fetch(`/api/documents/${id}`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
       });
       fetchDocs();
     } catch { }
@@ -152,9 +148,8 @@ export default function DocumentsPage() {
       return alert("Please fill all fields, select a category, and attach a file");
     setUploading(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token;
-      if (!token) return;
+      const headers = await getAuthHeaders();
+      if (!headers) return;
 
       const formData = new FormData();
       formData.append("file", selectedFile);
@@ -166,7 +161,7 @@ export default function DocumentsPage() {
       formData.append("category", uploadForm.category);
       const res = await fetch("/api/documents", {
         method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
         body: formData,
       });
       if (res.ok) {

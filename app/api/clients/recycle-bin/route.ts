@@ -6,12 +6,14 @@ export async function DELETE() {
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
     // Get all deleted client IDs
-    const { data: deletedClients } = await supabaseAdmin
+    const { data: clients } = await supabaseAdmin
       .from("clients")
-      .select("id")
-      .eq("is_deleted", true);
+      .select("id, is_deleted, notes");
 
-    const ids = (deletedClients || []).map((c: any) => c.id);
+    const ids = (clients || [])
+      .filter((c: any) => c.is_deleted === true || c.is_deleted === "true" || (typeof c.notes === "string" && c.notes.includes("[RECYCLE_BIN:")))
+      .map((c: any) => c.id);
+
     if (ids.length > 0) {
       await supabaseAdmin.from("documents").delete().in("client_id", ids);
       await supabaseAdmin.from("family_members").delete().in("client_id", ids);

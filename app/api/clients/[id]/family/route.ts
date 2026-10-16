@@ -8,6 +8,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const { searchParams } = new URL(request.url);
+  const status = searchParams.get("status");
 
   try {
     if (!supabaseAdmin) throw new Error("Supabase client not initialized");
@@ -19,11 +21,45 @@ export async function GET(
       .order("created_at", { ascending: true });
 
     if (error) throw error;
-    const formatted = (data || []).map((m: any) => ({
-      ...m,
-      name: formatFamilyName(m.name),
-    }));
-    return NextResponse.json({ family_members: formatted });
+
+    const isFamilyDeleted = (m: any) => {
+      if (m.is_deleted === true || m.is_deleted === "true") return true;
+      if (typeof m.name === "string" && m.name.startsWith("[RECYCLE_BIN]")) return true;
+      return false;
+    };
+
+    const cleanFamilyName = (m: any) => {
+      const raw = typeof m.name === "string" ? m.name : "";
+      return formatFamilyName(raw.replace(/^\[RECYCLE_BIN\]\s*/, ""));
+    };
+
+    const activeMembers = (data || [])
+      .filter((m: any) => !isFamilyDeleted(m))
+      .map((m: any) => ({
+        ...m,
+        name: cleanFamilyName(m),
+        is_deleted: false,
+      }));
+
+    const recycledMembers = (data || [])
+      .filter((m: any) => isFamilyDeleted(m))
+      .map((m: any) => ({
+        ...m,
+        name: cleanFamilyName(m),
+        is_deleted: true,
+      }));
+
+    if (status === "recycle_bin") {
+      return NextResponse.json({
+        family_members: recycledMembers,
+        recycled_family_members: recycledMembers,
+      });
+    }
+
+    return NextResponse.json({
+      family_members: activeMembers,
+      recycled_family_members: recycledMembers,
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to fetch family members" }, { status: 500 });
   }

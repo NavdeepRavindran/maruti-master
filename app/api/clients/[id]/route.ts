@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabaseClient";
 
 import { validateEmail } from "@/lib/emailValidator";
-import { validateDateRange } from "@/lib/formatUtils";
+import { validateDateRange, isValidDateYear } from "@/lib/formatUtils";
 
 // GET /api/clients/[id]
 export async function GET(
@@ -31,6 +31,29 @@ export async function GET(
       if (data) family = data;
     } catch {}
 
+    const isFamilyDeleted = (fm: any) => {
+      if (fm.is_deleted === true || fm.is_deleted === "true") return true;
+      if (typeof fm.name === "string" && fm.name.startsWith("[RECYCLE_BIN]")) return true;
+      return false;
+    };
+
+    const cleanFamilyName = (fm: any) => {
+      const raw = typeof fm.name === "string" ? fm.name : "";
+      return raw.replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
+    };
+
+    const activeFamily = family.filter((f) => !isFamilyDeleted(f)).map((f) => ({
+      ...f,
+      name: cleanFamilyName(f),
+      is_deleted: false,
+    }));
+
+    const recycledFamily = family.filter((f) => isFamilyDeleted(f)).map((f) => ({
+      ...f,
+      name: cleanFamilyName(f),
+      is_deleted: true,
+    }));
+
     let docs: any[] = [];
     try {
       const { data } = await supabaseAdmin
@@ -43,6 +66,12 @@ export async function GET(
     const rawSurname = client.surname || client.fatherName || client.father_name || "";
     const surname = rawSurname ? rawSurname.toUpperCase() : "";
 
+    const isDeleted = Boolean(
+      client.is_deleted === true ||
+      client.is_deleted === "true" ||
+      (typeof client.notes === "string" && client.notes.includes("[RECYCLE_BIN:"))
+    );
+
     return NextResponse.json({
       client: {
         ...client,
@@ -53,13 +82,20 @@ export async function GET(
         pin_code: client.pin_code || client.pinCode || "",
         pinCode: client.pin_code || client.pinCode || "",
         date_of_birth: client.date_of_birth || client.dob || "",
-        anniversary_date: client.anniversary_date || client.anniversaryDate || "",
+        anniversary_date: isValidDateYear(client.anniversary_date || client.anniversaryDate)
+          ? (client.anniversary_date || client.anniversaryDate)
+          : "",
+        anniversaryDate: isValidDateYear(client.anniversary_date || client.anniversaryDate)
+          ? (client.anniversary_date || client.anniversaryDate)
+          : "",
         clientloginid: client.clientloginid || client.clientLoginId || client.phone || "",
         plain_password: client.plain_password || client.plainPassword || client.temporarypassword || "",
-        family_count: family.length,
+        is_deleted: isDeleted,
+        family_count: activeFamily.length,
         document_count: docs.length,
       },
-      family_members: family,
+      family_members: activeFamily,
+      recycled_family_members: recycledFamily,
       documents: docs,
     });
   } catch (err: any) {
@@ -161,15 +197,43 @@ export async function PUT(
       }
     }
 
-    const { data, error } = await supabaseAdmin
+    let updateRes = await supabaseAdmin
       .from("clients")
       .update(updatePayload)
       .eq("id", id)
       .select()
-      .single();
+      .maybeSingle();
 
-    if (error) throw error;
-    return NextResponse.json({ client: data });
+    if (updateRes.error) {
+      // Schema resilience fallback: retry by removing column if not present in DB
+      let curPayload = { ...updatePayload };
+      let lastErr: any = updateRes.error;
+      while (Object.keys(curPayload).length > 0 && lastErr) {
+        const msg = lastErr.message || "";
+        const colMatch = msg.match(/column "(.*?)" of relation "clients" does not exist/i) ||
+                         msg.match(/Could not find the '(.*?)' column/i);
+        if (colMatch && colMatch[1] && curPayload[colMatch[1]] !== undefined) {
+          delete curPayload[colMatch[1]];
+          const retryRes = await supabaseAdmin
+            .from("clients")
+            .update(curPayload)
+            .eq("id", id)
+            .select()
+            .maybeSingle();
+          if (!retryRes.error) {
+            updateRes = retryRes;
+            lastErr = null;
+            break;
+          }
+          lastErr = retryRes.error;
+        } else {
+          break;
+        }
+      }
+      if (lastErr) throw lastErr;
+    }
+
+    return NextResponse.json({ client: updateRes.data });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to update client" }, { status: 500 });
   }
@@ -215,7 +279,22 @@ export async function DELETE(
           .eq("id", id);
       }
       if (updateRes.error) {
-        throw updateRes.error;
+        // Fallback: If is_deleted column does not exist in DB, tag notes
+        const { data: clientData } = await supabaseAdmin
+          .from("clients")
+          .select("notes")
+          .eq("id", id)
+          .maybeSingle();
+        const existingNotes = clientData?.notes || "";
+        const tag = `[RECYCLE_BIN:${new Date().toISOString()}]`;
+        const updatedNotes = existingNotes ? `${existingNotes}\n${tag}` : tag;
+        const notesRes = await supabaseAdmin
+          .from("clients")
+          .update({ notes: updatedNotes })
+          .eq("id", id);
+        if (notesRes.error) {
+          throw updateRes.error;
+        }
       }
       return NextResponse.json({ success: true, message: "Client moved to Recycle Bin" });
     }

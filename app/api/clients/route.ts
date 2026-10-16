@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { isValidEmail, getEmailError } from "@/lib/emailValidator";
-import { validateDateRange } from "@/lib/formatUtils";
+import { validateDateRange, isValidDateYear } from "@/lib/formatUtils";
 
 const clientSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -150,18 +150,23 @@ export async function GET(request: Request) {
 
     const getComputedStatus = (c: any) => {
       if (c.status === "Inactive") return "Inactive";
-      if (c.status === "Active") return "Active";
       // If KYC document is uploaded, client is Active, otherwise Pending
       return hasKyc[c.id] ? "Active" : "Pending";
+    };
+
+    const isClientDeleted = (c: any) => {
+      if (c.is_deleted === true || c.is_deleted === "true") return true;
+      if (typeof c.notes === "string" && c.notes.includes("[RECYCLE_BIN:")) return true;
+      return false;
     };
 
     let filtered = data || [];
 
     // Filter soft deletion safely in JavaScript
     if (status === "recycle_bin" || status === "deleted") {
-      filtered = filtered.filter((c: any) => c.is_deleted === true || c.is_deleted === "true");
+      filtered = filtered.filter((c: any) => isClientDeleted(c));
     } else {
-      filtered = filtered.filter((c: any) => !c.is_deleted || c.is_deleted === false || c.is_deleted === "false");
+      filtered = filtered.filter((c: any) => !isClientDeleted(c));
       if (status && status !== "all") {
         filtered = filtered.filter((c: any) => getComputedStatus(c).toLowerCase() === status.toLowerCase());
       }
@@ -187,8 +192,15 @@ export async function GET(request: Request) {
       const altMobile = c.alternate_mobile || c.alternateMobile || c.alt_phone || "";
       const email = c.email || "";
       const dob = c.date_of_birth || c.dob || "";
-      const anniv = c.anniversary_date || c.anniversaryDate || "";
+      const rawAnniv = c.anniversary_date || c.anniversaryDate || "";
+      const anniv = isValidDateYear(rawAnniv) ? rawAnniv : "";
       const pin = c.pin_code || c.pinCode || c.pincode || "";
+
+      let deletedAt = c.deleted_at || null;
+      if (!deletedAt && typeof c.notes === "string") {
+        const match = c.notes.match(/\[RECYCLE_BIN:([^\]]+)\]/);
+        if (match) deletedAt = match[1];
+      }
 
       return {
         id: c.id,
@@ -216,8 +228,8 @@ export async function GET(request: Request) {
         clientLoginId: c.clientloginid || c.clientLoginId || phone,
         profile_pic: c.profile_pic || null,
         created_at: c.created_at || new Date().toISOString(),
-        is_deleted: Boolean(c.is_deleted),
-        deleted_at: c.deleted_at || null,
+        is_deleted: isClientDeleted(c),
+        deleted_at: deletedAt,
         family_count: familyCounts[c.id] ?? (c.family_members?.[0]?.count ?? 0),
         document_count: docCounts[c.id] ?? (c.documents?.[0]?.count ?? 0),
       };
