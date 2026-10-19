@@ -256,6 +256,8 @@ setForm(prev => ({
   }
 }
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -525,19 +527,17 @@ setForm(prev => ({
   }, [fetchRecycleCount]);
 
   const handleDelete = async (id: string) => {
+    setIsDeleting(true);
     try {
       const { headers } = await getAuthTokenAndHeaders();
-
-      // Optimistically update lists and counts in real time
-      setClients(prev => prev.filter(c => c.id !== id));
-      setAllClients(prev => prev.map(c => c.id === id ? { ...c, is_deleted: true } : c));
-      setRecycleCount(prev => prev + 1);
-
       const res = await fetch(`/api/clients/${id}`, {
         method: "DELETE",
         headers,
       });
       if (res.ok) {
+        setClients(prev => prev.filter(c => c.id !== id));
+        setAllClients(prev => prev.map(c => c.id === id ? { ...c, is_deleted: true } : c));
+        setRecycleCount(prev => prev + 1);
         toast.success("Client moved to Recycle Bin.");
       } else {
         const err = await res.json().catch(() => ({}));
@@ -549,35 +549,39 @@ setForm(prev => ({
     } catch (e: any) {
       toast.error(e.message || "Failed to delete client");
       fetchClients();
+    } finally {
+      setIsDeleting(false);
+      setDeleteConfirm(null);
     }
-    setDeleteConfirm(null);
   };
 
   const handleRestore = async (id: string) => {
+    setRestoringId(id);
     try {
       const { headers } = await getAuthTokenAndHeaders();
-
-      // Optimistically update lists and counts in real time
-      setClients(prev => prev.filter(c => c.id !== id));
-      setAllClients(prev => prev.map(c => c.id === id ? { ...c, is_deleted: false } : c));
-      setRecycleCount(prev => Math.max(0, prev - 1));
-
       const res = await fetch(`/api/clients/${id}/restore`, {
         method: "POST",
         headers,
       });
       if (res.ok) {
+        setClients(prev => prev.filter(c => c.id !== id));
+        setAllClients(prev => prev.map(c => c.id === id ? { ...c, is_deleted: false } : c));
+        setRecycleCount(prev => Math.max(0, prev - 1));
         toast.success("Client restored successfully!");
       } else {
         const err = await res.json().catch(() => ({}));
         toast.error(err.error || "Failed to restore client");
       }
-      fetchClients();
-      fetchAllClientsSummary();
-      fetchRecycleCount();
+      await Promise.all([
+        fetchClients(),
+        fetchAllClientsSummary(),
+        fetchRecycleCount(),
+      ]);
     } catch (e: any) {
       toast.error(e.message || "Failed to restore client");
       fetchClients();
+    } finally {
+      setRestoringId(null);
     }
   };
 
@@ -658,7 +662,10 @@ setForm(prev => ({
       profile_pic: c.profile_pic || "",
     });
 
-    // Also load family members for this client
+    // Open modal immediately so user sees zero delay
+    setShowAdd(true);
+
+    // Also load family members for this client in background
     try {
       const { token, headers } = await getAuthTokenAndHeaders();
       if (token) {
@@ -680,8 +687,6 @@ setForm(prev => ({
     } catch {
       setFamilyMembers([]);
     }
-
-    setShowAdd(true);
   };
 
   const closeModal = () => {
@@ -916,10 +921,10 @@ setForm(prev => ({
                       const { firstName, surname } = formatClientDisplayName(c.name, c.surname);
                       return (
                         <Link href={`/dashboard/clients/${c.id}`} className="text-[15px] font-bold truncate block hover:underline">
-                          <span className="text-black font-bold">{firstName}</span>{" "}
                           {surname && (
-                            <span className="text-[#0E7AC7] font-semibold">{surname}</span>
+                            <span className="text-[#0E7AC7] font-bold mr-1.5">{surname}</span>
                           )}
+                          <span className="text-black font-bold">{firstName}</span>
                         </Link>
                       );
                     })()}
@@ -966,10 +971,20 @@ setForm(prev => ({
                 {filter === "recycle_bin" ? (
                   <div className="flex gap-2 pt-3 border-t border-slate-100">
                     <button
+                      disabled={restoringId === c.id}
                       onClick={() => handleRestore(c.id)}
-                      className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-600 hover:text-white transition-all shadow-2xs"
+                      className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-600 hover:text-white transition-all shadow-2xs disabled:opacity-60 cursor-pointer"
                     >
-                      <IC.Restore /> Restore
+                      {restoringId === c.id ? (
+                        <>
+                          <span className="w-3.5 h-3.5 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                          <span>Restoring...</span>
+                        </>
+                      ) : (
+                        <>
+                          <IC.Restore /> Restore
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => handlePermanentDelete(c.id)}
@@ -1060,10 +1075,10 @@ setForm(prev => ({
                         const { firstName, surname } = formatClientDisplayName(c.name, c.surname);
                         return (
                           <Link href={`/dashboard/clients/${c.id}`} className="text-[13px] font-bold truncate block hover:underline">
-                            <span className="text-black group-hover:text-black font-bold">{firstName}</span>{" "}
                             {surname && (
-                              <span className="text-[#0E7AC7] group-hover:text-[#0E7AC7] font-semibold">{surname}</span>
+                              <span className="text-[#0E7AC7] group-hover:text-[#0E7AC7] font-bold mr-1.5">{surname}</span>
                             )}
+                            <span className="text-black group-hover:text-black font-bold">{firstName}</span>
                           </Link>
                         );
                       })()}
@@ -1121,11 +1136,21 @@ setForm(prev => ({
                     {filter === "recycle_bin" ? (
                       <div className="flex items-center gap-1.5">
                         <button
+                          disabled={restoringId === c.id}
                           onClick={() => handleRestore(c.id)}
-                          className="h-8 px-2.5 flex items-center gap-1 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[11px] font-bold transition-all shadow-xs"
+                          className="h-8 px-2.5 flex items-center gap-1.5 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white text-[11px] font-bold transition-all shadow-xs disabled:opacity-60 cursor-pointer"
                           title="Restore Client"
                         >
-                          <IC.Restore /> Restore
+                          {restoringId === c.id ? (
+                            <>
+                              <span className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                              <span>Restoring...</span>
+                            </>
+                          ) : (
+                            <>
+                              <IC.Restore /> Restore
+                            </>
+                          )}
                         </button>
                         <button
                           onClick={() => handlePermanentDelete(c.id)}
@@ -1198,13 +1223,26 @@ setForm(prev => ({
               This client will be stored in the Recycle Bin for 3 months (90 days). You can restore them anytime during this period before they are permanently deleted.
             </p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)}
-                className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC] transition-colors">
+              <button 
+                disabled={isDeleting}
+                onClick={() => setDeleteConfirm(null)}
+                className="flex-1 h-12 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-[#F7F9FC] transition-colors disabled:opacity-50">
                 Cancel
               </button>
-              <button onClick={() => handleDelete(deleteConfirm)}
-                className="flex-1 h-12 rounded-2xl bg-[#EF4444] text-white text-[13px] font-bold hover:bg-[#dc2626] transition-colors active:scale-95 flex items-center justify-center gap-1.5">
-                <IC.Trash /> Move to Bin
+              <button 
+                disabled={isDeleting}
+                onClick={() => handleDelete(deleteConfirm)}
+                className="flex-1 h-12 rounded-2xl bg-[#EF4444] text-white text-[13px] font-bold hover:bg-[#dc2626] transition-colors active:scale-95 flex items-center justify-center gap-2 disabled:opacity-60 cursor-pointer">
+                {isDeleting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>Moving...</span>
+                  </>
+                ) : (
+                  <>
+                    <IC.Trash /> Move to Bin
+                  </>
+                )}
               </button>
             </div>
           </div>

@@ -41,8 +41,22 @@ export async function GET(request: Request) {
     const { data, error } = await query;
     if (error) throw error;
 
+    const isDocDeleted = (d: any) => {
+      if (d.is_deleted === true || d.is_deleted === "true") return true;
+      if (typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]")) return true;
+      return false;
+    };
+
+    const cleanDocName = (d: any) => {
+      const raw = typeof d.name === "string" ? d.name : "";
+      return raw.replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
+    };
+
     const documents = (data || []).map((d: any) => ({
       ...d,
+      raw_name: d.name,
+      name: cleanDocName(d),
+      is_deleted: isDocDeleted(d),
       client_name: d.clients?.name || "Unknown",
     }));
 
@@ -113,6 +127,21 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw error;
+
+    // Automatically mark client Active upon KYC upload
+    const isKyc = (
+      category === "KYC / Identity" ||
+      category === "KYC" ||
+      /ckyc|kyc|aadhaar|pan/i.test(name) ||
+      /ckyc|kyc|aadhaar|pan/i.test(file.name)
+    );
+    if (isKyc) {
+      await supabaseAdmin
+        .from("clients")
+        .update({ status: "Active" })
+        .eq("id", client_id);
+    }
+
     return NextResponse.json({ document: data }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to upload document" }, { status: 500 });

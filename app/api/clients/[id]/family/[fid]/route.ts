@@ -24,12 +24,41 @@ export async function PUT(
   try {
     if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized");
 
-    const updatePayload: Record<string, any> = {};
-    if (body.name !== undefined) updatePayload.name = formatFamilyName(body.name);
+    // Fetch current family member to preserve existing name / occupation if not supplied
+    const { data: currentFm } = await supabaseAdmin
+      .from("family_members")
+      .select("name, phone, relationship, date_of_birth, photo_url")
+      .eq("id", fid)
+      .maybeSingle();
+
+    const currentRawName = currentFm?.name || "";
+    const isDeleted = currentRawName.startsWith("[RECYCLE_BIN]");
+    
+    // Determine target occupation
+    const existingOccMatch = currentRawName.match(/\[OCC:\s*(.*?)\]/);
+    const existingOcc = existingOccMatch ? existingOccMatch[1].trim() : "";
+    const targetOcc = body.occupation !== undefined ? (body.occupation || "").trim() : existingOcc;
+
+    const baseName = body.name !== undefined 
+      ? formatFamilyName(body.name) 
+      : currentRawName.replace(/^\[RECYCLE_BIN\]\s*/, "").replace(/\[OCC:\s*.*?\]/g, "").trim();
+
+    let finalName = baseName;
+    if (targetOcc) {
+      finalName = `${finalName} [OCC: ${targetOcc}]`;
+    }
+    if (isDeleted) {
+      finalName = `[RECYCLE_BIN] ${finalName}`;
+    }
+
+    const updatePayload: Record<string, any> = {
+      name: finalName,
+    };
     if (body.relationship !== undefined) updatePayload.relationship = body.relationship;
     if (body.date_of_birth !== undefined) updatePayload.date_of_birth = body.date_of_birth;
     if (body.phone !== undefined) updatePayload.phone = body.phone;
-    if (body.occupation !== undefined) updatePayload.occupation = body.occupation;
+    if (targetOcc) updatePayload.occupation = targetOcc;
+    if (body.photo_url !== undefined) updatePayload.photo_url = body.photo_url;
     if (body.notes !== undefined) updatePayload.notes = body.notes;
 
     let updateRes = await supabaseAdmin
@@ -70,7 +99,13 @@ export async function PUT(
       if (lastErr) throw lastErr;
     }
 
-    return NextResponse.json({ family_member: updateRes.data });
+    const returnedData = {
+      ...(updateRes.data || {}),
+      name: baseName,
+      occupation: targetOcc,
+    };
+
+    return NextResponse.json({ family_member: returnedData });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to update family member" }, { status: 500 });
   }

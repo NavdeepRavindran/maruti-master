@@ -11,23 +11,7 @@ export async function POST(
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
     
-    let restoreRes = await supabaseAdmin
-      .from("clients")
-      .update({ is_deleted: false, deleted_at: null })
-      .eq("id", id)
-      .select()
-      .maybeSingle();
-
-    if (restoreRes.error) {
-      restoreRes = await supabaseAdmin
-        .from("clients")
-        .update({ is_deleted: false })
-        .eq("id", id)
-        .select()
-        .maybeSingle();
-    }
-
-    // Also clean up [RECYCLE_BIN:...] from notes if present
+    // Clean up [RECYCLE_BIN:...] tag from notes directly and fast
     const { data: clientData } = await supabaseAdmin
       .from("clients")
       .select("notes")
@@ -41,7 +25,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      client: restoreRes.data || { id, is_deleted: false },
+      client: { id, is_deleted: false },
       message: "Client restored successfully from Recycle Bin",
     });
   } catch (err: any) {

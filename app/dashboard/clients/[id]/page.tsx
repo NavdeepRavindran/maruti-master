@@ -14,6 +14,7 @@ import {
   getAge,
   validateDateRange,
   isValidDateYear,
+  getRecycleBinRetention,
 } from "@/lib/formatUtils";
 import { validateEmail } from "@/lib/emailValidator";
 
@@ -51,6 +52,9 @@ interface FamilyMember {
   relationship: string;
   phone?: string;
   occupation?: string;
+  photo_url?: string;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
 }
 
 interface DocData {
@@ -63,6 +67,8 @@ interface DocData {
   family_member_id?: string | null;
   file_url?: string;
   category?: string;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
 }
 
 const labelCls = "block text-xs font-semibold text-[#6B7280] mb-1.5";
@@ -162,12 +168,17 @@ export default function ClientProfilePage({
   const [savingPassword, setSavingPassword] = useState(false);
 
   const [viewingDoc, setViewingDoc] = useState<DocData | null>(null);
+  const [recycledDocs, setRecycledDocs] = useState<DocData[]>([]);
+  const [docSubTab, setDocSubTab] = useState<"active" | "recycle_bin">("active");
 
   const [viewingFamilyMember, setViewingFamilyMember] = useState<FamilyMember | null>(null);
   const [editingFamilyMember, setEditingFamilyMember] = useState<FamilyMember | null>(null);
   const [recycledFamily, setRecycledFamily] = useState<FamilyMember[]>([]);
   const [familySubTab, setFamilySubTab] = useState<"active" | "recycle_bin">("active");
   const [savingFamilyEdit, setSavingFamilyEdit] = useState(false);
+  const familyPhotoInputRef = useRef<HTMLInputElement>(null);
+  const editFamilyPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFamilyPhoto, setUploadingFamilyPhoto] = useState(false);
 
   // In-modal error banners (displayed directly on the same layer)
   const [editModalError, setEditModalError] = useState<string | null>(null);
@@ -239,8 +250,9 @@ export default function ClientProfilePage({
       if (data.client) setClient(data.client);
       if (data.family_members) setFamily(data.family_members);
       if (data.recycled_family_members) setRecycledFamily(data.recycled_family_members);
-      else setRecycledFamily([]);
       if (data.documents) setDocs(data.documents);
+      if (data.recycled_documents) setRecycledDocs(data.recycled_documents);
+      else setRecycledDocs([]);
     } catch {
     } finally {
       setLoading(false);
@@ -359,30 +371,98 @@ export default function ClientProfilePage({
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
-      alert("Image must be under 2 MB.");
+      toast.error("Image must be under 2 MB.");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const b64 = reader.result as string;
-      try {
-        const headers = await authHeaders(true);
-        const res = await fetch(`/api/clients/${id}`, {
-          method: "PUT",
-          headers,
-          body: JSON.stringify({ profile_pic: b64 }),
-        });
-        if (res.ok) {
-          setClient((prev: any) => (prev ? { ...prev, profile_pic: b64 } : prev));
-          toast.success("Profile photo updated successfully!");
-        } else {
-          toast.error("Failed to update photo.");
-        }
-      } catch {
-        toast.error("Failed to update photo.");
+    const toastId = toast.loading("Uploading client photo...");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "clients");
+      formData.append("id", id);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const photoUrl = data.photoUrl;
+        setClient((prev: any) => (prev ? { ...prev, profile_pic: photoUrl } : prev));
+        toast.success("Profile photo updated successfully!", { id: toastId });
+        fetchClient();
+      } else {
+        // Fallback to base64 PUT if storage upload failed
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const b64 = reader.result as string;
+          const headers = await authHeaders(true);
+          const putRes = await fetch(`/api/clients/${id}`, {
+            method: "PUT",
+            headers,
+            body: JSON.stringify({ profile_pic: b64 }),
+          });
+          if (putRes.ok) {
+            setClient((prev: any) => (prev ? { ...prev, profile_pic: b64 } : prev));
+            toast.success("Profile photo updated successfully!", { id: toastId });
+          } else {
+            toast.error("Failed to update photo.", { id: toastId });
+          }
+        };
+        reader.readAsDataURL(file);
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update photo.", { id: toastId });
+    }
+  }
+
+  async function handleFamilyPhotoUpload(e: React.ChangeEvent<HTMLInputElement>, memberId: string) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image must be under 2 MB.");
+      return;
+    }
+    setUploadingFamilyPhoto(true);
+    const toastId = toast.loading("Uploading family member photo...");
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "family");
+      formData.append("id", memberId);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || "Failed to upload photo");
+      }
+
+      const data = await res.json();
+      const photoUrl = data.photoUrl;
+
+      // Update local states
+      setFamily((prev) =>
+        prev.map((m) => (m.id === memberId ? { ...m, photo_url: photoUrl } : m))
+      );
+      if (viewingFamilyMember && viewingFamilyMember.id === memberId) {
+        setViewingFamilyMember((prev) => (prev ? { ...prev, photo_url: photoUrl } : null));
+      }
+      if (editingFamilyMember && editingFamilyMember.id === memberId) {
+        setEditingFamilyMember((prev) => (prev ? { ...prev, photo_url: photoUrl } : null));
+      }
+
+      toast.success("Family member photo updated successfully!", { id: toastId });
+      fetchClient();
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update photo.", { id: toastId });
+    } finally {
+      setUploadingFamilyPhoto(false);
+    }
   }
 
   async function handleSavePassword() {
@@ -671,6 +751,9 @@ export default function ClientProfilePage({
       });
       setSelectedDocFile(null);
       toast.success("Document uploaded.");
+      if (docForm.category === "KYC / Identity" || docForm.category === "KYC" || /ckyc|kyc|aadhaar|pan/i.test(docForm.name)) {
+        setClient(prev => prev ? { ...prev, status: "Active" } : null);
+      }
       fetchClient();
     } catch (e: any) {
       toast.error("Error: " + e.message);
@@ -679,21 +762,72 @@ export default function ClientProfilePage({
     }
   }
 
-async function deleteDocument(did: string) {
-  if (!confirm("Delete this document?")) return;
-  try {
-    const headers = await authHeaders(false);
-    const res = await fetch(`/api/documents/${did}`, { method: "DELETE", headers });
-    if (!res.ok) {
-      const e = await res.json();
-      toast.error("Delete failed: " + (e.error || res.status));
-      return;
+  async function deleteDocument(did: string) {
+    if (!confirm("Move this document to this client's Recycle Bin? You can restore it anytime.")) return;
+    try {
+      const headers = await authHeaders(false);
+      const res = await fetch(`/api/documents/${did}`, { method: "DELETE", headers });
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        toast.error("Failed to move document: " + (e.error || res.status));
+        return;
+      }
+      toast.success("Document moved to Recycle Bin.");
+      fetchClient();
+    } catch (e: any) {
+      toast.error("Failed: " + e.message);
     }
-    fetchClient();
-  } catch (e: any) {
-    toast.error("Delete failed: " + e.message);
   }
-}
+
+  async function restoreDocument(did: string) {
+    try {
+      const headers = await authHeaders(false);
+      const res = await fetch(`/api/documents/${did}/restore`, { method: "POST", headers });
+      if (res.ok) {
+        toast.success("Document restored successfully.");
+        fetchClient();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to restore document");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to restore document");
+    }
+  }
+
+  async function permanentDeleteDocument(did: string) {
+    if (!confirm("Permanently delete this document and remove its file? This action CANNOT be undone.")) return;
+    try {
+      const headers = await authHeaders(false);
+      const res = await fetch(`/api/documents/${did}?permanent=true`, { method: "DELETE", headers });
+      if (res.ok) {
+        toast.success("Document permanently deleted.");
+        fetchClient();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to permanently delete document");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to delete document");
+    }
+  }
+
+  async function emptyDocumentRecycleBin() {
+    if (!confirm("Permanently delete ALL documents in this client's Recycle Bin? This action CANNOT be undone.")) return;
+    try {
+      const headers = await authHeaders(false);
+      const res = await fetch(`/api/clients/${id}/documents/recycle-bin`, { method: "DELETE", headers });
+      if (res.ok) {
+        toast.success("Document Recycle Bin emptied.");
+        fetchClient();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err.error || "Failed to empty Document Recycle Bin");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Failed to empty Document Recycle Bin");
+    }
+  }
 
   if (loading)
     return (
@@ -715,7 +849,7 @@ async function deleteDocument(did: string) {
       </div>
     );
 
-  const fullName = [client.name, client.surname].filter(Boolean).join(" ");
+  const { firstName: clientFirstName, surname: clientSurname, fullName } = formatClientDisplayName(client.name, client.surname);
   const fullAddress = [
     client.address,
     client.city,
@@ -929,24 +1063,24 @@ async function deleteDocument(did: string) {
                     return (
                       <>
                         <div className="flex items-baseline gap-2.5 flex-wrap">
-                          <h1 className="text-2xl sm:text-[28px] font-bold text-black">
-                            {firstName}
-                          </h1>
                           {surname && (
-                            <span className="text-2xl sm:text-[28px] font-bold text-[#0E7AC7]">
+                            <h1 className="text-2xl sm:text-[28px] font-bold text-[#0E7AC7] tracking-wide">
                               {surname}
-                            </span>
+                            </h1>
                           )}
+                          <span className="text-2xl sm:text-[28px] font-bold text-black">
+                            {firstName}
+                          </span>
                         </div>
 
                         <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-[#6B7280] flex-wrap">
-                          <span>First Name: <strong className="text-black">{firstName}</strong></span>
                           {surname && (
                             <>
-                              <span>•</span>
                               <span>Surname: <strong className="text-[#0E7AC7]">{surname}</strong></span>
+                              <span>•</span>
                             </>
                           )}
+                          <span>First Name: <strong className="text-black">{firstName}</strong></span>
                         </div>
                       </>
                     );
@@ -1152,8 +1286,8 @@ async function deleteDocument(did: string) {
           </div>
           <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
             {[
-              { label: "First Name", value: formatClientDisplayName(client.name, client.surname).firstName },
               { label: "Surname", value: formatClientDisplayName(client.name, client.surname).surname || "—" },
+              { label: "First Name", value: formatClientDisplayName(client.name, client.surname).firstName },
               { label: "Marital Status", value: client.marital_status },
               { label: "Alternate Mobile", value: client.alternate_mobile },
               {
@@ -1407,7 +1541,7 @@ async function deleteDocument(did: string) {
         {/* Documents tab */}
         {activeTab === "docs" && (
           <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
-            <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+            <div className="px-5 py-4 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
                   Documents
@@ -1416,232 +1550,420 @@ async function deleteDocument(did: string) {
                   Separate documents for {client.name} and each family member
                 </p>
               </div>
-              <button
-                onClick={() => {
-                  setDocForm({
-                    name: "",
-                    file_name: "",
-                    file_size: 0,
-                    file_url: "",
-                    family_member_id: docFilterMember !== "all" && docFilterMember !== "client" ? docFilterMember : "",
-                    category: "",
-                  });
-                  setShowDocModal(true);
-                }}
-                className="flex items-center gap-1.5 px-3.5 h-9 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95"
-              >
-                <svg
-                  className="w-3 h-3"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
-                Upload Document
-              </button>
-            </div>
 
-            {/* Separate Document Filter Bar by Member */}
-            <div className="px-5 py-2.5 bg-[#F7F9FC] border-b border-slate-100 flex items-center gap-2 overflow-x-auto">
-              <span className="text-[11px] font-bold text-[#6B7280] shrink-0 mr-1">Filter By:</span>
-              <button
-                onClick={() => setDocFilterMember("all")}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                  docFilterMember === "all"
-                    ? "bg-[#005A87] text-white shadow-xs"
-                    : "bg-white text-[#6B7280] hover:text-[#1F2937] border border-slate-200"
-                }`}
-              >
-                All Documents ({docs.length})
-              </button>
-              <button
-                onClick={() => setDocFilterMember("client")}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                  docFilterMember === "client"
-                    ? "bg-[#005A87] text-white shadow-xs"
-                    : "bg-white text-[#6B7280] hover:text-[#1F2937] border border-slate-200"
-                }`}
-              >
-                Client: {capitalizeWords(client.name)} ({docs.filter((d) => !d.family_member_id).length})
-              </button>
-              {family.map((f) => (
-                <button
-                  key={f.id}
-                  onClick={() => setDocFilterMember(f.id)}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                    docFilterMember === f.id
-                      ? "bg-[#7C6CF6] text-white shadow-xs"
-                      : "bg-white text-[#6B7280] hover:text-[#1F2937] border border-slate-200"
-                  }`}
-                >
-                  {f.name} ({docs.filter((d) => d.family_member_id === f.id).length})
-                </button>
-              ))}
-            </div>
-
-            {docs.length === 0 ? (
-              <div className="py-16 text-center px-5">
-                <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
-                  <svg
-                    className="w-6 h-6"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={1.5}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Active / Recycle Bin Sub-tabs */}
+                <div className="flex items-center p-1 bg-[#F7F9FC] rounded-xl border border-slate-100 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setDocSubTab("active")}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      docSubTab === "active"
+                        ? "bg-white text-[#005A87] shadow-xs"
+                        : "text-[#6B7280] hover:text-[#1F2937]"
+                    }`}
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                  </svg>
+                    Active Documents ({docs.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDocSubTab("recycle_bin")}
+                    className={`px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all ${
+                      docSubTab === "recycle_bin"
+                        ? "bg-white text-rose-600 shadow-xs"
+                        : "text-[#6B7280] hover:text-[#1F2937]"
+                    }`}
+                  >
+                    <span>🗑️</span>
+                    <span>Recycle Bin ({recycledDocs.length})</span>
+                  </button>
                 </div>
-                <p className="text-[13px] font-semibold text-[#1F2937] mb-2">
-                  No documents uploaded yet
-                </p>
-                <button
-                  onClick={() => setShowDocModal(true)}
-                  className="text-xs text-[#005A87] font-bold hover:underline"
-                >
-                  Upload first document →
-                </button>
+
+                {docSubTab === "active" ? (
+                  <button
+                    onClick={() => {
+                      setDocForm({
+                        name: "",
+                        file_name: "",
+                        file_size: 0,
+                        file_url: "",
+                        family_member_id:
+                          docFilterMember !== "all" && docFilterMember !== "client"
+                            ? docFilterMember
+                            : "",
+                        category: "",
+                      });
+                      setShowDocModal(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3.5 h-9 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95 shadow-xs"
+                  >
+                    <svg
+                      className="w-3 h-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth={2.5}
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 4v16m8-8H4"
+                      />
+                    </svg>
+                    Upload Document
+                  </button>
+                ) : (
+                  recycledDocs.length > 0 && (
+                    <button
+                      onClick={emptyDocumentRecycleBin}
+                      className="flex items-center gap-1 px-3 h-9 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-xl text-xs font-bold transition-all shadow-xs"
+                      title="Permanently empty document recycle bin"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                      Empty Documents Bin
+                    </button>
+                  )
+                )}
               </div>
-            ) : (
-              <div className="divide-y divide-slate-50">
-                {docs
-                  .filter((d) => {
-                    if (docFilterMember === "all") return true;
-                    if (docFilterMember === "client") return !d.family_member_id;
-                    return d.family_member_id === docFilterMember;
-                  })
-                  .map((doc) => {
-                    const famMember = family.find((f) => f.id === doc.family_member_id);
-                    return (
-                      <div
-                        key={doc.id}
-                        className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F9FC] transition-colors group"
+            </div>
+
+            {/* Sub-tab 1: Active Documents */}
+            {docSubTab === "active" && (
+              <>
+                {/* Separate Document Filter Bar by Member */}
+                <div className="px-5 py-2.5 bg-[#F7F9FC] border-b border-slate-100 flex items-center gap-2 overflow-x-auto">
+                  <span className="text-[11px] font-bold text-[#6B7280] shrink-0 mr-1">Filter By:</span>
+                  <button
+                    onClick={() => setDocFilterMember("all")}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                      docFilterMember === "all"
+                        ? "bg-[#005A87] text-white shadow-xs"
+                        : "bg-white text-[#6B7280] hover:text-[#1F2937] border border-slate-200"
+                    }`}
+                  >
+                    All Documents ({docs.length})
+                  </button>
+                  <button
+                    onClick={() => setDocFilterMember("client")}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                      docFilterMember === "client"
+                        ? "bg-[#005A87] text-white shadow-xs"
+                        : "bg-white text-[#6B7280] hover:text-[#1F2937] border border-slate-200"
+                    }`}
+                  >
+                    Client: {capitalizeWords(client.name)} ({docs.filter((d) => !d.family_member_id).length})
+                  </button>
+                  {family.map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setDocFilterMember(f.id)}
+                      className={`px-3 py-1 rounded-xl text-xs font-bold transition-all shrink-0 ${
+                        docFilterMember === f.id
+                          ? "bg-[#7C6CF6] text-white shadow-xs"
+                          : "bg-white text-[#6B7280] hover:text-[#1F2937] border border-slate-200"
+                      }`}
+                    >
+                      {f.name} ({docs.filter((d) => d.family_member_id === f.id).length})
+                    </button>
+                  ))}
+                </div>
+
+                {docs.length === 0 ? (
+                  <div className="py-16 text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-[#F7F9FC] flex items-center justify-center mx-auto mb-3 text-[#6B7280]">
+                      <svg
+                        className="w-6 h-6"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={1.5}
                       >
-                        <div
-                          className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${docColor(doc.file_type)}`}
-                        >
-                          {doc.file_type}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-bold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">
-                            {doc.name}
-                          </p>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <p className="text-[11px] text-[#6B7280] font-medium truncate">
-                              {doc.file_name}
-                            </p>
-                            {/* Distinct separate owner indicator */}
-                            {famMember ? (
-                              <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded shrink-0">
-                                Family: {famMember.name}
-                              </span>
-                            ) : (
-                              <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2 py-0.5 rounded shrink-0">
-                                Self: {capitalizeWords(client.name)}
-                              </span>
-                            )}
-                            {doc.category && (
-                              <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded shrink-0">
-                                {doc.category}
-                              </span>
-                            )}
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                        />
+                      </svg>
+                    </div>
+                    <p className="text-[13px] font-semibold text-[#1F2937] mb-2">
+                      No documents uploaded yet
+                    </p>
+                    <button
+                      onClick={() => setShowDocModal(true)}
+                      className="text-xs text-[#005A87] font-bold hover:underline"
+                    >
+                      Upload first document →
+                    </button>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-slate-50">
+                    {docs
+                      .filter((d) => {
+                        if (docFilterMember === "all") return true;
+                        if (docFilterMember === "client") return !d.family_member_id;
+                        return d.family_member_id === docFilterMember;
+                      })
+                      .map((doc) => {
+                        const famMember = family.find((f) => f.id === doc.family_member_id);
+                        return (
+                          <div
+                            key={doc.id}
+                            className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F9FC] transition-colors group"
+                          >
+                            <div
+                              className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${docColor(doc.file_type)}`}
+                            >
+                              {doc.file_type}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] font-bold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors">
+                                {doc.name}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <p className="text-[11px] text-[#6B7280] font-medium truncate">
+                                  {doc.file_name}
+                                </p>
+                                {famMember ? (
+                                  <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded shrink-0">
+                                    Family: {famMember.name}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2 py-0.5 rounded shrink-0">
+                                    Self: {capitalizeWords(client.name)}
+                                  </span>
+                                )}
+                                {doc.category && (
+                                  <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded shrink-0">
+                                    {doc.category}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 hidden sm:block">
+                              <p className="text-[11px] font-semibold text-[#6B7280]">
+                                {formatSize(doc.file_size)}
+                              </p>
+                              <p className="text-[10px] text-slate-300 font-medium">
+                                {formatDate(doc.created_at)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
+                              {/* View In-App */}
+                              <button
+                                type="button"
+                                onClick={() => setViewingDoc(doc)}
+                                title="View Document in App"
+                                className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                  />
+                                  <circle
+                                    cx="12"
+                                    cy="12"
+                                    r="3"
+                                    stroke="currentColor"
+                                    strokeWidth={2}
+                                  />
+                                </svg>
+                              </button>
+
+                              {/* Download */}
+                              <a
+                                href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
+                                download={doc.file_name}
+                                title="Download"
+                                className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                  />
+                                </svg>
+                              </a>
+
+                              {/* Move to Recycle Bin */}
+                              <button
+                                onClick={() => deleteDocument(doc.id)}
+                                title="Move to Recycle Bin"
+                                className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                        <div className="text-right shrink-0 hidden sm:block">
-                          <p className="text-[11px] font-semibold text-[#6B7280]">
-                            {formatSize(doc.file_size)}
-                          </p>
-                          <p className="text-[10px] text-slate-300 font-medium">
-                            {formatDate(doc.created_at)}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0">
-                          {/* View In-App */}
-                          <button
-                            type="button"
-                            onClick={() => setViewingDoc(doc)}
-                            title="View Document in App"
-                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
-                          >
-                            <svg
-                              className="w-3.5 h-3.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                              />
-                              <circle
-                                cx="12"
-                                cy="12"
-                                r="3"
-                                stroke="currentColor"
-                                strokeWidth={2}
-                              />
-                            </svg>
-                          </button>
+                        );
+                      })}
+                  </div>
+                )}
+              </>
+            )}
 
-                          {/* Download */}
-                          <a
-                            href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
-                            download={doc.file_name}
-                            title="Download"
-                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all"
-                          >
-                            <svg
-                              className="w-3.5 h-3.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                              />
-                            </svg>
-                          </a>
-
-                          {/* Delete */}
-                          <button
-                            onClick={() => deleteDocument(doc.id)}
-                            title="Delete"
-                            className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
-                          >
-                            <svg
-                              className="w-3.5 h-3.5"
-                              fill="none"
-                              viewBox="0 0 24 24"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                              />
-                            </svg>
-                          </button>
-                        </div>
+            {/* Sub-tab 2: Recycled Documents */}
+            {docSubTab === "recycle_bin" && (
+              <>
+                {recycledDocs.length === 0 ? (
+                  <div className="py-16 text-center px-5">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3 text-slate-400 text-2xl">
+                      🗑️
+                    </div>
+                    <p className="text-[13px] font-bold text-slate-700 mb-1">
+                      Document Recycle Bin is Empty
+                    </p>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                      Deleted documents will appear here with safe retention before permanent removal. You can restore them anytime.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="px-5 py-2.5 bg-amber-50/60 border-b border-amber-100 flex items-center justify-between text-xs text-amber-800">
+                      <div className="flex items-center gap-2">
+                        <span>ℹ️</span>
+                        <span>
+                          Documents stay here for safe keeping. You can <strong>Restore</strong> them to active or delete them permanently.
+                        </span>
                       </div>
-                    );
-                  })}
-              </div>
+                      <span className="font-bold text-amber-900 shrink-0">
+                        {recycledDocs.length} {recycledDocs.length === 1 ? "document" : "documents"} in bin
+                      </span>
+                    </div>
+
+                    <div className="divide-y divide-slate-100 bg-slate-50/30">
+                      {recycledDocs.map((doc) => {
+                        const famMember = family.find((f) => f.id === doc.family_member_id);
+                        const retention = getRecycleBinRetention(doc.deleted_at);
+                        return (
+                          <div
+                            key={doc.id}
+                            className="flex items-center gap-4 px-5 py-3.5 hover:bg-white transition-colors group"
+                          >
+                            <div
+                              className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 opacity-70 ${docColor(
+                                doc.file_type
+                              )}`}
+                            >
+                              {doc.file_type}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13px] font-bold text-slate-700 truncate line-through decoration-slate-300">
+                                {doc.name}
+                              </p>
+                              <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                                <p className="text-[11px] text-slate-400 font-medium truncate">
+                                  {doc.file_name}
+                                </p>
+                                {famMember ? (
+                                  <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded shrink-0">
+                                    Family: {famMember.name}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] font-bold text-[#005A87] bg-sky-50 px-2 py-0.5 rounded shrink-0">
+                                    Self: {capitalizeWords(client.name)}
+                                  </span>
+                                )}
+                                <span
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded shrink-0 ${
+                                    retention.isExpired
+                                      ? "bg-rose-100 text-rose-700"
+                                      : "bg-amber-100 text-amber-800"
+                                  }`}
+                                >
+                                  ⏱️ {retention.label}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 hidden sm:block">
+                              <p className="text-[11px] font-semibold text-slate-500">
+                                {formatSize(doc.file_size)}
+                              </p>
+                              <p className="text-[10px] text-slate-400 font-medium">
+                                Deleted: {formatDate(doc.deleted_at || doc.created_at)}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {/* Restore Document */}
+                              <button
+                                type="button"
+                                onClick={() => restoreDocument(doc.id)}
+                                title="Restore Document"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-50 text-teal-700 hover:bg-teal-600 hover:text-white transition-all text-xs font-bold shadow-xs active:scale-95"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2.5}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                  />
+                                </svg>
+                                <span>Restore</span>
+                              </button>
+
+                              {/* Permanent Delete */}
+                              <button
+                                type="button"
+                                onClick={() => permanentDeleteDocument(doc.id)}
+                                title="Permanently Delete"
+                                className="w-8 h-8 flex items-center justify-center rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-all shadow-xs active:scale-95"
+                              >
+                                <svg
+                                  className="w-3.5 h-3.5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2}
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                                  />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </div>
         )}
@@ -1762,11 +2084,19 @@ async function deleteDocument(did: string) {
                         className="flex flex-col sm:flex-row sm:items-center gap-4 px-5 py-4 hover:bg-[#F7F9FC] transition-colors group"
                       >
                         <div className="flex items-center gap-4 flex-1 min-w-0">
-                          <div
-                            className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(fm.name)} flex items-center justify-center text-white font-bold text-sm shrink-0`}
-                          >
-                            {fm.name[0]?.toUpperCase()}
-                          </div>
+                          {fm.photo_url ? (
+                            <img
+                              src={fm.photo_url}
+                              alt={fm.name}
+                              className="w-11 h-11 rounded-xl object-cover shrink-0 ring-1 ring-slate-200 shadow-xs"
+                            />
+                          ) : (
+                            <div
+                              className={`w-11 h-11 rounded-xl bg-gradient-to-br ${getGradient(fm.name)} flex items-center justify-center text-white font-bold text-sm shrink-0`}
+                            >
+                              {fm.name[0]?.toUpperCase()}
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <p className="text-[14px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors">
                               {formatFamilyName(fm.name)}
@@ -1907,11 +2237,19 @@ async function deleteDocument(did: string) {
                         className="flex flex-col sm:flex-row sm:items-center gap-4 px-5 py-4 bg-slate-50/40 hover:bg-slate-50 transition-colors"
                       >
                         <div className="flex items-center gap-4 flex-1 min-w-0 opacity-80">
-                          <div
-                            className="w-11 h-11 rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0"
-                          >
-                            {fm.name[0]?.toUpperCase()}
-                          </div>
+                          {fm.photo_url ? (
+                            <img
+                              src={fm.photo_url}
+                              alt={fm.name}
+                              className="w-11 h-11 rounded-xl object-cover shrink-0 opacity-60 ring-1 ring-slate-200"
+                            />
+                          ) : (
+                            <div
+                              className="w-11 h-11 rounded-xl bg-slate-200 flex items-center justify-center text-slate-600 font-bold text-sm shrink-0"
+                            >
+                              {fm.name[0]?.toUpperCase()}
+                            </div>
+                          )}
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <p className="text-[14px] font-bold text-[#1F2937] line-through decoration-slate-400">
@@ -2922,12 +3260,44 @@ async function deleteDocument(did: string) {
           <div className="relative bg-white w-full sm:max-w-xl rounded-t-[28px] sm:rounded-[22px] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
             {/* Profile Header */}
             <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-[#F7F9FC]/70">
-              <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${getGradient(viewingFamilyMember.name)} flex items-center justify-center text-white font-bold text-lg shadow-sm shrink-0`}
-                >
-                  {viewingFamilyMember.name[0]?.toUpperCase()}
+              <div className="flex items-center gap-3.5 min-w-0">
+                <div className="relative group shrink-0">
+                  {viewingFamilyMember.photo_url ? (
+                    <img
+                      src={viewingFamilyMember.photo_url}
+                      alt={viewingFamilyMember.name}
+                      className="w-14 h-14 rounded-2xl object-cover ring-2 ring-white shadow-md"
+                    />
+                  ) : (
+                    <div
+                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getGradient(viewingFamilyMember.name)} flex items-center justify-center text-white font-bold text-xl shadow-md`}
+                    >
+                      {viewingFamilyMember.name[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  {/* Photo Upload Overlay Button */}
+                  <button
+                    type="button"
+                    onClick={() => familyPhotoInputRef.current?.click()}
+                    disabled={uploadingFamilyPhoto}
+                    className="absolute inset-0 rounded-2xl bg-black/55 flex flex-col items-center justify-center transition-all opacity-0 group-hover:opacity-100 text-white cursor-pointer"
+                    title="Upload / Change Photo"
+                  >
+                    <svg className="w-4 h-4 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="text-[9px] font-bold">Photo</span>
+                  </button>
+                  <input
+                    ref={familyPhotoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => handleFamilyPhotoUpload(e, viewingFamilyMember.id)}
+                    className="hidden"
+                  />
                 </div>
+
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-base font-bold text-[#1F2937] truncate">
@@ -2936,14 +3306,27 @@ async function deleteDocument(did: string) {
                     <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
                       {viewingFamilyMember.relationship}
                     </span>
+                    <button
+                      type="button"
+                      onClick={() => familyPhotoInputRef.current?.click()}
+                      disabled={uploadingFamilyPhoto}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-50 border border-sky-200/80 text-[11px] font-semibold text-[#0E7AC7] hover:bg-sky-100 hover:border-sky-300 transition-all cursor-pointer shadow-2xs"
+                      title={viewingFamilyMember.photo_url ? "Change Profile Photo" : "Upload Profile Photo"}
+                    >
+                      <svg className="w-3 h-3 text-[#0E7AC7]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                      <span>{uploadingFamilyPhoto ? "Uploading..." : viewingFamilyMember.photo_url ? "Edit Photo" : "Add Photo"}</span>
+                    </button>
                   </div>
-                  <p className="text-xs text-[#6B7280] truncate">
+                  <p className="text-xs text-[#6B7280] truncate mt-0.5">
                     {(() => {
                       const { firstName, surname } = formatClientDisplayName(client?.name, client?.surname);
                       return (
                         <>
-                          Family Profile · Client: <span className="text-black font-semibold">{firstName}</span>{" "}
-                          {surname && <span className="text-[#0E7AC7] font-semibold">{surname}</span>}
+                          Family Profile · Client:{" "}
+                          {surname && <span className="text-[#0E7AC7] font-semibold mr-1">{surname}</span>}
+                          <span className="text-black font-semibold">{firstName}</span>
                         </>
                       );
                     })()}
@@ -3193,6 +3576,48 @@ async function deleteDocument(did: string) {
                   </button>
                 </div>
               )}
+              {/* Profile Photo Upload */}
+              <div className="flex items-center gap-4 p-3.5 bg-[#F7F9FC] rounded-2xl border border-slate-100">
+                <div className="relative group shrink-0">
+                  {editingFamilyMember.photo_url ? (
+                    <img
+                      src={editingFamilyMember.photo_url}
+                      alt={editingFamilyMember.name}
+                      className="w-14 h-14 rounded-2xl object-cover ring-2 ring-white shadow-sm"
+                    />
+                  ) : (
+                    <div
+                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getGradient(
+                        editingFamilyMember.name || "Member"
+                      )} flex items-center justify-center text-white font-bold text-xl shadow-sm`}
+                    >
+                      {editingFamilyMember.name?.[0]?.toUpperCase() || "M"}
+                    </div>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-[#1F2937]">Profile Photo</p>
+                  <p className="text-[11px] text-[#6B7280] mb-2">JPG, PNG, or WebP up to 2MB</p>
+                  <button
+                    type="button"
+                    onClick={() => editFamilyPhotoInputRef.current?.click()}
+                    disabled={uploadingFamilyPhoto}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-[#005A87] hover:bg-slate-50 transition-all shadow-xs cursor-pointer"
+                  >
+                    <svg className="w-3.5 h-3.5 text-[#005A87]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                    <span>{uploadingFamilyPhoto ? "Uploading..." : editingFamilyMember.photo_url ? "Change Photo" : "Upload Photo"}</span>
+                  </button>
+                  <input
+                    ref={editFamilyPhotoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => handleFamilyPhotoUpload(e, editingFamilyMember.id)}
+                    className="hidden"
+                  />
+                </div>
+              </div>
 
               <div>
                 <label className={labelCls}>Full Name *</label>

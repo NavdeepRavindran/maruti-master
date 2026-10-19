@@ -29,40 +29,149 @@ type DocCategory =
 const CATEGORIES: {
   key: DocCategory;
   label: string;
-  icon: string;
   color: string;
   bg: string;
+  borderColor: string;
 }[] = [
   {
-    key: "Health Records",
-    label: "Health",
-    icon: "🏥",
-    color: "#22c55e",
-    bg: "#f0fdf4",
-  },
-  {
     key: "KYC / Identity",
-    label: "KYC",
-    icon: "🆔",
-    color: "#8b5cf6",
+    label: "KYC & Identity",
+    color: "#7c3aed",
     bg: "#f5f3ff",
+    borderColor: "#ddd6fe",
   },
   {
     key: "Policy Documents",
-    label: "Documents",
-    icon: "📄",
-    color: "#3b82f6",
+    label: "Policy Documents",
+    color: "#2563eb",
     bg: "#eff6ff",
+    borderColor: "#bfdbfe",
+  },
+  {
+    key: "Financial / Tax",
+    label: "Financial & Tax",
+    color: "#d97706",
+    bg: "#fffbeb",
+    borderColor: "#fde68a",
+  },
+  {
+    key: "Health Records",
+    label: "Health Records",
+    color: "#16a34a",
+    bg: "#f0fdf4",
+    borderColor: "#bbf7d0",
+  },
+  {
+    key: "Vehicle RC / Insurance",
+    label: "Vehicle & Auto",
+    color: "#0891b2",
+    bg: "#ecfeff",
+    borderColor: "#a5f3fc",
   },
   {
     key: "Others",
-    label: "General",
-    icon: "📁",
+    label: "General / Others",
     color: "#64748b",
     bg: "#f8fafc",
+    borderColor: "#e2e8f0",
   },
 ];
-const getCat = (key?: DocCategory) => CATEGORIES.find(c => c.key === key) ?? CATEGORIES[0];
+
+const getCat = (key?: string) => {
+  if (!key) return CATEGORIES[5];
+  const found = CATEGORIES.find(c => c.key.toLowerCase() === key.toLowerCase());
+  if (found) return found;
+  if (/kyc|aadhaar|pan|identity/i.test(key)) return CATEGORIES[0];
+  if (/policy|insurance|premium/i.test(key)) return CATEGORIES[1];
+  if (/financial|tax|form 16|itr|salary|bank/i.test(key)) return CATEGORIES[2];
+  if (/health|medical|hospital/i.test(key)) return CATEGORIES[3];
+  if (/vehicle|motor|rc|car|bike/i.test(key)) return CATEGORIES[4];
+  return CATEGORIES[5];
+};
+
+function CategoryIcon({ category, size = 18, color }: { category?: string; size?: number; color?: string }) {
+  const c = color || "currentColor";
+  const catKey = getCat(category).key;
+  switch (catKey) {
+    case "KYC / Identity":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="18" height="16" rx="3" />
+          <circle cx="9" cy="10" r="2" />
+          <path d="M15 8h2" />
+          <path d="M15 12h2" />
+          <path d="M7 16c0-1.5 1.5-2 3-2s3 .5 3 2" />
+        </svg>
+      );
+    case "Policy Documents":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+          <polyline points="14 2 14 8 20 8" />
+          <line x1="16" y1="13" x2="8" y2="13" />
+          <line x1="16" y1="17" x2="8" y2="17" />
+          <polyline points="10 9 9 9 8 9" />
+        </svg>
+      );
+    case "Financial / Tax":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="12" y1="1" x2="12" y2="23" />
+          <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+        </svg>
+      );
+    case "Health Records":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+      );
+    case "Vehicle RC / Insurance":
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2" />
+          <circle cx="7" cy="17" r="2" />
+          <path d="M9 17h6" />
+          <circle cx="17" cy="17" r="2" />
+        </svg>
+      );
+    case "Others":
+    default:
+      return (
+        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+        </svg>
+      );
+  }
+}
+
+function FileTypeIcon({ type, size = 18, color }: { type?: string; size?: number; color?: string }) {
+  const c = color || "currentColor";
+  if (type === "PDF") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <polyline points="14 2 14 8 20 8" />
+        <path d="M9 15h2a1.5 1.5 0 0 0 0-3H9v6" />
+      </svg>
+    );
+  }
+  if (type === "IMG") {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+        <circle cx="8.5" cy="8.5" r="1.5" />
+        <polyline points="21 15 16 10 5 21" />
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
+      <polyline points="13 2 13 9 20 9" />
+    </svg>
+  );
+}
 
 export default function DocumentsPage() {
   const supabase = createClient();
@@ -82,6 +191,9 @@ export default function DocumentsPage() {
     category: "" as DocCategory | "",
   });
   const [clientFamily, setClientFamily] = useState<{ id: string; name: string; relationship: string }[]>([]);
+  const [vaultTab, setVaultTab] = useState<"active" | "recycle_bin">("active");
+  const [restoringDocId, setRestoringDocId] = useState<string | null>(null);
+  const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(fetchDocs, 300);
@@ -131,7 +243,7 @@ export default function DocumentsPage() {
   }
 
   async function deleteDoc(id: string) {
-    if (!confirm("Delete this document?")) return;
+    if (!confirm("Move this document to Recycle Bin? You can restore it anytime within 30 days.")) return;
     try {
       const headers = await getAuthHeaders();
       if (!headers) return;
@@ -141,6 +253,37 @@ export default function DocumentsPage() {
       });
       fetchDocs();
     } catch { }
+  }
+
+  async function restoreDoc(id: string) {
+    setRestoringDocId(id);
+    try {
+      const headers = await getAuthHeaders();
+      if (!headers) return;
+      await fetch(`/api/documents/${id}/restore`, {
+        method: "POST",
+        headers,
+      });
+      fetchDocs();
+    } catch { } finally {
+      setRestoringDocId(null);
+    }
+  }
+
+  async function permanentDeleteDoc(id: string) {
+    if (!confirm("Permanently delete this document from storage? This action CANNOT be undone.")) return;
+    setDeletingDocId(id);
+    try {
+      const headers = await getAuthHeaders();
+      if (!headers) return;
+      await fetch(`/api/documents/${id}?permanent=true`, {
+        method: "DELETE",
+        headers,
+      });
+      fetchDocs();
+    } catch { } finally {
+      setDeletingDocId(null);
+    }
   }
 
   async function handleUpload() {
@@ -182,18 +325,37 @@ export default function DocumentsPage() {
   const formatSize = (b: number) => b < 1048576 ? (b / 1024).toFixed(1) + " KB" : (b / 1048576).toFixed(1) + " MB";
   const formatDate = (d: string) => new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
-  const typeConfig: Record<string, { bg: string; color: string; icon: string }> = {
-    PDF: { bg: "#fef2f2", color: "#ef4444", icon: "📄" },
-    IMG: { bg: "#fffbeb", color: "#f59e0b", icon: "🖼️" },
-    DOC: { bg: "#eff6ff", color: "#3b82f6", icon: "📝" },
+  const typeConfig: Record<string, { bg: string; color: string }> = {
+    PDF: { bg: "#fef2f2", color: "#dc2626" },
+    IMG: { bg: "#fffbeb", color: "#d97706" },
+    DOC: { bg: "#eff6ff", color: "#2563eb" },
   };
-  const getType = (t: string) => typeConfig[t] || { bg: "#f0fdf4", color: "#22c55e", icon: "📎" };
+  const getType = (t: string) => typeConfig[t] || { bg: "#f8fafc", color: "#64748b" };
 
-  const filteredDocs = activeCategory === "all" ? docs : docs.filter(d => d.category === activeCategory);
-  const totalSize = docs.reduce((a, d) => a + d.file_size, 0);
-  const pdfCount = docs.filter(d => d.file_type === "PDF").length;
-  const imgCount = docs.filter(d => d.file_type === "IMG").length;
-  const otherCount = docs.filter(d => !["PDF", "IMG"].includes(d.file_type)).length;
+  const isDocDeleted = (d: DocData & { raw_name?: string; is_deleted?: boolean }) => {
+    if (d.is_deleted === true || (d as any).is_deleted === "true") return true;
+    if (typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]")) return true;
+    if (typeof d.raw_name === "string" && d.raw_name.startsWith("[RECYCLE_BIN]")) return true;
+    return false;
+  };
+
+  const cleanDocName = (d: DocData & { raw_name?: string }) => {
+    const raw = d.name || d.raw_name || "";
+    return raw.replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
+  };
+
+  const activeDocs = docs.filter(d => !isDocDeleted(d)).map(d => ({ ...d, name: cleanDocName(d) }));
+  const recycledDocs = docs.filter(d => isDocDeleted(d)).map(d => ({ ...d, name: cleanDocName(d) }));
+
+  const currentTabDocs = vaultTab === "active" ? activeDocs : recycledDocs;
+  const filteredDocs = activeCategory === "all"
+    ? currentTabDocs
+    : currentTabDocs.filter(d => getCat(d.category).key === activeCategory);
+
+  const totalSize = activeDocs.reduce((a, d) => a + d.file_size, 0);
+  const pdfCount = activeDocs.filter(d => d.file_type === "PDF").length;
+  const imgCount = activeDocs.filter(d => d.file_type === "IMG").length;
+  const otherCount = activeDocs.filter(d => !["PDF", "IMG"].includes(d.file_type)).length;
   const usedPct = Math.min((totalSize / (2 * 1073741824)) * 100, 100);
 
   return (
@@ -256,15 +418,15 @@ export default function DocumentsPage() {
         .dp-upload-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(59,130,246,0.45); }
         .dp-upload-btn:active { transform: scale(0.97); }
 
-        /* ── Category Cards (NEW) ── */
+        /* ── Category Cards (Top Permanent Section) ── */
         .dp-cat-grid {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
           gap: 10px;
-          margin-bottom: 16px;
+          margin-bottom: 14px;
         }
         @media (min-width: 640px) { .dp-cat-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; } }
-        @media (min-width: 1024px) { .dp-cat-grid { grid-template-columns: repeat(6, 1fr); } }
+        @media (min-width: 1024px) { .dp-cat-grid { grid-template-columns: repeat(6, 1fr); gap: 12px; } }
 
         .dp-cat-card {
           background: #fff;
@@ -276,34 +438,49 @@ export default function DocumentsPage() {
           box-shadow: 0 1px 4px rgba(0,0,0,0.04);
           text-align: left;
           font-family: inherit;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
         }
         .dp-cat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
         .dp-cat-card.active { border-width: 2px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
-        .dp-cat-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 17px; margin-bottom: 10px; }
-        .dp-cat-count { font-family: 'Sora', sans-serif; font-size: clamp(20px,4vw,26px); font-weight: 800; color: #0f172a; line-height: 1; margin-bottom: 3px; }
-        .dp-cat-name { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #94a3b8; }
-
-        /* ── Filter tabs (NEW) ── */
-        .dp-filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
-        .dp-filter-tab {
-          display: flex; align-items: center; gap: 6px;
-          padding: 7px 14px; border-radius: 20px;
-          border: 1.5px solid #e2e8f0; background: #fff;
-          font-size: 12px; font-weight: 700; color: #64748b;
-          cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap;
+        .dp-cat-icon {
+          width: 38px;
+          height: 38px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 10px;
+          flex-shrink: 0;
         }
-        .dp-filter-tab:hover { border-color: #94a3b8; color: #334155; }
-        .dp-filter-tab.active { color: #fff; border-color: transparent; }
-        .dp-filter-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+        .dp-cat-count {
+          font-family: 'Sora', sans-serif;
+          font-size: clamp(20px,4vw,26px);
+          font-weight: 800;
+          color: #0f172a;
+          line-height: 1;
+          margin-bottom: 4px;
+        }
+        .dp-cat-name {
+          font-size: 11px;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: #94a3b8;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
 
-        /* ── Stats row ── */
+        /* ── Stats row (Top Permanent Section) ── */
         .dp-stats {
           display: grid;
           grid-template-columns: repeat(2, 1fr);
           gap: 10px;
-          margin-bottom: 20px;
+          margin-bottom: 24px;
         }
-        @media (min-width: 640px) { .dp-stats { grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; } }
+        @media (min-width: 640px) { .dp-stats { grid-template-columns: repeat(4, 1fr); gap: 12px; } }
 
         .dp-stat {
           background: #fff;
@@ -311,7 +488,12 @@ export default function DocumentsPage() {
           border-radius: 14px;
           padding: 14px 16px;
           box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
         }
+        .dp-stat-info { display: flex; flex-direction: column; }
         .dp-stat-val {
           font-family: 'Sora', sans-serif;
           font-size: clamp(20px, 4vw, 28px);
@@ -321,6 +503,145 @@ export default function DocumentsPage() {
           margin-bottom: 4px;
         }
         .dp-stat-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #94a3b8; }
+        .dp-stat-icon-box {
+          width: 42px;
+          height: 42px;
+          border-radius: 11px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        /* ── Lower Section: Filter Bar & Recycle Bin ── */
+        .dp-filter-bar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 18px;
+        }
+        .dp-filter-tabs { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+        .dp-filter-tab {
+          display: flex; align-items: center; gap: 6px;
+          padding: 7px 14px; border-radius: 20px;
+          border: 1.5px solid #e2e8f0; background: #fff;
+          font-size: 12px; font-weight: 700; color: #64748b;
+          cursor: pointer; font-family: inherit; transition: all 0.15s; white-space: nowrap;
+        }
+        .dp-filter-tab:hover { border-color: #94a3b8; color: #1e293b; }
+        .dp-filter-tab.active { color: #fff; border-color: transparent; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
+        .dp-filter-tab-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+
+        .dp-recycle-tab-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 7px 16px;
+          border-radius: 20px;
+          font-size: 12px;
+          font-weight: 700;
+          font-family: inherit;
+          cursor: pointer;
+          border: 1.5px solid #fed7aa;
+          background: #fff7ed;
+          color: #c2410c;
+          transition: all 0.18s;
+          white-space: nowrap;
+          box-shadow: 0 1px 3px rgba(194,65,12,0.06);
+        }
+        .dp-recycle-tab-btn:hover {
+          background: #ffedd5;
+          border-color: #fdba74;
+          color: #9a3412;
+          transform: translateY(-1px);
+        }
+        .dp-recycle-tab-btn.active {
+          background: #ef4444;
+          border-color: #ef4444;
+          color: #fff;
+          box-shadow: 0 3px 12px rgba(239,68,68,0.25);
+        }
+        .dp-recycle-badge {
+          background: #fee2e2;
+          color: #dc2626;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 1px 7px;
+          border-radius: 99px;
+          line-height: 1.3;
+        }
+        .dp-recycle-tab-btn.active .dp-recycle-badge {
+          background: rgba(255,255,255,0.25);
+          color: #fff;
+        }
+
+        /* ── Recycle Banner (Inside Files Area) ── */
+        .dp-recycle-banner {
+          background: #fff7ed;
+          border-bottom: 1.5px solid #fed7aa;
+          padding: 12px 18px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .dp-recycle-banner-info {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .dp-recycle-banner-icon {
+          width: 32px;
+          height: 32px;
+          border-radius: 8px;
+          background: #fee2e2;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+        .dp-recycle-banner-title {
+          font-size: 13px;
+          font-weight: 700;
+          color: #9a3412;
+        }
+        .dp-recycle-banner-sub {
+          font-size: 11px;
+          color: #c2410c;
+          font-weight: 500;
+        }
+        .dp-recycle-banner-close {
+          padding: 6px 14px;
+          background: #fff;
+          border: 1px solid #fdba74;
+          border-radius: 8px;
+          font-size: 12px;
+          font-weight: 700;
+          color: #c2410c;
+          cursor: pointer;
+          transition: all 0.15s;
+          font-family: inherit;
+        }
+        .dp-recycle-banner-close:hover {
+          background: #fff7ed;
+          color: #9a3412;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+        }
+
+        .dp-empty-icon-box {
+          width: 56px;
+          height: 56px;
+          border-radius: 16px;
+          background: #f1f5f9;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin: 0 auto 12px;
+          color: #94a3b8;
+        }
 
         /* ── Main layout ── */
         .dp-layout {
@@ -690,72 +1011,181 @@ export default function DocumentsPage() {
             Upload Document
           </button>
         </div>
-
-        {/* ── Category Cards (NEW) ── */}
+        {/* ── Category Cards (Top Permanent Section) ── */}
         <div className="dp-cat-grid">
           {CATEGORIES.map(cat => {
-            const count = docs.filter(d => d.category === cat.key).length;
+            const count = activeDocs.filter(d => getCat(d.category).key === cat.key).length;
             const isActive = activeCategory === cat.key;
             return (
               <button
                 key={cat.key}
+                type="button"
                 className={`dp-cat-card${isActive ? " active" : ""}`}
                 style={isActive ? { borderColor: cat.color, background: cat.bg } : {}}
-                onClick={() => setActiveCategory(isActive ? "all" : cat.key)}
+                onClick={() => {
+                  if (vaultTab === "recycle_bin") setVaultTab("active");
+                  setActiveCategory(isActive ? "all" : cat.key);
+                }}
               >
-                <div className="dp-cat-icon" style={{ background: cat.bg }}>{cat.icon}</div>
-                <div className="dp-cat-count" style={isActive ? { color: cat.color } : {}}>{loading ? "—" : count}</div>
-                <div className="dp-cat-name" style={isActive ? { color: cat.color, opacity: 0.8 } : {}}>{cat.label}</div>
+                <div className="dp-cat-icon" style={{ background: cat.bg }}>
+                  <CategoryIcon category={cat.key} size={20} color={cat.color} />
+                </div>
+                <div className="dp-cat-count" style={isActive ? { color: cat.color } : {}}>
+                  {loading ? "—" : count}
+                </div>
+                <div className="dp-cat-name" style={isActive ? { color: cat.color } : {}} title={cat.label}>
+                  {cat.label}
+                </div>
               </button>
             );
           })}
         </div>
 
-        {/* ── Filter tabs (NEW) ── */}
-        <div className="dp-filter-tabs">
-          <button
-            className={`dp-filter-tab${activeCategory === "all" ? " active" : ""}`}
-            style={activeCategory === "all" ? { background: "#0f172a" } : {}}
-            onClick={() => setActiveCategory("all")}
-          >
-            All Files ({docs.length})
-          </button>
-          {CATEGORIES.map(cat => {
-            const count = docs.filter(d => d.category === cat.key).length;
-            const isActive = activeCategory === cat.key;
-            return (
-              <button
-                key={cat.key}
-                className={`dp-filter-tab${isActive ? " active" : ""}`}
-                style={isActive ? { background: cat.color } : {}}
-                onClick={() => setActiveCategory(isActive ? "all" : cat.key)}
-              >
-                <span className="dp-filter-tab-dot" style={{ background: isActive ? "rgba(255,255,255,0.6)" : cat.color }} />
-                {cat.label} ({count})
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Quick stats */}
+        {/* ── Quick Stats Row (Top Permanent Section) ── */}
         <div className="dp-stats">
           {[
-            { label: "Total Files", val: docs.length },
-            { label: "PDFs", val: pdfCount },
-            { label: "Images", val: imgCount },
-            { label: "Storage Used", val: (totalSize / 1048576).toFixed(1) + " MB" },
+            {
+              label: "Active Files",
+              val: activeDocs.length,
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+              ),
+              bg: "#eff6ff",
+            },
+            {
+              label: "PDF Documents",
+              val: pdfCount,
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M7 21h10a2 2 0 0 0 2-2V9.414a1 1 0 0 0-.293-.707l-5.414-5.414A1 1 0 0 0 12.586 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z" />
+                  <path d="M9 13h2a1.5 1.5 0 0 0 0-3H9v6" />
+                </svg>
+              ),
+              bg: "#fef2f2",
+            },
+            {
+              label: "Image Files",
+              val: imgCount,
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+              ),
+              bg: "#fffbeb",
+            },
+            {
+              label: "Storage Used",
+              val: (totalSize / 1048576).toFixed(1) + " MB",
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#059669" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <ellipse cx="12" cy="5" rx="9" ry="3" />
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3" />
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5" />
+                </svg>
+              ),
+              bg: "#ecfdf5",
+            },
           ].map(s => (
             <div key={s.label} className="dp-stat">
-              <div className="dp-stat-val">{loading ? "—" : s.val}</div>
-              <div className="dp-stat-lbl">{s.label}</div>
+              <div className="dp-stat-info">
+                <div className="dp-stat-val">{loading ? "—" : s.val}</div>
+                <div className="dp-stat-lbl">{s.label}</div>
+              </div>
+              <div className="dp-stat-icon-box" style={{ background: s.bg }}>
+                {s.icon}
+              </div>
             </div>
           ))}
+        </div>
+
+        {/* ── Lower Section: Filter Bar & Recycle Bin ── */}
+        <div className="dp-filter-bar">
+          <div className="dp-filter-tabs">
+            <button
+              type="button"
+              className={`dp-filter-tab${activeCategory === "all" ? " active" : ""}`}
+              style={activeCategory === "all" ? { background: "#0f172a", color: "#fff", borderColor: "#0f172a" } : {}}
+              onClick={() => setActiveCategory("all")}
+            >
+              {vaultTab === "recycle_bin" ? `All Deleted (${recycledDocs.length})` : `All Files (${activeDocs.length})`}
+            </button>
+            {CATEGORIES.map(cat => {
+              const count = currentTabDocs.filter(d => getCat(d.category).key === cat.key).length;
+              const isActive = activeCategory === cat.key;
+              return (
+                <button
+                  key={cat.key}
+                  type="button"
+                  className={`dp-filter-tab${isActive ? " active" : ""}`}
+                  style={isActive ? { background: cat.color, color: "#fff", borderColor: cat.color } : {}}
+                  onClick={() => setActiveCategory(isActive ? "all" : cat.key)}
+                >
+                  <span className="dp-filter-tab-dot" style={{ background: isActive ? "rgba(255,255,255,0.7)" : cat.color }} />
+                  {cat.label} ({count})
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Recycle Bin Option at Lower Section */}
+          <button
+            type="button"
+            className={`dp-recycle-tab-btn${vaultTab === "recycle_bin" ? " active" : ""}`}
+            onClick={() => {
+              setVaultTab(vaultTab === "active" ? "recycle_bin" : "active");
+              setActiveCategory("all");
+            }}
+          >
+            <svg width="15" height="15" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            <span>Recycle Bin</span>
+            {recycledDocs.length > 0 && (
+              <span className="dp-recycle-badge">{recycledDocs.length}</span>
+            )}
+          </button>
         </div>
 
         {/* Layout */}
         <div className="dp-layout">
           {/* Files panel */}
           <div className="dp-files">
+            {/* Recycle Bin Alert Banner when viewing Recycle Bin */}
+            {vaultTab === "recycle_bin" && (
+              <div className="dp-recycle-banner">
+                <div className="dp-recycle-banner-info">
+                  <div className="dp-recycle-banner-icon">
+                    <svg width="18" height="18" fill="none" stroke="#dc2626" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="dp-recycle-banner-title">
+                      Recycle Bin ({recycledDocs.length} {recycledDocs.length === 1 ? "document" : "documents"})
+                    </div>
+                    <div className="dp-recycle-banner-sub">
+                      Documents are retained for 30 days before permanent deletion. You can restore or delete them forever.
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setVaultTab("active"); setActiveCategory("all"); }}
+                  className="dp-recycle-banner-close"
+                >
+                  ← Back to Active Files
+                </button>
+              </div>
+            )}
+
             {/* Toolbar */}
             <div className="dp-files-header">
               <div className="dp-search-wrap">
@@ -767,13 +1197,15 @@ export default function DocumentsPage() {
                 <input
                   className="dp-search"
                   type="text"
-                  placeholder="Search documents..."
+                  placeholder={vaultTab === "recycle_bin" ? "Search deleted documents..." : "Search documents..."}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
               </div>
               <span className="dp-files-title">
-                {activeCategory === "all" ? "All Files" : getCat(activeCategory as DocCategory).label}
+                {vaultTab === "recycle_bin"
+                  ? `Recycle Bin · ${activeCategory === "all" ? "All Deleted" : getCat(activeCategory as DocCategory).label}`
+                  : activeCategory === "all" ? "All Files" : getCat(activeCategory as DocCategory).label}
               </span>
               <div className="dp-view-toggle">
                 <button className={`dp-view-btn${viewMode === "list" ? " active" : ""}`} onClick={() => setViewMode("list")}>
@@ -797,8 +1229,14 @@ export default function DocumentsPage() {
               </div>
             ) : filteredDocs.length === 0 ? (
               <div className="dp-empty">
-                <div style={{ fontSize: 40, marginBottom: 10 }}>📂</div>
-                <p style={{ color: "#94a3b8", fontWeight: 700, fontSize: 14 }}>No documents found</p>
+                <div className="dp-empty-icon-box">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                  </svg>
+                </div>
+                <p style={{ color: "#94a3b8", fontWeight: 700, fontSize: 14 }}>
+                  {vaultTab === "recycle_bin" ? "Recycle Bin is empty" : "No documents found"}
+                </p>
                 {activeCategory !== "all" && (
                   <p style={{ color: "#cbd5e1", fontSize: 12, marginTop: 4 }}>
                     No files in <b>{getCat(activeCategory as DocCategory).label}</b> yet
@@ -813,42 +1251,76 @@ export default function DocumentsPage() {
                   return (
                     <div key={doc.id} className="dp-card">
                       <div className="dp-card-top">
-                        <div className="dp-card-type" style={{ background: tc.bg }}>{tc.icon}</div>
+                        <div className="dp-card-type" style={{ background: tc.bg }}>
+                          <FileTypeIcon type={doc.file_type} size={20} color={tc.color} />
+                        </div>
                         <div className="dp-card-actions">
-                          <button
-                            type="button"
-                            className="dp-card-action"
-                            title="View in App"
-                            onClick={() => setViewingDoc(doc)}
-                          >
-                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-                          <a
-                            href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
-                            download={doc.file_name}
-                            title="Download"
-                            className="dp-card-action"
-                          >
-                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                            </svg>
-                          </a>
-                          <button className="dp-card-action del" title="Delete" onClick={() => deleteDoc(doc.id)}>
-                            <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          {vaultTab === "recycle_bin" ? (
+                            <>
+                              <button
+                                type="button"
+                                disabled={restoringDocId === doc.id}
+                                onClick={() => restoreDoc(doc.id)}
+                                className="dp-card-action"
+                                title="Restore Document"
+                                style={{ color: "#10b981", borderColor: "#a7f3d0", background: "#ecfdf5" }}
+                              >
+                                {restoringDocId === doc.id ? "…" : "↩"}
+                              </button>
+                              <button
+                                type="button"
+                                disabled={deletingDocId === doc.id}
+                                onClick={() => permanentDeleteDoc(doc.id)}
+                                className="dp-card-action del"
+                                title="Delete Forever"
+                              >
+                                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className="dp-card-action"
+                                title="View in App"
+                                onClick={() => setViewingDoc(doc)}
+                              >
+                                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                              </button>
+                              <a
+                                href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
+                                download={doc.file_name}
+                                title="Download"
+                                className="dp-card-action"
+                              >
+                                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                              </a>
+                              <button className="dp-card-action del" title="Move to Recycle Bin" onClick={() => deleteDoc(doc.id)}>
+                                <svg width="13" height="13" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </>
+                          )}
                         </div>
                       </div>
                       <div className="dp-card-name">{doc.name}</div>
                       <div className="dp-card-owner" style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
-                        <span>👤 {doc.client_name || "—"}</span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                          {doc.client_name || "—"}
+                        </span>
                         {doc.family_member_name ? (
-                          <span style={{ fontSize: "10px", background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
-                            👥 {doc.family_member_name}
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px", background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", padding: "1px 6px", borderRadius: "4px", fontWeight: 700 }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                            {doc.family_member_name}
                           </span>
                         ) : (
                           <span style={{ fontSize: "10px", background: "#f1f5f9", color: "#64748b", padding: "1px 5px", borderRadius: "4px", fontWeight: 600 }}>
@@ -858,8 +1330,9 @@ export default function DocumentsPage() {
                       </div>
                       {/* Category pill */}
                       <div style={{ marginBottom: 8 }}>
-                        <span className="dp-cat-pill" style={{ background: cat.bg, color: cat.color }}>
-                          {cat.icon} {cat.label}
+                        <span className="dp-cat-pill" style={{ background: cat.bg, color: cat.color, border: `1px solid ${cat.borderColor}` }}>
+                          <CategoryIcon category={cat.key} size={11} color={cat.color} />
+                          <span>{cat.label}</span>
                         </span>
                       </div>
                       <div className="dp-card-footer">
@@ -877,22 +1350,29 @@ export default function DocumentsPage() {
                   const cat = getCat(doc.category);
                   return (
                     <div key={doc.id} className="dp-list-row">
-                      <div className="dp-list-type" style={{ background: tc.bg }}>{tc.icon}</div>
+                      <div className="dp-list-type" style={{ background: tc.bg }}>
+                        <FileTypeIcon type={doc.file_type} size={18} color={tc.color} />
+                      </div>
                       <div className="dp-list-info">
                         <div className="dp-list-name">{doc.name}</div>
                         <div className="dp-list-meta">
                           <span>{doc.file_type} · {formatSize(doc.file_size)}</span>
                           {/* Category pill */}
-                          <span className="dp-cat-pill" style={{ background: cat.bg, color: cat.color }}>
-                            {cat.icon} {cat.label}
+                          <span className="dp-cat-pill" style={{ background: cat.bg, color: cat.color, border: `1px solid ${cat.borderColor}` }}>
+                            <CategoryIcon category={cat.key} size={11} color={cat.color} />
+                            <span>{cat.label}</span>
                           </span>
                         </div>
                       </div>
                       <div className="dp-list-col-owner">
-                        <div style={{ fontWeight: 600, color: "#1e293b" }}>{doc.client_name || "—"}</div>
+                        <div style={{ fontWeight: 600, color: "#1e293b", display: "flex", alignItems: "center", gap: "4px" }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>
+                          {doc.client_name || "—"}
+                        </div>
                         {doc.family_member_name ? (
-                          <span style={{ display: "inline-block", fontSize: "10px", background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", padding: "1px 6px", borderRadius: "4px", fontWeight: 700, marginTop: "2px" }}>
-                            👥 {doc.family_member_name}
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: "3px", fontSize: "10px", background: "#f5f3ff", color: "#7c3aed", border: "1px solid #ddd6fe", padding: "1px 6px", borderRadius: "4px", fontWeight: 700, marginTop: "2px" }}>
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>
+                            {doc.family_member_name}
                           </span>
                         ) : (
                           <span style={{ fontSize: "10px", color: "#94a3b8" }}>Self</span>
@@ -901,32 +1381,60 @@ export default function DocumentsPage() {
                       <div className="dp-list-col-date">{formatDate(doc.created_at)}</div>
                       <div className="dp-list-col-size">{formatSize(doc.file_size)}</div>
                       <div className="dp-list-actions">
-                        <button
-                          type="button"
-                          className="dp-list-action"
-                          title="View in App"
-                          onClick={() => setViewingDoc(doc)}
-                        >
-                          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                        <a
-                          href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
-                          download={doc.file_name}
-                          title="Download"
-                          className="dp-list-action"
-                        >
-                          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                        </a>
-                        <button className="dp-list-action del" title="Delete" onClick={() => deleteDoc(doc.id)}>
-                          <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {vaultTab === "recycle_bin" ? (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <button
+                              type="button"
+                              disabled={restoringDocId === doc.id}
+                              onClick={() => restoreDoc(doc.id)}
+                              className="dp-list-action"
+                              title="Restore Document"
+                              style={{ width: "auto", padding: "0 10px", height: 28, fontSize: 11, fontWeight: 700, borderRadius: 8, background: "#ecfdf5", color: "#059669", border: "1px solid #a7f3d0" }}
+                            >
+                              {restoringDocId === doc.id ? "Restoring..." : "Restore"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={deletingDocId === doc.id}
+                              onClick={() => permanentDeleteDoc(doc.id)}
+                              className="dp-list-action del"
+                              title="Delete Permanently"
+                            >
+                              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="dp-list-action"
+                              title="View in App"
+                              onClick={() => setViewingDoc(doc)}
+                            >
+                              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </button>
+                            <a
+                              href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
+                              download={doc.file_name}
+                              title="Download"
+                              className="dp-list-action"
+                            >
+                              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </a>
+                            <button className="dp-list-action del" title="Move to Recycle Bin" onClick={() => deleteDoc(doc.id)}>
+                              <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                   );
@@ -953,17 +1461,19 @@ export default function DocumentsPage() {
                 </div>
               </div>
 
-              {/* ── Category breakdown (NEW — replaces old type list) ── */}
+              {/* ── Category breakdown ── */}
               <div className="dp-storage-title" style={{ fontSize: 12, marginBottom: 12 }}>By Category</div>
               <div className="dp-cat-breakdown">
                 {CATEGORIES.map(cat => {
-                  const count = docs.filter(d => d.category === cat.key).length;
-                  const pct = docs.length > 0 ? Math.round((count / docs.length) * 100) : 0;
+                  const count = activeDocs.filter(d => getCat(d.category).key === cat.key).length;
+                  const pct = activeDocs.length > 0 ? Math.round((count / activeDocs.length) * 100) : 0;
                   return (
                     <div key={cat.key}>
                       <div className="dp-cat-br-row">
                         <div className="dp-cat-br-left">
-                          <div className="dp-cat-br-icon" style={{ background: cat.bg }}>{cat.icon}</div>
+                          <div className="dp-cat-br-icon" style={{ background: cat.bg }}>
+                            <CategoryIcon category={cat.key} size={14} color={cat.color} />
+                          </div>
                           <span className="dp-cat-br-lbl">{cat.label}</span>
                         </div>
                         <span className="dp-cat-br-count">{count} files</span>
@@ -990,7 +1500,7 @@ export default function DocumentsPage() {
               <button className="dp-modal-close" onClick={() => setShowUploadModal(false)}>✕</button>
             </div>
 
-            {/* ── Category picker (NEW) ── */}
+            {/* ── Category picker ── */}
             <div className="dp-field">
               <label className="dp-field-label">Document Category</label>
               <div className="dp-cat-picker">
@@ -1004,7 +1514,9 @@ export default function DocumentsPage() {
                       style={isActive ? { borderColor: cat.color, background: cat.bg, color: cat.color } : {}}
                       onClick={() => setUploadForm({ ...uploadForm, category: cat.key })}
                     >
-                      <div className="dp-cat-pick-icon" style={{ background: cat.bg }}>{cat.icon}</div>
+                      <div className="dp-cat-pick-icon" style={{ background: cat.bg }}>
+                        <CategoryIcon category={cat.key} size={16} color={cat.color} />
+                      </div>
                       {cat.label}
                     </button>
                   );
@@ -1033,10 +1545,10 @@ export default function DocumentsPage() {
                   value={uploadForm.family_member_id}
                   onChange={e => setUploadForm({ ...uploadForm, family_member_id: e.target.value })}
                 >
-                  <option value="">👤 Client (Self / Primary)</option>
+                  <option value="">Client (Self / Primary)</option>
                   {clientFamily.map(f => (
                     <option key={f.id} value={f.id}>
-                      👥 Family Member: {f.name} ({f.relationship})
+                      Family Member: {f.name} ({f.relationship})
                     </option>
                   ))}
                 </select>
@@ -1145,7 +1657,7 @@ export default function DocumentsPage() {
               ) : (
                 <div className="text-center p-8 bg-white rounded-2xl border border-slate-200 max-w-md shadow-sm">
                   <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-2xl mx-auto mb-3 bg-blue-50 text-blue-600">
-                    {viewingDoc.file_type === "PDF" ? "📄" : "📁"}
+                    <FileTypeIcon type={viewingDoc.file_type} size={28} color="#2563eb" />
                   </div>
                   <h3 className="font-bold text-[#1F2937] text-base mb-1">{viewingDoc.name}</h3>
                   <p className="text-xs text-[#6B7280] mb-4">

@@ -50,6 +50,9 @@ export interface FamilyMember {
   relationship: string;
   occupation?: string;
   phone?: string;
+  photo_url?: string;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
   created_at: string;
 }
 
@@ -58,12 +61,14 @@ export interface Document {
   client_id: string;
   family_member_id?: string | null;
   name: string;
-  category?: "policy" | "kyc" | "claims" | "other";
+  category?: "policy" | "kyc" | "claims" | "other" | string;
   file_name: string;
   file_url: string;
   file_type: string;
   file_size: number;
   uploaded_by: string;
+  is_deleted?: boolean;
+  deleted_at?: string | null;
   created_at: string;
 }
 

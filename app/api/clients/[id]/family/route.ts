@@ -28,9 +28,18 @@ export async function GET(
       return false;
     };
 
+    const getFamilyOccupation = (m: any) => {
+      if (m.occupation) return m.occupation;
+      if (typeof m.name === "string") {
+        const match = m.name.match(/\[OCC:\s*(.*?)\]/);
+        if (match) return match[1].trim();
+      }
+      return "";
+    };
+
     const cleanFamilyName = (m: any) => {
       const raw = typeof m.name === "string" ? m.name : "";
-      return formatFamilyName(raw.replace(/^\[RECYCLE_BIN\]\s*/, ""));
+      return formatFamilyName(raw.replace(/^\[RECYCLE_BIN\]\s*/, "").replace(/\[OCC:\s*.*?\]/g, "").trim());
     };
 
     const activeMembers = (data || [])
@@ -38,6 +47,7 @@ export async function GET(
       .map((m: any) => ({
         ...m,
         name: cleanFamilyName(m),
+        occupation: getFamilyOccupation(m),
         is_deleted: false,
       }));
 
@@ -46,6 +56,7 @@ export async function GET(
       .map((m: any) => ({
         ...m,
         name: cleanFamilyName(m),
+        occupation: getFamilyOccupation(m),
         is_deleted: true,
       }));
 
@@ -82,25 +93,65 @@ export async function POST(
   }
 
   const cleanName = formatFamilyName(body.name);
+  const rawOccupation = (body.occupation || "").trim();
+  const storedName = rawOccupation ? `${cleanName} [OCC: ${rawOccupation}]` : cleanName;
 
   try {
     if (!supabaseAdmin) throw new Error("Supabase client not initialized");
 
-    const { data, error } = await supabaseAdmin
+    const insertPayload: Record<string, any> = {
+      client_id: id,
+      name: storedName,
+      date_of_birth: body.date_of_birth,
+      relationship: body.relationship,
+    };
+    if (body.phone) insertPayload.phone = body.phone;
+    if (rawOccupation) insertPayload.occupation = rawOccupation;
+    if (body.photo_url) insertPayload.photo_url = body.photo_url;
+
+    let res = await supabaseAdmin
       .from("family_members")
-      .insert({
-        client_id: id,
-        name: cleanName,
-        date_of_birth: body.date_of_birth,
-        relationship: body.relationship,
-        phone: body.phone || null,
-        occupation: body.occupation || null,
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
-    if (error) throw error;
-    return NextResponse.json({ family_member: data }, { status: 201 });
+    if (res.error) {
+      // Schema resilience: retry removing unknown column (like occupation or photo_url if column does not exist)
+      let cur = { ...insertPayload };
+      let lastErr: any = res.error;
+      while (lastErr) {
+        const msg = lastErr.message || "";
+        const colMatch =
+          msg.match(/column "(.*?)" of relation "family_members" does not exist/i) ||
+          msg.match(/Could not find the '(.*?)' column/i);
+        if (colMatch && colMatch[1] && cur[colMatch[1]] !== undefined) {
+          delete cur[colMatch[1]];
+          const retry = await supabaseAdmin
+            .from("family_members")
+            .insert(cur)
+            .select()
+            .single();
+          if (!retry.error) {
+            res = retry;
+            lastErr = null;
+            break;
+          }
+          lastErr = retry.error;
+        } else {
+          break;
+        }
+      }
+      if (lastErr) throw lastErr;
+    }
+
+    const savedData = {
+      ...res.data,
+      name: cleanName,
+      occupation: rawOccupation,
+      photo_url: res.data?.photo_url || body.photo_url || null,
+    };
+
+    return NextResponse.json({ family_member: savedData }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to add family member" }, { status: 500 });
   }

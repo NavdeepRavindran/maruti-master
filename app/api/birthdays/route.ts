@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, supabaseAuth } from "../../../lib/supabaseClient";
+import { formatClientDisplayName } from "@/lib/formatUtils";
 
 function daysUntilBirthday(dob: string): number {
   const birth = new Date(dob);
@@ -82,8 +83,9 @@ export async function GET(request: Request) {
     const entries: BirthdayEntry[] = [];
 
     for (const client of clients || []) {
+      const { fullName } = formatClientDisplayName(client.name, client.surname);
       entries.push({
-        name: client.name,
+        name: fullName || client.name,
         date_of_birth: client.date_of_birth,
         relationship: "Client (Self)",
         phone: client.phone,
@@ -93,12 +95,18 @@ export async function GET(request: Request) {
     }
 
     for (const fm of familyMembers || []) {
+      const parentClientName = (fm as any).clients?.name;
+      const parentClientSurname = (fm as any).clients?.surname;
+      const formattedParentName = parentClientName
+        ? formatClientDisplayName(parentClientName, parentClientSurname).fullName
+        : undefined;
+
       entries.push({
         name: fm.name,
         date_of_birth: fm.date_of_birth,
         relationship: fm.relationship,
         phone: fm.phone,
-        client_name: (fm as any).clients?.name,
+        client_name: formattedParentName,
         client_id: fm.client_id,
         family_member_id: fm.id,
         type: "family_member",

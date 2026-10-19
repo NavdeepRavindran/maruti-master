@@ -37,9 +37,14 @@ export function formatClientDisplayName(name?: string, surname?: string) {
     sur = parts.slice(-1).join(" ");
   }
 
+  const cleanFirst = capitalizeWords(first);
+  const cleanSur = sur ? sur.toUpperCase().trim() : "";
+  const fullName = cleanSur ? `${cleanSur} ${cleanFirst}`.trim() : cleanFirst;
+
   return {
-    firstName: capitalizeWords(first),
-    surname: sur ? sur.toUpperCase() : "",
+    firstName: cleanFirst,
+    surname: cleanSur,
+    fullName,
   };
 }
 

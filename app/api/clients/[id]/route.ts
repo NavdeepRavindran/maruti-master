@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabaseClient";
 
 import { validateEmail } from "@/lib/emailValidator";
-import { validateDateRange, isValidDateYear } from "@/lib/formatUtils";
+import { validateDateRange, isValidDateYear, formatClientDisplayName } from "@/lib/formatUtils";
 
 // GET /api/clients/[id]
 export async function GET(
@@ -14,22 +14,17 @@ export async function GET(
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
 
-    const { data: client, error } = await supabaseAdmin
-      .from("clients")
-      .select("*")
-      .eq("id", id)
-      .single();
+    // Fetch client, family members, and documents in parallel for high performance
+    const [clientRes, famRes, docsRes] = await Promise.all([
+      supabaseAdmin.from("clients").select("*").eq("id", id).single(),
+      supabaseAdmin.from("family_members").select("*").eq("client_id", id),
+      supabaseAdmin.from("documents").select("*").eq("client_id", id),
+    ]);
 
-    if (error || !client) throw error || new Error("Client not found");
+    const client = clientRes.data;
+    if (clientRes.error || !client) throw clientRes.error || new Error("Client not found");
 
-    let family: any[] = [];
-    try {
-      const { data } = await supabaseAdmin
-        .from("family_members")
-        .select("*")
-        .eq("client_id", id);
-      if (data) family = data;
-    } catch {}
+    const family = famRes.data || [];
 
     const isFamilyDeleted = (fm: any) => {
       if (fm.is_deleted === true || fm.is_deleted === "true") return true;
@@ -37,34 +32,66 @@ export async function GET(
       return false;
     };
 
+    const getFamilyOccupation = (fm: any) => {
+      if (fm.occupation) return fm.occupation;
+      if (typeof fm.name === "string") {
+        const match = fm.name.match(/\[OCC:\s*(.*?)\]/);
+        if (match) return match[1].trim();
+      }
+      return "";
+    };
+
     const cleanFamilyName = (fm: any) => {
       const raw = typeof fm.name === "string" ? fm.name : "";
-      return raw.replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
+      return raw.replace(/^\[RECYCLE_BIN\]\s*/, "").replace(/\[OCC:\s*.*?\]/g, "").trim();
     };
 
     const activeFamily = family.filter((f) => !isFamilyDeleted(f)).map((f) => ({
       ...f,
       name: cleanFamilyName(f),
+      occupation: getFamilyOccupation(f),
       is_deleted: false,
     }));
 
     const recycledFamily = family.filter((f) => isFamilyDeleted(f)).map((f) => ({
       ...f,
       name: cleanFamilyName(f),
+      occupation: getFamilyOccupation(f),
       is_deleted: true,
     }));
 
-    let docs: any[] = [];
-    try {
-      const { data } = await supabaseAdmin
-        .from("documents")
-        .select("*")
-        .eq("client_id", id);
-      if (data) docs = data;
-    } catch {}
+    const rawDocs = docsRes.data || [];
+
+    const isDocDeleted = (d: any) => {
+      if (d.is_deleted === true || d.is_deleted === "true") return true;
+      if (typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]")) return true;
+      return false;
+    };
+
+    const cleanDocName = (d: any) => {
+      const raw = typeof d.name === "string" ? d.name : "";
+      return raw.replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
+    };
+
+    const activeDocs = rawDocs
+      .filter((d) => !isDocDeleted(d))
+      .map((d) => ({
+        ...d,
+        name: cleanDocName(d),
+        is_deleted: false,
+      }));
+
+    const recycledDocs = rawDocs
+      .filter((d) => isDocDeleted(d))
+      .map((d) => ({
+        ...d,
+        name: cleanDocName(d),
+        is_deleted: true,
+      }));
 
     const rawSurname = client.surname || client.fatherName || client.father_name || "";
-    const surname = rawSurname ? rawSurname.toUpperCase() : "";
+    const { firstName: clientFirstName, surname: clientSurname, fullName: clientFullName } =
+      formatClientDisplayName(client.name, rawSurname);
 
     const isDeleted = Boolean(
       client.is_deleted === true ||
@@ -75,8 +102,9 @@ export async function GET(
     return NextResponse.json({
       client: {
         ...client,
-        surname,
-        fullName: `${client.name || ""}${surname ? " " + surname : ""}`.trim(),
+        name: clientFirstName,
+        surname: clientSurname,
+        fullName: clientFullName,
         alternate_mobile: client.alternate_mobile || client.alternateMobile || "",
         alternateMobile: client.alternate_mobile || client.alternateMobile || "",
         pin_code: client.pin_code || client.pinCode || "",
@@ -92,11 +120,12 @@ export async function GET(
         plain_password: client.plain_password || client.plainPassword || client.temporarypassword || "",
         is_deleted: isDeleted,
         family_count: activeFamily.length,
-        document_count: docs.length,
+        document_count: activeDocs.length,
       },
       family_members: activeFamily,
       recycled_family_members: recycledFamily,
-      documents: docs,
+      documents: activeDocs,
+      recycled_documents: recycledDocs,
     });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Client not found" }, { status: 404 });
@@ -251,16 +280,6 @@ export async function DELETE(
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
 
-    // Auto-purge soft-deleted clients older than 3 months (90 days) permanently
-    try {
-      const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-      await supabaseAdmin
-        .from("clients")
-        .delete()
-        .eq("is_deleted", true)
-        .lt("deleted_at", threeMonthsAgo);
-    } catch {}
-
     if (permanent) {
       await supabaseAdmin.from("documents").delete().eq("client_id", id);
       await supabaseAdmin.from("family_members").delete().eq("client_id", id);
@@ -268,34 +287,22 @@ export async function DELETE(
       if (error) throw error;
       return NextResponse.json({ success: true, message: "Client permanently deleted" });
     } else {
-      let updateRes = await supabaseAdmin
+      // Direct, fast soft-delete via notes tagging
+      const { data: clientData } = await supabaseAdmin
         .from("clients")
-        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+        .select("notes")
+        .eq("id", id)
+        .maybeSingle();
+
+      const existingNotes = clientData?.notes || "";
+      const tag = `[RECYCLE_BIN:${new Date().toISOString()}]`;
+      const updatedNotes = existingNotes ? `${existingNotes}\n${tag}` : tag;
+      const notesRes = await supabaseAdmin
+        .from("clients")
+        .update({ notes: updatedNotes })
         .eq("id", id);
-      if (updateRes.error) {
-        updateRes = await supabaseAdmin
-          .from("clients")
-          .update({ is_deleted: true })
-          .eq("id", id);
-      }
-      if (updateRes.error) {
-        // Fallback: If is_deleted column does not exist in DB, tag notes
-        const { data: clientData } = await supabaseAdmin
-          .from("clients")
-          .select("notes")
-          .eq("id", id)
-          .maybeSingle();
-        const existingNotes = clientData?.notes || "";
-        const tag = `[RECYCLE_BIN:${new Date().toISOString()}]`;
-        const updatedNotes = existingNotes ? `${existingNotes}\n${tag}` : tag;
-        const notesRes = await supabaseAdmin
-          .from("clients")
-          .update({ notes: updatedNotes })
-          .eq("id", id);
-        if (notesRes.error) {
-          throw updateRes.error;
-        }
-      }
+
+      if (notesRes.error) throw notesRes.error;
       return NextResponse.json({ success: true, message: "Client moved to Recycle Bin" });
     }
   } catch (err: any) {

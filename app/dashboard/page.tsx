@@ -381,10 +381,10 @@ export default function DashboardPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="text-sm font-semibold truncate">
-                              <span className="text-black group-hover:text-black font-bold">{firstName}</span>{" "}
                               {surname && (
-                                <span className="text-[#0E7AC7] group-hover:text-[#0E7AC7] font-semibold">{surname}</span>
+                                <span className="text-[#0E7AC7] group-hover:text-[#0E7AC7] font-bold mr-1.5">{surname}</span>
                               )}
+                              <span className="text-black group-hover:text-black font-bold">{firstName}</span>
                             </p>
                             <p className="text-xs text-[#6B7280] font-medium truncate">
                               {client.occupation || "Client"}

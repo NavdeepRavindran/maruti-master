@@ -90,68 +90,56 @@ export async function GET(request: Request) {
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
 
-    // Auto-purge soft-deleted clients older than 3 months (90 days) permanently if supported
-    try {
-      const threeMonthsAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-      await supabaseAdmin
-        .from("clients")
-        .delete()
-        .eq("is_deleted", true)
-        .lt("deleted_at", threeMonthsAgo);
-    } catch {}
+    // Parallel queries to fetch clients, documents, and family members efficiently
+    const [clientsRes, docsRes, famRes] = await Promise.all([
+      supabaseAdmin.from("clients").select("*").order("created_at", { ascending: false }),
+      supabaseAdmin.from("documents").select("client_id, category, name, file_name"),
+      supabaseAdmin.from("family_members").select("client_id, name"),
+    ]);
 
-    // Query clients table safely - select(*) never fails on missing column names
-    let { data, error } = await supabaseAdmin
-      .from("clients")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      // Fallback without ordering in case created_at is not indexed or named differently
+    let data = clientsRes.data;
+    if (clientsRes.error) {
       const fallback = await supabaseAdmin.from("clients").select("*");
-      if (fallback.error) {
-        throw fallback.error;
-      }
+      if (fallback.error) throw fallback.error;
       data = fallback.data;
     }
 
-    // Safely collect document and family member counts without fragile PostgREST relation joins
+    // Safely collect document and family member counts
     let docCounts: Record<string, number> = {};
     let familyCounts: Record<string, number> = {};
     let hasKyc: Record<string, boolean> = {};
-    try {
-      const { data: docs } = await supabaseAdmin.from("documents").select("client_id, category, name, file_name");
-      if (docs) {
-        for (const d of docs) {
-          if (d.client_id) {
-            docCounts[d.client_id] = (docCounts[d.client_id] || 0) + 1;
-            const isKyc = (
-              d.category === "KYC / Identity" ||
-              d.category === "KYC" ||
-              /ckyc|kyc|aadhaar|pan/i.test(d.name || "") ||
-              /ckyc|kyc|aadhaar|pan/i.test(d.file_name || "")
-            );
-            if (isKyc) {
-              hasKyc[d.client_id] = true;
-            }
+
+    if (docsRes.data) {
+      for (const d of docsRes.data) {
+        const isDeleted = typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]");
+        if (d.client_id && !isDeleted) {
+          docCounts[d.client_id] = (docCounts[d.client_id] || 0) + 1;
+          const isKyc = (
+            d.category === "KYC / Identity" ||
+            d.category === "KYC" ||
+            /ckyc|kyc|aadhaar|pan/i.test(d.name || "") ||
+            /ckyc|kyc|aadhaar|pan/i.test(d.file_name || "")
+          );
+          if (isKyc) {
+            hasKyc[d.client_id] = true;
           }
         }
       }
-    } catch {}
+    }
 
-    try {
-      const { data: fam } = await supabaseAdmin.from("family_members").select("client_id");
-      if (fam) {
-        for (const f of fam) {
-          if (f.client_id) familyCounts[f.client_id] = (familyCounts[f.client_id] || 0) + 1;
+    if (famRes.data) {
+      for (const f of famRes.data) {
+        const isDeleted = typeof f.name === "string" && f.name.startsWith("[RECYCLE_BIN]");
+        if (f.client_id && !isDeleted) {
+          familyCounts[f.client_id] = (familyCounts[f.client_id] || 0) + 1;
         }
       }
-    } catch {}
+    }
 
     const getComputedStatus = (c: any) => {
       if (c.status === "Inactive") return "Inactive";
-      // If KYC document is uploaded, client is Active, otherwise Pending
-      return hasKyc[c.id] ? "Active" : "Pending";
+      if (c.status === "Active") return "Active";
+      return hasKyc[c.id] ? "Active" : (c.status || "Pending");
     };
 
     const isClientDeleted = (c: any) => {
