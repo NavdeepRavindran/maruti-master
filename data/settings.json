@@ -1,0 +1,33 @@
+{
+  "agency": {
+    "name": "Maruthi Insure Care",
+    "logoUrl": "https://example.com/logo.png",
+    "address": "123 Main St, City",
+    "regNo": "REG-987654321",
+    "phone": "+91 98765 43210",
+    "email": "contact@maruthiinsure.com"
+  },
+  "categories": [
+    "Policy Documents",
+    "KYC / Identity",
+    "Health Records",
+    "Vehicle RC / Insurance",
+    "Financial / Tax",
+    "Others"
+  ],
+  "templates": {
+    "birthdayEnglish": "Wishing you a very Happy Birthday! 🎉 May your year ahead be filled with happiness, health, and prosperity. Best wishes from Maruthi Insure Care.",
+    "birthdayTamil": "இனிய பிறந்தநாள் நல்வாழ்த்துகள்! 🎂 உங்கள் வாழ்வில் எல்லா வளங்களும் நலன்களும் பெற்று ஆரோக்கியத்துடனும் அமைதியுடனும் வாழ வாழ்த்துகிறோம். — மருதி இன்சூர் கேர்.",
+    "anniversaryEnglish": "Happy Wedding Anniversary! 💐 Wishing you many more years of love, togetherness, and wonderful milestones. Warm regards from Maruthi Insure Care.",
+    "anniversaryTamil": "இனிய திருமண நாள் நல்வாழ்த்துகள்! 💐 அன்பு, மகிழ்ச்சி, வளமையுடன் கூடிய நீடித்த இல்லற வாழ்விற்கு இதயங்கனிந்த வாழ்த்துகள். — மருதி இன்சூர் கேர்."
+  },
+  "notifications": {
+    "emailAlerts": true,
+    "smsAlerts": false,
+    "marketing": false
+  },
+  "portal": {
+    "enableClientPortal": true,
+    "require2FA": false
+  }
+}

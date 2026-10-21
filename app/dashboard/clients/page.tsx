@@ -700,6 +700,20 @@ setForm(prev => ({
 
   const formatDob = (d: string) => formatDate(d);
 
+  const handleAddFamilyMember = () => {
+    const nextIdx = familyMembers.length;
+    setFamilyMembers(prev => [...prev, { name: "", relationship: "", date_of_birth: "", phone: "", occupation: "" }]);
+    toast.success(`Family Member #${nextIdx + 1} added! Fill in their details below.`, { icon: "👥" });
+    setTimeout(() => {
+      const el = document.getElementById(`family-member-card-${nextIdx}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        const firstInput = el.querySelector("input");
+        if (firstInput) firstInput.focus();
+      }
+    }, 120);
+  };
+
   const inputCls = "w-full px-4 py-3 rounded-2xl bg-[#F7F9FC] border border-slate-200 focus:bg-white focus:border-[#0E7AC7] focus:ring-2 focus:ring-[#DDF3FF] outline-none transition-all text-[13px] font-semibold text-[#1F2937] placeholder:text-slate-400 placeholder:font-normal";
   const labelCls = "block text-xs font-semibold text-[#6B7280] mb-1.5";
 
@@ -1653,8 +1667,8 @@ setForm(prev => ({
                   </div>
                   <button
                     type="button"
-                    onClick={() => setFamilyMembers(prev => [...prev, { name: "", relationship: "Wife", date_of_birth: "", phone: "", occupation: "" }])}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#005A87] text-white text-xs font-bold hover:bg-[#00476b] transition-all shadow-sm"
+                    onClick={handleAddFamilyMember}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#005A87] text-white text-xs font-bold hover:bg-[#00476b] transition-all shadow-sm active:scale-95"
                   >
                     + Add Member
                   </button>
@@ -1665,7 +1679,11 @@ setForm(prev => ({
                 ) : (
                   <div className="space-y-3">
                     {familyMembers.map((fm, idx) => (
-                      <div key={idx} className="bg-white rounded-xl p-3 border border-slate-200/80 shadow-xs space-y-2.5">
+                      <div
+                        key={idx}
+                        id={`family-member-card-${idx}`}
+                        className="bg-white rounded-xl p-3 border border-slate-200/80 shadow-xs space-y-2.5 transition-all animate-in fade-in slide-in-from-bottom-2 duration-300"
+                      >
                         <div className="flex items-center justify-between">
                           <span className="text-[11px] font-bold text-[#005A87]">Family Member #{idx + 1}</span>
                           <button

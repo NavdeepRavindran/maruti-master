@@ -18,21 +18,17 @@ interface DocData {
   family_member_name?: string;
 }
 
-type DocCategory =
-  | "Policy Documents"
-  | "KYC / Identity"
-  | "Health Records"
-  | "Vehicle RC / Insurance"
-  | "Financial / Tax"
-  | "Others";
+type DocCategory = string;
 
-const CATEGORIES: {
-  key: DocCategory;
+interface CategoryConfig {
+  key: string;
   label: string;
   color: string;
   bg: string;
   borderColor: string;
-}[] = [
+}
+
+const DEFAULT_CATEGORIES: CategoryConfig[] = [
   {
     key: "KYC / Identity",
     label: "KYC & Identity",
@@ -77,16 +73,34 @@ const CATEGORIES: {
   },
 ];
 
+const PRESET_PALETTES = [
+  { color: "#0284c7", bg: "#f0f9ff", borderColor: "#bae6fd" },
+  { color: "#8b5cf6", bg: "#f5f3ff", borderColor: "#ddd6fe" },
+  { color: "#ec4899", bg: "#fdf2f8", borderColor: "#fbcfe8" },
+  { color: "#14b8a6", bg: "#f0fdfa", borderColor: "#99f6e4" },
+  { color: "#f59e0b", bg: "#fffbeb", borderColor: "#fde68a" },
+  { color: "#6366f1", bg: "#eef2ff", borderColor: "#c7d2fe" },
+  { color: "#059669", bg: "#ecfdf5", borderColor: "#a7f3d0" },
+];
+
+let dynamicCategories: CategoryConfig[] = [...DEFAULT_CATEGORIES];
+
 const getCat = (key?: string) => {
-  if (!key) return CATEGORIES[5];
-  const found = CATEGORIES.find(c => c.key.toLowerCase() === key.toLowerCase());
+  if (!key) return dynamicCategories.find(c => c.key === "Others") || DEFAULT_CATEGORIES[5];
+  const found = dynamicCategories.find(c => c.key.toLowerCase() === key.toLowerCase());
   if (found) return found;
-  if (/kyc|aadhaar|pan|identity/i.test(key)) return CATEGORIES[0];
-  if (/policy|insurance|premium/i.test(key)) return CATEGORIES[1];
-  if (/financial|tax|form 16|itr|salary|bank/i.test(key)) return CATEGORIES[2];
-  if (/health|medical|hospital/i.test(key)) return CATEGORIES[3];
-  if (/vehicle|motor|rc|car|bike/i.test(key)) return CATEGORIES[4];
-  return CATEGORIES[5];
+  if (/kyc|aadhaar|pan|identity/i.test(key)) return DEFAULT_CATEGORIES[0];
+  if (/policy|insurance|premium/i.test(key)) return DEFAULT_CATEGORIES[1];
+  if (/financial|tax|form 16|itr|salary|bank/i.test(key)) return DEFAULT_CATEGORIES[2];
+  if (/health|medical|hospital/i.test(key)) return DEFAULT_CATEGORIES[3];
+  if (/vehicle|motor|rc|car|bike/i.test(key)) return DEFAULT_CATEGORIES[4];
+  return {
+    key: key,
+    label: key,
+    color: "#64748b",
+    bg: "#f8fafc",
+    borderColor: "#e2e8f0",
+  };
 };
 
 function CategoryIcon({ category, size = 18, color }: { category?: string; size?: number; color?: string }) {
@@ -194,6 +208,42 @@ export default function DocumentsPage() {
   const [vaultTab, setVaultTab] = useState<"active" | "recycle_bin">("active");
   const [restoringDocId, setRestoringDocId] = useState<string | null>(null);
   const [deletingDocId, setDeletingDocId] = useState<string | null>(null);
+  const [categoryItems, setCategoryItems] = useState<CategoryConfig[]>(DEFAULT_CATEGORIES);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/settings");
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.categories) && data.categories.length > 0) {
+          const list: CategoryConfig[] = [];
+          data.categories.forEach((name: string, i: number) => {
+            const def = DEFAULT_CATEGORIES.find(c => c.key.toLowerCase() === name.toLowerCase());
+            if (def) {
+              list.push(def);
+            } else {
+              const pal = PRESET_PALETTES[i % PRESET_PALETTES.length];
+              list.push({
+                key: name,
+                label: name,
+                color: pal.color,
+                bg: pal.bg,
+                borderColor: pal.borderColor,
+              });
+            }
+          });
+          dynamicCategories = list;
+          setCategoryItems(list);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load settings categories:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     const t = setTimeout(fetchDocs, 300);
@@ -1013,7 +1063,7 @@ export default function DocumentsPage() {
         </div>
         {/* ── Category Cards (Top Permanent Section) ── */}
         <div className="dp-cat-grid">
-          {CATEGORIES.map(cat => {
+          {categoryItems.map(cat => {
             const count = activeDocs.filter(d => getCat(d.category).key === cat.key).length;
             const isActive = activeCategory === cat.key;
             return (
@@ -1117,7 +1167,7 @@ export default function DocumentsPage() {
             >
               {vaultTab === "recycle_bin" ? `All Deleted (${recycledDocs.length})` : `All Files (${activeDocs.length})`}
             </button>
-            {CATEGORIES.map(cat => {
+            {categoryItems.map(cat => {
               const count = currentTabDocs.filter(d => getCat(d.category).key === cat.key).length;
               const isActive = activeCategory === cat.key;
               return (
@@ -1464,7 +1514,7 @@ export default function DocumentsPage() {
               {/* ── Category breakdown ── */}
               <div className="dp-storage-title" style={{ fontSize: 12, marginBottom: 12 }}>By Category</div>
               <div className="dp-cat-breakdown">
-                {CATEGORIES.map(cat => {
+                {categoryItems.map(cat => {
                   const count = activeDocs.filter(d => getCat(d.category).key === cat.key).length;
                   const pct = activeDocs.length > 0 ? Math.round((count / activeDocs.length) * 100) : 0;
                   return (
@@ -1504,7 +1554,7 @@ export default function DocumentsPage() {
             <div className="dp-field">
               <label className="dp-field-label">Document Category</label>
               <div className="dp-cat-picker">
-                {CATEGORIES.map(cat => {
+                {categoryItems.map(cat => {
                   const isActive = uploadForm.category === cat.key;
                   return (
                     <button
