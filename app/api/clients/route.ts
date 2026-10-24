@@ -93,7 +93,7 @@ export async function GET(request: Request) {
     // Parallel queries to fetch clients, documents, and family members efficiently
     const [clientsRes, docsRes, famRes] = await Promise.all([
       supabaseAdmin.from("clients").select("*").order("created_at", { ascending: false }),
-      supabaseAdmin.from("documents").select("client_id, category, name, file_name"),
+      supabaseAdmin.from("documents").select("client_id, category, name, file_name, is_deleted"),
       supabaseAdmin.from("family_members").select("client_id, name"),
     ]);
 
@@ -111,7 +111,10 @@ export async function GET(request: Request) {
 
     if (docsRes.data) {
       for (const d of docsRes.data) {
-        const isDeleted = typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]");
+        const isDeleted =
+          d.is_deleted === true ||
+          d.is_deleted === "true" ||
+          (typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]"));
         if (d.client_id && !isDeleted) {
           docCounts[d.client_id] = (docCounts[d.client_id] || 0) + 1;
           const isKyc = (
@@ -136,11 +139,33 @@ export async function GET(request: Request) {
       }
     }
 
+    // A client can ONLY be Active if they have an active KYC document uploaded
     const getComputedStatus = (c: any) => {
       if (c.status === "Inactive") return "Inactive";
-      if (c.status === "Active") return "Active";
-      return hasKyc[c.id] ? "Active" : (c.status || "Pending");
+      return hasKyc[c.id] ? "Active" : "Pending";
     };
+
+    // Self-healing database sync in background: fix any clients with mismatched status in Supabase
+    try {
+      const activeWithoutKyc = (data || [])
+        .filter((c: any) => c.status === "Active" && !hasKyc[c.id])
+        .map((c: any) => c.id);
+      if (activeWithoutKyc.length > 0) {
+        await supabaseAdmin
+          .from("clients")
+          .update({ status: "Pending" })
+          .in("id", activeWithoutKyc);
+      }
+      const pendingWithKyc = (data || [])
+        .filter((c: any) => c.status === "Pending" && hasKyc[c.id])
+        .map((c: any) => c.id);
+      if (pendingWithKyc.length > 0) {
+        await supabaseAdmin
+          .from("clients")
+          .update({ status: "Active" })
+          .in("id", pendingWithKyc);
+      }
+    } catch {}
 
     const isClientDeleted = (c: any) => {
       if (c.is_deleted === true || c.is_deleted === "true") return true;
@@ -213,6 +238,8 @@ export async function GET(request: Request) {
         occupation: c.occupation || "",
         notes: c.notes || "",
         status: getComputedStatus(c),
+        has_kyc: Boolean(hasKyc[c.id]),
+        hasKyc: Boolean(hasKyc[c.id]),
         clientLoginId: c.clientloginid || c.clientLoginId || phone,
         profile_pic: c.profile_pic || null,
         created_at: c.created_at || new Date().toISOString(),
@@ -303,7 +330,7 @@ export async function POST(request: Request) {
         pin_code: validatedData.pinCode || null,
         notes: validatedData.notes || null,
         profile_pic: validatedData.profile_pic || rawBody.profile_pic || null,
-        status: "Active",
+        status: "Pending",
         agent_id: validatedData.agent_id || null,
         clientloginid: validatedData.phone,
         temporarypassword: hashedPassword,
@@ -320,6 +347,9 @@ export async function POST(request: Request) {
       {
         client: {
           ...data,
+          status: "Pending",
+          has_kyc: false,
+          hasKyc: false,
           clientLoginId: validatedData.phone,
           temporaryPassword,
         },

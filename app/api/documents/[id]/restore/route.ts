@@ -12,19 +12,40 @@ export async function POST(
   try {
     if (!admin) throw new Error("No supabaseAdmin");
 
-    // Fast restore by stripping [RECYCLE_BIN] prefix from name
+    // Fast restore by stripping [RECYCLE_BIN] prefix from name and resetting is_deleted
     const { data: doc } = await admin
       .from("documents")
-      .select("name")
+      .select("client_id, category, name, file_name")
       .eq("id", id)
       .maybeSingle();
 
-    if (doc?.name && doc.name.startsWith("[RECYCLE_BIN]")) {
+    if (doc?.name) {
       const cleanName = doc.name.replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
       await admin
         .from("documents")
-        .update({ name: cleanName })
+        .update({ name: cleanName, is_deleted: false })
         .eq("id", id);
+
+      const isKyc = (
+        doc.category === "KYC / Identity" ||
+        doc.category === "KYC" ||
+        /ckyc|kyc|aadhaar|pan/i.test(cleanName) ||
+        /ckyc|kyc|aadhaar|pan/i.test(doc.file_name || "")
+      );
+
+      if (isKyc && doc.client_id) {
+        const { data: cl } = await admin
+          .from("clients")
+          .select("status")
+          .eq("id", doc.client_id)
+          .maybeSingle();
+        if (cl && cl.status !== "Inactive") {
+          await admin
+            .from("clients")
+            .update({ status: "Active" })
+            .eq("id", doc.client_id);
+        }
+      }
     }
 
     return NextResponse.json({

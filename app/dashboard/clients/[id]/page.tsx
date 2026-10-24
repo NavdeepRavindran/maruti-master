@@ -279,7 +279,7 @@ export default function ClientProfilePage({
       state: client.state || "",
       pin_code: client.pin_code || "",
       notes: client.notes || "",
-      status: client.status || "Active",
+      status: client.status || "Pending",
       profile_pic: client.profile_pic || "",
     });
     setEditModalError(null);
@@ -751,7 +751,12 @@ export default function ClientProfilePage({
       });
       setSelectedDocFile(null);
       toast.success("Document uploaded.");
-      if (docForm.category === "KYC / Identity" || docForm.category === "KYC" || /ckyc|kyc|aadhaar|pan/i.test(docForm.name)) {
+      const isKyc = (
+        docForm.category === "KYC / Identity" ||
+        docForm.category === "KYC" ||
+        /ckyc|kyc|aadhaar|pan/i.test(docForm.name)
+      );
+      if (isKyc && client?.status !== "Inactive") {
         setClient(prev => prev ? { ...prev, status: "Active" } : null);
       }
       fetchClient();
@@ -889,9 +894,14 @@ export default function ClientProfilePage({
               const isInactive = client.status === "Inactive";
               const hasKyc = docs.some(
                 (d) =>
-                  d.category === "KYC / Identity" ||
-                  /ckyc|kyc|aadhaar|pan/i.test(d.name) ||
-                  /ckyc|kyc|aadhaar|pan/i.test(d.file_name)
+                  !d.is_deleted &&
+                  !(typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]")) &&
+                  (
+                    d.category === "KYC / Identity" ||
+                    d.category === "KYC" ||
+                    /ckyc|kyc|aadhaar|pan/i.test(d.name) ||
+                    /ckyc|kyc|aadhaar|pan/i.test(d.file_name)
+                  )
               );
               const newStatus = isInactive ? (hasKyc ? "Active" : "Pending") : "Inactive";
               const confirmMsg = isInactive
@@ -975,9 +985,14 @@ export default function ClientProfilePage({
       {client &&
         !docs.some(
           (d) =>
-            d.category === "KYC / Identity" ||
-            /ckyc|kyc|aadhaar|pan/i.test(d.name) ||
-            /ckyc|kyc|aadhaar|pan/i.test(d.file_name)
+            !d.is_deleted &&
+            !(typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]")) &&
+            (
+              d.category === "KYC / Identity" ||
+              d.category === "KYC" ||
+              /ckyc|kyc|aadhaar|pan/i.test(d.name) ||
+              /ckyc|kyc|aadhaar|pan/i.test(d.file_name)
+            )
         ) &&
         client.status !== "Inactive" && (
           <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 sm:px-6 py-3">
@@ -2720,7 +2735,7 @@ export default function ClientProfilePage({
               <div>
                 <label className={labelCls}>Status</label>
                 <select
-                  value={editForm.status || "Active"}
+                  value={editForm.status || "Pending"}
                   onChange={(e) =>
                     setEditForm({ ...editForm, status: e.target.value })
                   }
@@ -2728,7 +2743,7 @@ export default function ClientProfilePage({
                 >
                   {["Active", "Pending", "Inactive"].map((s) => (
                     <option key={s} value={s}>
-                      {s}
+                      {s === "Active" ? "Active (Requires KYC)" : s}
                     </option>
                   ))}
                 </select>

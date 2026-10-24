@@ -128,7 +128,7 @@ export async function POST(request: Request) {
 
     if (error) throw error;
 
-    // Automatically mark client Active upon KYC upload
+    // Automatically mark client Active upon KYC upload (unless client is Inactive)
     const isKyc = (
       category === "KYC / Identity" ||
       category === "KYC" ||
@@ -136,10 +136,17 @@ export async function POST(request: Request) {
       /ckyc|kyc|aadhaar|pan/i.test(file.name)
     );
     if (isKyc) {
-      await supabaseAdmin
+      const { data: curClient } = await supabaseAdmin
         .from("clients")
-        .update({ status: "Active" })
-        .eq("id", client_id);
+        .select("status")
+        .eq("id", client_id)
+        .maybeSingle();
+      if (curClient && curClient.status !== "Inactive") {
+        await supabaseAdmin
+          .from("clients")
+          .update({ status: "Active" })
+          .eq("id", client_id);
+      }
     }
 
     return NextResponse.json({ document: data }, { status: 201 });

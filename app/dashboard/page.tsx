@@ -410,8 +410,14 @@ export default function DashboardPage() {
                         </div>
 
                         <div className="sm:col-span-2 hidden sm:flex flex-col items-end justify-center">
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mb-0.5 ${client.status === "Active" ? "bg-[#14B86A]/10 text-[#14B86A]" : "bg-slate-100 text-slate-500"}`}>
-                            {client.status || "Active"}
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full mb-0.5 ${
+                            client.status === "Active"
+                              ? "bg-[#14B86A]/10 text-[#14B86A]"
+                              : client.status === "Inactive"
+                              ? "bg-slate-100 text-slate-500"
+                              : "bg-[#F59E0B]/10 text-[#F59E0B]"
+                          }`}>
+                            {client.status || "Pending"}
                           </span>
                           <span className="text-[11px] text-[#6B7280] font-medium">
                             {formatTime(client.created_at)}

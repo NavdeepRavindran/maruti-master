@@ -53,6 +53,8 @@ interface ClientData {
   deleted_at?: string;
   family_count?: number;
   document_count?: number;
+  has_kyc?: boolean;
+  hasKyc?: boolean;
   created_at: string;
   profile_pic?: string; // base64 or URL from server
 }
@@ -146,7 +148,7 @@ export default function ClientsPage() {
     name: "", surname: "", phone: "", alternateMobile: "", email: "", date_of_birth: "",
     anniversaryDate: "", gender: "", maritalStatus: "", occupation: "",
     address: "", town: "", city: "", state: "", pinCode: "", notes: "",
-    status: "Active",
+    status: "Pending",
     profile_pic: "", // base64 data URL
   };
 
@@ -428,7 +430,7 @@ setForm(prev => ({
         anniversaryDate: anniv || null,
         anniversary_date: anniv || null,
         notes: formData.notes ?? "",
-        status: formData.status || "Active",
+        status: editingClient ? (formData.status || "Pending") : "Pending",
         name: capitalizeWords(formData.name),
         surname: formData.surname.trim().toUpperCase(),
       };
@@ -719,7 +721,7 @@ setForm(prev => ({
 
   const toggleClientStatus = async (c: ClientData) => {
     const isInactive = c.status === "Inactive";
-    const hasKyc = Boolean(c.document_count && c.document_count > 0);
+    const hasKyc = Boolean(c.has_kyc ?? c.hasKyc);
     // If activating: if KYC not found, move to Pending, not to Active!
     const newStatus = isInactive ? (hasKyc ? "Active" : "Pending") : "Inactive";
     const msg = isInactive
@@ -1783,11 +1785,11 @@ setForm(prev => ({
               <div>
                 <label className={labelCls}>Status</label>
                 <select
-                  value={formData.status || "Active"}
+                  value={formData.status || "Pending"}
                   onChange={e => setForm({ ...formData, status: e.target.value as any })}
                   className={inputCls}
                 >
-                  <option value="Active">Active</option>
+                  <option value="Active">Active (Requires KYC)</option>
                   <option value="Pending">Pending</option>
                   <option value="Inactive">Inactive</option>
                 </select>

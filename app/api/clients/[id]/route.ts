@@ -99,6 +99,28 @@ export async function GET(
       (typeof client.notes === "string" && client.notes.includes("[RECYCLE_BIN:"))
     );
 
+    const hasKyc = activeDocs.some(
+      (d: any) =>
+        d.category === "KYC / Identity" ||
+        d.category === "KYC" ||
+        /ckyc|kyc|aadhaar|pan/i.test(d.name || "") ||
+        /ckyc|kyc|aadhaar|pan/i.test(d.file_name || "")
+    );
+
+    const computedStatus = client.status === "Inactive"
+      ? "Inactive"
+      : (hasKyc ? "Active" : "Pending");
+
+    // Self-heal DB status if it is mismatched
+    if (client.status !== "Inactive" && client.status !== computedStatus) {
+      try {
+        await supabaseAdmin
+          .from("clients")
+          .update({ status: computedStatus })
+          .eq("id", id);
+      } catch {}
+    }
+
     return NextResponse.json({
       client: {
         ...client,
@@ -116,6 +138,9 @@ export async function GET(
         anniversaryDate: isValidDateYear(client.anniversary_date || client.anniversaryDate)
           ? (client.anniversary_date || client.anniversaryDate)
           : "",
+        status: computedStatus,
+        has_kyc: hasKyc,
+        hasKyc: hasKyc,
         clientloginid: client.clientloginid || client.clientLoginId || client.phone || "",
         plain_password: client.plain_password || client.plainPassword || client.temporarypassword || "",
         is_deleted: isDeleted,
@@ -204,25 +229,44 @@ export async function PUT(
     }
     if (body.notes !== undefined) updatePayload.notes = body.notes ?? "";
     if (body.profile_pic !== undefined) updatePayload.profile_pic = body.profile_pic;
+    // Accurately check whether client has any active KYC documents
+    let hasKyc = false;
+    try {
+      const { data: docs } = await supabaseAdmin
+        .from("documents")
+        .select("category, name, file_name, is_deleted")
+        .eq("client_id", id);
+      const nonDeletedDocs = (docs || []).filter(
+        (d: any) =>
+          d.is_deleted !== true &&
+          d.is_deleted !== "true" &&
+          !(typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]"))
+      );
+      hasKyc = nonDeletedDocs.some(
+        (d: any) =>
+          d.category === "KYC / Identity" ||
+          d.category === "KYC" ||
+          /ckyc|kyc|aadhaar|pan/i.test(d.name || "") ||
+          /ckyc|kyc|aadhaar|pan/i.test(d.file_name || "")
+      );
+    } catch {}
+
     if (body.status !== undefined) {
-      if (body.status === "Active") {
-        let hasKyc = false;
-        try {
-          const { data: docs } = await supabaseAdmin
-            .from("documents")
-            .select("category, name, file_name")
-            .eq("client_id", id);
-          hasKyc = (docs || []).some(
-            (d: any) =>
-              d.category === "KYC / Identity" ||
-              d.category === "KYC" ||
-              /ckyc|kyc|aadhaar|pan/i.test(d.name || "") ||
-              /ckyc|kyc|aadhaar|pan/i.test(d.file_name || "")
-          );
-        } catch {}
-        updatePayload.status = hasKyc ? "Active" : "Pending";
+      if (body.status === "Inactive") {
+        updatePayload.status = "Inactive";
       } else {
-        updatePayload.status = body.status;
+        // Can ONLY be Active if KYC document is uploaded!
+        updatePayload.status = hasKyc ? "Active" : "Pending";
+      }
+    } else {
+      // If status wasn't explicitly passed, ensure any non-inactive client status matches KYC presence
+      const { data: curClient } = await supabaseAdmin
+        .from("clients")
+        .select("status")
+        .eq("id", id)
+        .maybeSingle();
+      if (curClient && curClient.status !== "Inactive") {
+        updatePayload.status = hasKyc ? "Active" : "Pending";
       }
     }
 
@@ -262,7 +306,15 @@ export async function PUT(
       if (lastErr) throw lastErr;
     }
 
-    return NextResponse.json({ client: updateRes.data });
+    const finalStatus = updateRes.data?.status ?? updatePayload.status ?? (hasKyc ? "Active" : "Pending");
+    return NextResponse.json({
+      client: {
+        ...updateRes.data,
+        status: finalStatus,
+        has_kyc: hasKyc,
+        hasKyc: hasKyc,
+      },
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to update client" }, { status: 500 });
   }
