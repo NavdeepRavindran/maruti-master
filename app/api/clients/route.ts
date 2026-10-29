@@ -93,7 +93,7 @@ export async function GET(request: Request) {
     // Parallel queries to fetch clients, documents, and family members efficiently
     const [clientsRes, docsRes, famRes] = await Promise.all([
       supabaseAdmin.from("clients").select("*").order("created_at", { ascending: false }),
-      supabaseAdmin.from("documents").select("client_id, category, name, file_name, is_deleted"),
+      supabaseAdmin.from("documents").select("client_id, category, name, file_name"),
       supabaseAdmin.from("family_members").select("client_id, name"),
     ]);
 
@@ -104,16 +104,34 @@ export async function GET(request: Request) {
       data = fallback.data;
     }
 
+    let docsData = docsRes.data;
+    if (docsRes.error) {
+      console.error("GET /api/clients docsRes error:", docsRes.error);
+      const fallbackDocs = await supabaseAdmin.from("documents").select("client_id, category, name, file_name");
+      if (!fallbackDocs.error) {
+        docsData = fallbackDocs.data;
+      }
+    }
+
+    let famData = famRes.data;
+    if (famRes.error) {
+      console.error("GET /api/clients famRes error:", famRes.error);
+      const fallbackFam = await supabaseAdmin.from("family_members").select("client_id, name");
+      if (!fallbackFam.error) {
+        famData = fallbackFam.data;
+      }
+    }
+
     // Safely collect document and family member counts
     let docCounts: Record<string, number> = {};
     let familyCounts: Record<string, number> = {};
     let hasKyc: Record<string, boolean> = {};
 
-    if (docsRes.data) {
-      for (const d of docsRes.data) {
+    if (docsData) {
+      for (const d of docsData) {
         const isDeleted =
-          d.is_deleted === true ||
-          d.is_deleted === "true" ||
+          (d as any).is_deleted === true ||
+          (d as any).is_deleted === "true" ||
           (typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]"));
         if (d.client_id && !isDeleted) {
           docCounts[d.client_id] = (docCounts[d.client_id] || 0) + 1;
@@ -130,9 +148,11 @@ export async function GET(request: Request) {
       }
     }
 
-    if (famRes.data) {
-      for (const f of famRes.data) {
-        const isDeleted = typeof f.name === "string" && f.name.startsWith("[RECYCLE_BIN]");
+    if (famData) {
+      for (const f of famData) {
+        const isDeleted =
+          (f as any).is_deleted === true ||
+          (typeof f.name === "string" && f.name.startsWith("[RECYCLE_BIN]"));
         if (f.client_id && !isDeleted) {
           familyCounts[f.client_id] = (familyCounts[f.client_id] || 0) + 1;
         }
@@ -147,23 +167,25 @@ export async function GET(request: Request) {
 
     // Self-healing database sync in background: fix any clients with mismatched status in Supabase
     try {
-      const activeWithoutKyc = (data || [])
-        .filter((c: any) => c.status === "Active" && !hasKyc[c.id])
-        .map((c: any) => c.id);
-      if (activeWithoutKyc.length > 0) {
-        await supabaseAdmin
-          .from("clients")
-          .update({ status: "Pending" })
-          .in("id", activeWithoutKyc);
-      }
-      const pendingWithKyc = (data || [])
-        .filter((c: any) => c.status === "Pending" && hasKyc[c.id])
-        .map((c: any) => c.id);
-      if (pendingWithKyc.length > 0) {
-        await supabaseAdmin
-          .from("clients")
-          .update({ status: "Active" })
-          .in("id", pendingWithKyc);
+      if (docsData) {
+        const activeWithoutKyc = (data || [])
+          .filter((c: any) => c.status === "Active" && !hasKyc[c.id])
+          .map((c: any) => c.id);
+        if (activeWithoutKyc.length > 0) {
+          await supabaseAdmin
+            .from("clients")
+            .update({ status: "Pending" })
+            .in("id", activeWithoutKyc);
+        }
+        const pendingWithKyc = (data || [])
+          .filter((c: any) => c.status === "Pending" && hasKyc[c.id])
+          .map((c: any) => c.id);
+        if (pendingWithKyc.length > 0) {
+          await supabaseAdmin
+            .from("clients")
+            .update({ status: "Active" })
+            .in("id", pendingWithKyc);
+        }
       }
     } catch {}
 

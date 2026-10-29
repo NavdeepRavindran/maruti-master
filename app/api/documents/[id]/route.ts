@@ -48,7 +48,7 @@ export async function DELETE(
       const taggedName = `[RECYCLE_BIN] ${baseName}`;
       const { error: tagErr } = await admin
         .from("documents")
-        .update({ name: taggedName, is_deleted: true })
+        .update({ name: taggedName })
         .eq("id", id);
 
       if (tagErr) throw tagErr;
@@ -59,13 +59,13 @@ export async function DELETE(
       try {
         const { data: remDocs } = await admin
           .from("documents")
-          .select("category, name, file_name, is_deleted")
+          .select("category, name, file_name")
           .eq("client_id", clientId);
 
         const hasRemainingKyc = (remDocs || []).some(
           (d: any) =>
-            d.is_deleted !== true &&
-            d.is_deleted !== "true" &&
+            (d as any).is_deleted !== true &&
+            (d as any).is_deleted !== "true" &&
             !(typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]")) &&
             (
               d.category === "KYC / Identity" ||

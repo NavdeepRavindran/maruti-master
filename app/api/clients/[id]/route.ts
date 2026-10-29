@@ -234,12 +234,12 @@ export async function PUT(
     try {
       const { data: docs } = await supabaseAdmin
         .from("documents")
-        .select("category, name, file_name, is_deleted")
+        .select("category, name, file_name")
         .eq("client_id", id);
       const nonDeletedDocs = (docs || []).filter(
         (d: any) =>
-          d.is_deleted !== true &&
-          d.is_deleted !== "true" &&
+          (d as any).is_deleted !== true &&
+          (d as any).is_deleted !== "true" &&
           !(typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]"))
       );
       hasKyc = nonDeletedDocs.some(

@@ -14,13 +14,13 @@ export async function DELETE(
 
     const { data: allDocs } = await admin
       .from("documents")
-      .select("id, name, file_url, is_deleted")
+      .select("id, name, file_url")
       .eq("client_id", id);
 
     const recycledDocs = (allDocs || []).filter(
       (d: any) =>
-        d.is_deleted === true ||
-        d.is_deleted === "true" ||
+        (d as any).is_deleted === true ||
+        (d as any).is_deleted === "true" ||
         (typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]"))
     );
 

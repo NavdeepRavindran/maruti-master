@@ -23,7 +23,7 @@ export async function POST(
       const cleanName = doc.name.replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
       await admin
         .from("documents")
-        .update({ name: cleanName, is_deleted: false })
+        .update({ name: cleanName })
         .eq("id", id);
 
       const isKyc = (

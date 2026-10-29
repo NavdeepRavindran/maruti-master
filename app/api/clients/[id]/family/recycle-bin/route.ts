@@ -13,14 +13,14 @@ export async function DELETE(
 
     const { data: allMembers } = await supabaseAdmin
       .from("family_members")
-      .select("id, name, is_deleted")
+      .select("id, name")
       .eq("client_id", id);
 
     const recycledIds = (allMembers || [])
       .filter(
         (m: any) =>
-          m.is_deleted === true ||
-          m.is_deleted === "true" ||
+          (m as any).is_deleted === true ||
+          (m as any).is_deleted === "true" ||
           (typeof m.name === "string" && m.name.startsWith("[RECYCLE_BIN]"))
       )
       .map((m: any) => m.id);

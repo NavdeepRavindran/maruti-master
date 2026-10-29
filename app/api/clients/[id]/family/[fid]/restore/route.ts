@@ -11,44 +11,33 @@ export async function POST(
   try {
     if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized");
 
-    let restoreRes = await supabaseAdmin
+    // Strip [RECYCLE_BIN] prefix from name to restore
+    const { data: fm, error: fmErr } = await supabaseAdmin
       .from("family_members")
-      .update({ is_deleted: false, deleted_at: null })
+      .select("id, client_id, name")
       .eq("id", fid)
       .eq("client_id", id)
-      .select()
       .maybeSingle();
 
-    if (restoreRes.error) {
-      restoreRes = await supabaseAdmin
+    if (fmErr) throw fmErr;
+
+    let updatedFm = fm;
+    if (fm?.name && fm.name.startsWith("[RECYCLE_BIN]")) {
+      const cleanName = fm.name.replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
+      const { data: updated, error: updateErr } = await supabaseAdmin
         .from("family_members")
-        .update({ is_deleted: false })
+        .update({ name: cleanName })
         .eq("id", fid)
         .eq("client_id", id)
         .select()
         .maybeSingle();
-    }
-
-    // Also strip [RECYCLE_BIN] prefix from name if present
-    const { data: fm } = await supabaseAdmin
-      .from("family_members")
-      .select("name")
-      .eq("id", fid)
-      .eq("client_id", id)
-      .maybeSingle();
-
-    if (fm?.name && fm.name.startsWith("[RECYCLE_BIN]")) {
-      const cleanName = fm.name.replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
-      await supabaseAdmin
-        .from("family_members")
-        .update({ name: cleanName })
-        .eq("id", fid)
-        .eq("client_id", id);
+      if (updateErr) throw updateErr;
+      updatedFm = updated;
     }
 
     return NextResponse.json({
       success: true,
-      family_member: restoreRes.data || { id: fid, client_id: id },
+      family_member: updatedFm || { id: fid, client_id: id },
       message: "Family member restored successfully",
     });
   } catch (err: any) {

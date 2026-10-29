@@ -8,10 +8,10 @@ export async function DELETE() {
     // Get all deleted client IDs
     const { data: clients } = await supabaseAdmin
       .from("clients")
-      .select("id, is_deleted, notes");
+      .select("id, notes");
 
     const ids = (clients || [])
-      .filter((c: any) => c.is_deleted === true || c.is_deleted === "true" || (typeof c.notes === "string" && c.notes.includes("[RECYCLE_BIN:")))
+      .filter((c: any) => (c as any).is_deleted === true || (c as any).is_deleted === "true" || (typeof c.notes === "string" && c.notes.includes("[RECYCLE_BIN:")))
       .map((c: any) => c.id);
 
     if (ids.length > 0) {

@@ -134,39 +134,23 @@ export async function DELETE(
       if (familyError) throw familyError;
       return NextResponse.json({ success: true, message: "Family member permanently deleted" });
     } else {
-      // Soft-delete to this client's family recycle bin
-      let updateRes = await supabaseAdmin
+      // Soft-delete to this client's family recycle bin by tagging name
+      const { data: fm } = await supabaseAdmin
         .from("family_members")
-        .update({ is_deleted: true, deleted_at: new Date().toISOString() })
+        .select("name")
+        .eq("id", fid)
+        .eq("client_id", id)
+        .maybeSingle();
+
+      const baseName = (fm?.name || "").replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
+      const taggedName = `[RECYCLE_BIN] ${baseName}`;
+      const tagRes = await supabaseAdmin
+        .from("family_members")
+        .update({ name: taggedName })
         .eq("id", fid)
         .eq("client_id", id);
 
-      if (updateRes.error) {
-        updateRes = await supabaseAdmin
-          .from("family_members")
-          .update({ is_deleted: true })
-          .eq("id", fid)
-          .eq("client_id", id);
-      }
-
-      if (updateRes.error) {
-        // Tag name fallback if column is_deleted does not exist
-        const { data: fm } = await supabaseAdmin
-          .from("family_members")
-          .select("name")
-          .eq("id", fid)
-          .maybeSingle();
-        const baseName = (fm?.name || "").replace(/^\[RECYCLE_BIN\]\s*/, "").trim();
-        const taggedName = `[RECYCLE_BIN] ${baseName}`;
-        const tagRes = await supabaseAdmin
-          .from("family_members")
-          .update({ name: taggedName })
-          .eq("id", fid)
-          .eq("client_id", id);
-        if (tagRes.error) {
-          throw updateRes.error;
-        }
-      }
+      if (tagRes.error) throw tagRes.error;
 
       return NextResponse.json({ success: true, message: "Family member moved to Recycle Bin" });
     }
