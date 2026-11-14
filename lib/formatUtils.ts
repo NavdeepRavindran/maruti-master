@@ -58,6 +58,18 @@ export function formatFamilyName(str?: string): string {
     .join(" ");
 }
 
+/**
+ * Formats address so that in all words, ONLY the first letter is capitalized, and the rest is lowercase.
+ * Preserves numbers, punctuation (commas, slashes, hashes, hyphens), and whitespace.
+ * e.g. "12/4, GANDHI STREET, CHENNAI - 600001" -> "12/4, Gandhi Street, Chennai - 600001"
+ */
+export function formatAddress(str?: string): string {
+  if (!str) return "";
+  return str.replace(/\b([a-zA-Z])([a-zA-Z]*)\b/g, (_match, first, rest) => {
+    return first.toUpperCase() + rest.toLowerCase();
+  });
+}
+
 export const FAMILY_RELATIONSHIPS = [
   "Wife",
   "Husband",

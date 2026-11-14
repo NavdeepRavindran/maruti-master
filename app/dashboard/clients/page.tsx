@@ -266,6 +266,10 @@ setForm(prev => ({
     if (typeof window !== "undefined") {
       const p = new URLSearchParams(window.location.search);
       if (p.get("action") === "add") setShowAdd(true);
+      const tabParam = p.get("tab") || p.get("status") || p.get("from");
+      if (tabParam && ["all", "Active", "Pending", "Inactive", "recycle_bin"].includes(tabParam)) {
+        setFilter(tabParam);
+      }
     }
   }, []);
 
@@ -855,7 +859,13 @@ setForm(prev => ({
             ].map(tab => (
               <button
                 key={tab.key}
-                onClick={() => setFilter(tab.key)}
+                onClick={() => {
+                  setFilter(tab.key);
+                  if (typeof window !== "undefined") {
+                    const url = tab.key === "all" ? "/dashboard/clients" : `/dashboard/clients?tab=${tab.key}`;
+                    window.history.replaceState(null, "", url);
+                  }
+                }}
                 className={`flex-1 sm:flex-none px-3.5 sm:px-4 h-9 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 whitespace-nowrap ${
                   filter === tab.key
                     ? tab.key === "recycle_bin"
@@ -936,7 +946,7 @@ setForm(prev => ({
                     {(() => {
                       const { firstName, surname } = formatClientDisplayName(c.name, c.surname);
                       return (
-                        <Link href={`/dashboard/clients/${c.id}`} className="text-[15px] font-bold truncate block hover:underline">
+                        <Link href={`/dashboard/clients/${c.id}?from=${filter}`} className="text-[15px] font-bold truncate block hover:underline">
                           {surname && (
                             <span className="text-[#0E7AC7] font-bold mr-1.5">{surname}</span>
                           )}
@@ -1011,7 +1021,7 @@ setForm(prev => ({
                   </div>
                 ) : (
                   <div className="flex gap-2 pt-3 border-t border-slate-100">
-                    <Link href={`/dashboard/clients/${c.id}`}
+                    <Link href={`/dashboard/clients/${c.id}?from=${filter}`}
                       className="flex-1 flex items-center justify-center gap-1.5 h-10 rounded-xl bg-[#DDF3FF] text-[#005A87] text-xs font-bold hover:bg-[#005A87] hover:text-white transition-all">
                       <IC.Eye /> View
                     </Link>
@@ -1090,7 +1100,7 @@ setForm(prev => ({
                       {(() => {
                         const { firstName, surname } = formatClientDisplayName(c.name, c.surname);
                         return (
-                          <Link href={`/dashboard/clients/${c.id}`} className="text-[13px] font-bold truncate block hover:underline">
+                          <Link href={`/dashboard/clients/${c.id}?from=${filter}`} className="text-[13px] font-bold truncate block hover:underline">
                             {surname && (
                               <span className="text-[#0E7AC7] group-hover:text-[#0E7AC7] font-bold mr-1.5">{surname}</span>
                             )}
@@ -1141,7 +1151,7 @@ setForm(prev => ({
 
                   {/* Docs */}
                   <div className="col-span-1 flex justify-center">
-                    <Link href={`/dashboard/clients/${c.id}`}
+                    <Link href={`/dashboard/clients/${c.id}?from=${filter}`}
                       className="flex items-center gap-1 px-2.5 py-1 bg-[#F59E0B]/10 text-[#F59E0B] rounded-lg text-[11px] font-bold hover:bg-[#F59E0B] hover:text-white transition-all">
                       <IC.Doc /> {c.document_count || 0}
                     </Link>
@@ -1189,7 +1199,7 @@ setForm(prev => ({
                         >
                           {c.status === "Inactive" ? "Activate" : "Deactivate"}
                         </button>
-                        <Link href={`/dashboard/clients/${c.id}`}
+                        <Link href={`/dashboard/clients/${c.id}?from=${filter}`}
                           className="w-8 h-8 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#005A87] hover:text-white transition-all"
                           title="View">
                           <IC.Eye />

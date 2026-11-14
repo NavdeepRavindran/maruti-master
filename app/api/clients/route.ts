@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { isValidEmail, getEmailError } from "@/lib/emailValidator";
-import { validateDateRange, isValidDateYear } from "@/lib/formatUtils";
+import { validateDateRange, isValidDateYear, formatAddress } from "@/lib/formatUtils";
 
 const clientSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -249,9 +249,9 @@ export async function GET(request: Request) {
         date_of_birth: dob,
         anniversary_date: anniv,
         anniversaryDate: anniv,
-        address: c.address || "",
-        city: c.city || "",
-        state: c.state || "",
+        address: c.address ? formatAddress(c.address) : "",
+        city: c.city ? formatAddress(c.city) : "",
+        state: c.state ? formatAddress(c.state) : "",
         pin_code: pin,
         pinCode: pin,
         gender: c.gender || "",
@@ -346,9 +346,9 @@ export async function POST(request: Request) {
         gender: validatedData.gender || null,
         marital_status: validatedData.maritalStatus || null,
         occupation: validatedData.occupation || null,
-        address: validatedData.address || null,
-        city: validatedData.city || null,
-        state: validatedData.state || null,
+        address: validatedData.address ? formatAddress(validatedData.address) : null,
+        city: validatedData.city ? formatAddress(validatedData.city) : null,
+        state: validatedData.state ? formatAddress(validatedData.state) : null,
         pin_code: validatedData.pinCode || null,
         notes: validatedData.notes || null,
         profile_pic: validatedData.profile_pic || rawBody.profile_pic || null,

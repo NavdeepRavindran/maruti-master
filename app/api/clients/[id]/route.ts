@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "../../../../lib/supabaseClient";
 
 import { validateEmail } from "@/lib/emailValidator";
-import { validateDateRange, isValidDateYear, formatClientDisplayName } from "@/lib/formatUtils";
+import { validateDateRange, isValidDateYear, formatClientDisplayName, formatAddress } from "@/lib/formatUtils";
 
 // GET /api/clients/[id]
 export async function GET(
@@ -127,6 +127,9 @@ export async function GET(
         name: clientFirstName,
         surname: clientSurname,
         fullName: clientFullName,
+        address: client.address ? formatAddress(client.address) : "",
+        city: client.city ? formatAddress(client.city) : "",
+        state: client.state ? formatAddress(client.state) : "",
         alternate_mobile: client.alternate_mobile || client.alternateMobile || "",
         alternateMobile: client.alternate_mobile || client.alternateMobile || "",
         pin_code: client.pin_code || client.pinCode || "",
@@ -221,9 +224,9 @@ export async function PUT(
       updatePayload.marital_status = body.marital_status ?? body.maritalStatus;
     }
     if (body.occupation !== undefined) updatePayload.occupation = body.occupation;
-    if (body.address !== undefined) updatePayload.address = body.address;
-    if (body.city !== undefined) updatePayload.city = body.city;
-    if (body.state !== undefined) updatePayload.state = body.state;
+    if (body.address !== undefined) updatePayload.address = typeof body.address === "string" ? formatAddress(body.address) : body.address;
+    if (body.city !== undefined) updatePayload.city = typeof body.city === "string" ? formatAddress(body.city) : body.city;
+    if (body.state !== undefined) updatePayload.state = typeof body.state === "string" ? formatAddress(body.state) : body.state;
     if (body.pin_code !== undefined || body.pinCode !== undefined) {
       updatePayload.pin_code = body.pin_code ?? body.pinCode;
     }

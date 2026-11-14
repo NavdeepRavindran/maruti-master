@@ -9,6 +9,7 @@ import {
   formatClientDisplayName,
   sanitizeAlphabetsOnly,
   formatFamilyName,
+  formatAddress,
   FAMILY_RELATIONSHIPS,
   formatDate,
   getAge,
@@ -133,6 +134,15 @@ export default function ClientProfilePage({
   const [family, setFamily] = useState<FamilyMember[]>([]);
   const [docs, setDocs] = useState<DocData[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fromParam, setFromParam] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search);
+      setFromParam(sp.get("from") || sp.get("tab") || sp.get("status") || null);
+    }
+  }, []);
+
   const [showFamilyModal, setShowFamilyModal] = useState(false);
   const [showDocModal, setShowDocModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -844,32 +854,38 @@ export default function ClientProfilePage({
       </div>
     );
 
+  const backTab = fromParam === "all" ? "all" : (fromParam || (client?.status === "Active" ? "Active" : client?.status === "Pending" ? "Pending" : "all"));
+  const backHref = backTab === "all" ? "/dashboard/clients" : `/dashboard/clients?tab=${backTab}`;
+  const backLabel = backTab === "Active" ? "Back to Active Clients" : backTab === "Pending" ? "Back to Pending Clients" : backTab === "Inactive" ? "Back to Inactive Clients" : "Back to Clients";
+
   if (!client)
     return (
       <div className="py-32 text-center">
         <p className="text-[#6B7280] font-semibold mb-4">Client not found.</p>
-        <Link href="/dashboard/clients" className="text-[#005A87] font-bold">
-          ← Back to Clients
+        <Link href={backHref} className="text-[#005A87] font-bold">
+          ← {backLabel}
         </Link>
       </div>
     );
 
   const { firstName: clientFirstName, surname: clientSurname, fullName } = formatClientDisplayName(client.name, client.surname);
-  const fullAddress = [
-    client.address,
-    client.city,
-    client.state,
-    client.pin_code,
-  ]
-    .filter(Boolean)
-    .join(", ");
+  const fullAddress = formatAddress(
+    [
+      client.address,
+      client.city,
+      client.state,
+      client.pin_code,
+    ]
+      .filter(Boolean)
+      .join(", ")
+  );
 
   return (
     <div className="min-h-screen bg-[#F7F9FC]">
       {/* ── Top nav bar ─────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 sm:px-6 h-16 flex items-center justify-between">
         <Link
-          href="/dashboard/clients"
+          href={backHref}
           className="flex items-center gap-2 text-[13px] font-bold text-[#6B7280] hover:text-[#1F2937] transition-colors"
         >
           <svg
@@ -885,7 +901,8 @@ export default function ClientProfilePage({
               d="M15 19l-7-7 7-7"
             />
           </svg>
-          <span className="hidden sm:inline">Clients</span>
+          <span className="hidden sm:inline">{backLabel}</span>
+          <span className="sm:hidden">Back</span>
         </Link>
         <div className="flex items-center gap-2">
           <button
@@ -1311,8 +1328,8 @@ export default function ClientProfilePage({
                   ? formatDate(client.anniversary_date || (client as any).anniversaryDate)
                   : "—",
               },
-              { label: "City", value: client.city },
-              { label: "State", value: client.state },
+              { label: "City", value: formatAddress(client.city) },
+              { label: "State", value: formatAddress(client.state) },
               { label: "PIN Code", value: client.pin_code },
               { label: "Full Address", value: fullAddress || "—" },
             ]
@@ -1713,22 +1730,20 @@ export default function ClientProfilePage({
                     </button>
                   </div>
                 ) : (
-                  <div className="divide-y divide-slate-50">
-                    {docs
-                      .filter((d) => {
-                        if (docFilterMember === "all") return true;
-                        if (docFilterMember === "client") return !d.family_member_id;
-                        return d.family_member_id === docFilterMember;
-                      })
-                      .map((doc) => {
-                        const famMember = family.find((f) => f.id === doc.family_member_id);
+                  <div className="p-4 sm:p-5 space-y-6">
+                    {(() => {
+                      const showClientGroup = docFilterMember === "all" || docFilterMember === "client";
+                      const clientDocs = docs.filter((d) => !d.family_member_id);
+                      const membersToShow = family.filter((f) => docFilterMember === "all" || docFilterMember === f.id);
+
+                      const renderDocRow = (doc: DocData) => {
                         return (
                           <div
                             key={doc.id}
-                            className="flex items-center gap-4 px-5 py-3.5 hover:bg-[#F7F9FC] transition-colors group"
+                            className="flex items-center gap-4 px-4 sm:px-5 py-3.5 hover:bg-[#F7F9FC] transition-colors group"
                           >
                             <div
-                              className={`w-11 h-11 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${docColor(doc.file_type)}`}
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${docColor(doc.file_type)}`}
                             >
                               {doc.file_type}
                             </div>
@@ -1740,15 +1755,6 @@ export default function ClientProfilePage({
                                 <p className="text-[11px] text-[#6B7280] font-medium truncate">
                                   {doc.file_name}
                                 </p>
-                                {famMember ? (
-                                  <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded shrink-0">
-                                    Family: {famMember.name}
-                                  </span>
-                                ) : (
-                                  <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2 py-0.5 rounded shrink-0">
-                                    Self: {capitalizeWords(client.name)}
-                                  </span>
-                                )}
                                 {doc.category && (
                                   <span className="text-[10px] text-slate-500 bg-slate-100 px-2 py-0.5 rounded shrink-0">
                                     {doc.category}
@@ -1770,7 +1776,7 @@ export default function ClientProfilePage({
                                 type="button"
                                 onClick={() => setViewingDoc(doc)}
                                 title="View Document in App"
-                                className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
+                                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-xl bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
                               >
                                 <svg
                                   className="w-3.5 h-3.5"
@@ -1799,7 +1805,7 @@ export default function ClientProfilePage({
                                 href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
                                 download={doc.file_name}
                                 title="Download"
-                                className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all"
+                                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-xl bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all"
                               >
                                 <svg
                                   className="w-3.5 h-3.5"
@@ -1820,7 +1826,7 @@ export default function ClientProfilePage({
                               <button
                                 onClick={() => deleteDocument(doc.id)}
                                 title="Move to Recycle Bin"
-                                className="w-9 h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
+                                className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-xl bg-[#F7F9FC] text-[#6B7280] hover:bg-[#EF4444]/10 hover:text-[#EF4444] transition-all"
                               >
                                 <svg
                                   className="w-3.5 h-3.5"
@@ -1839,7 +1845,135 @@ export default function ClientProfilePage({
                             </div>
                           </div>
                         );
-                      })}
+                      };
+
+                      return (
+                        <>
+                          {/* ── Primary Client Section ── */}
+                          {showClientGroup && (
+                            <div className="border border-slate-200/80 rounded-2xl bg-white overflow-hidden shadow-xs">
+                              <div className="px-4 sm:px-5 py-3 bg-gradient-to-r from-blue-50/60 to-white border-b border-slate-100 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-2.5 min-w-0">
+                                  <div className="w-8 h-8 rounded-lg bg-[#005A87] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs">
+                                    {client.name?.[0]?.toUpperCase()}
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                    <h3 className="text-xs font-bold text-[#1F2937] uppercase tracking-wider truncate">
+                                      {capitalizeWords(client.name)}
+                                    </h3>
+                                    <span className="text-[10px] font-bold text-[#005A87] bg-[#DDF3FF] px-2 py-0.5 rounded-full shrink-0">
+                                      Self / Client
+                                    </span>
+                                    <span className="text-[11px] font-semibold text-[#6B7280] shrink-0">
+                                      ({clientDocs.length} {clientDocs.length === 1 ? "doc" : "docs"})
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setDocForm({
+                                      name: `${client.name} Document`,
+                                      file_name: "",
+                                      file_size: 0,
+                                      file_url: "",
+                                      family_member_id: "",
+                                      category: "KYC / Identity",
+                                    });
+                                    setShowDocModal(true);
+                                  }}
+                                  className="flex items-center gap-1 px-2.5 h-7 sm:h-8 rounded-xl bg-[#005A87] hover:bg-[#00476b] text-white text-[11px] font-bold transition-all shadow-xs shrink-0"
+                                >
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                  </svg>
+                                  <span>+ Upload Doc</span>
+                                </button>
+                              </div>
+
+                              {clientDocs.length === 0 ? (
+                                <div className="py-6 text-center px-4 bg-slate-50/30">
+                                  <p className="text-xs font-medium text-slate-400">
+                                    No documents uploaded for {capitalizeWords(client.name)} yet.
+                                  </p>
+                                </div>
+                              ) : (
+                                <div className="divide-y divide-slate-100">
+                                  {clientDocs.map((doc) => renderDocRow(doc))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          {/* ── Family Members Individual Sections ── */}
+                          {membersToShow.map((fm) => {
+                            const fmDocs = docs.filter((d) => d.family_member_id === fm.id);
+                            return (
+                              <div key={fm.id} className="border border-slate-200/80 rounded-2xl bg-white overflow-hidden shadow-xs">
+                                <div className="px-4 sm:px-5 py-3 bg-gradient-to-r from-purple-50/60 to-white border-b border-slate-100 flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    {fm.photo_url ? (
+                                      <img
+                                        src={fm.photo_url}
+                                        alt={fm.name}
+                                        className="w-8 h-8 rounded-lg object-cover shrink-0 ring-1 ring-slate-200 shadow-xs"
+                                      />
+                                    ) : (
+                                      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${getGradient(fm.name)} text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-xs`}>
+                                        {fm.name?.[0]?.toUpperCase()}
+                                      </div>
+                                    )}
+                                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                                      <h3 className="text-xs font-bold text-[#1F2937] uppercase tracking-wider truncate">
+                                        {formatFamilyName(fm.name)}
+                                      </h3>
+                                      <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded-full shrink-0">
+                                        {fm.relationship}
+                                      </span>
+                                      <span className="text-[11px] font-semibold text-[#6B7280] shrink-0">
+                                        ({fmDocs.length} {fmDocs.length === 1 ? "doc" : "docs"})
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setDocForm({
+                                        name: `${formatFamilyName(fm.name)} Document`,
+                                        file_name: "",
+                                        file_size: 0,
+                                        file_url: "",
+                                        family_member_id: fm.id,
+                                        category: "KYC / Identity",
+                                      });
+                                      setShowDocModal(true);
+                                    }}
+                                    className="flex items-center gap-1 px-2.5 h-7 sm:h-8 rounded-xl bg-[#7C6CF6] hover:bg-[#6858e0] text-white text-[11px] font-bold transition-all shadow-xs shrink-0"
+                                  >
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    <span>+ Upload Doc</span>
+                                  </button>
+                                </div>
+
+                                {fmDocs.length === 0 ? (
+                                  <div className="py-6 text-center px-4 bg-slate-50/30">
+                                    <p className="text-xs font-medium text-slate-400">
+                                      No documents uploaded for {formatFamilyName(fm.name)} yet.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <div className="divide-y divide-slate-100">
+                                    {fmDocs.map((doc) => renderDocRow(doc))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </>
+                      );
+                    })()}
                   </div>
                 )}
               </>
