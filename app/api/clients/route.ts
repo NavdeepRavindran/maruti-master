@@ -267,7 +267,7 @@ export async function GET(request: Request) {
         created_at: c.created_at || new Date().toISOString(),
         is_deleted: isClientDeleted(c),
         deleted_at: deletedAt,
-        family_count: familyCounts[c.id] ?? (c.family_members?.[0]?.count ?? 0),
+        family_count: (familyCounts[c.id] ?? (c.family_members?.[0]?.count ?? 0)) + 1,
         document_count: docCounts[c.id] ?? (c.documents?.[0]?.count ?? 0),
       };
     });

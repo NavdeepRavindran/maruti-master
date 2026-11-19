@@ -147,7 +147,7 @@ export async function GET(
         clientloginid: client.clientloginid || client.clientLoginId || client.phone || "",
         plain_password: client.plain_password || client.plainPassword || client.temporarypassword || "",
         is_deleted: isDeleted,
-        family_count: activeFamily.length,
+        family_count: activeFamily.length + 1,
         document_count: activeDocs.length,
       },
       family_members: activeFamily,

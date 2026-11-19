@@ -987,7 +987,7 @@ setForm(prev => ({
                     </div>
                   )}
                   <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#F7F9FC] rounded-xl text-[11px] font-semibold text-[#1F2937]">
-                    <span className="text-[#7C6CF6]"><IC.Users /></span> {c.family_count || 0} family
+                    <span className="text-[#7C6CF6]"><IC.Users /></span> {c.family_count ?? 1} family
                   </div>
                   <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-[#F7F9FC] rounded-xl text-[11px] font-semibold text-[#1F2937]">
                     <span className="text-[#F59E0B]"><IC.Doc /></span> {c.document_count || 0} docs
@@ -1145,7 +1145,7 @@ setForm(prev => ({
                   {/* Family */}
                   <div className="col-span-1 flex justify-center">
                     <div className="flex items-center gap-1 px-2.5 py-1 bg-[#7C6CF6]/10 rounded-lg text-[11px] font-bold text-[#7C6CF6]">
-                      <IC.Users /> {c.family_count || 0}
+                      <IC.Users /> {c.family_count ?? 1}
                     </div>
                   </div>
 

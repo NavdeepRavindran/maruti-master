@@ -1195,7 +1195,7 @@ export default function ClientProfilePage({
                     Family
                   </p>
                   <p className="text-[16px] font-bold text-[#0E7AC7] mt-0.5">
-                    {family.length}
+                    {family.length + 1}
                   </p>
                 </div>
               </div>
@@ -1545,7 +1545,7 @@ export default function ClientProfilePage({
         <div className="flex items-center gap-1 p-1.5 bg-white border border-slate-100 rounded-2xl w-fit shadow-sm">
           {[
             { key: "docs", label: `Documents`, count: docs.length },
-            { key: "family", label: `Family`, count: family.length },
+            { key: "family", label: `Family`, count: family.length + 1 },
           ].map((tab) => (
             <button
               key={tab.key}
