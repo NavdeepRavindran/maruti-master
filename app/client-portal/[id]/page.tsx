@@ -272,13 +272,62 @@ export default function ClientPortalDashboard() {
                 </div>
               </div>
 
-              {familyMembers.length === 0 ? (
-                <div className="py-8 text-center px-4 bg-slate-50/50 rounded-2xl border border-slate-100">
-                  <p className="text-sm font-semibold text-slate-500">No family members listed.</p>
-                  <p className="text-xs text-slate-400 mt-1">Contact your insurance advisor to add family members to your policy vault.</p>
-                </div>
-              ) : (
                 <div className="grid sm:grid-cols-2 gap-4">
+                  {/* Self Member Card */}
+                  <div className="p-4 rounded-2xl bg-blue-50/40 border border-blue-200/80 hover:border-blue-300 hover:bg-white transition-all shadow-xs flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-start gap-3 mb-3">
+                        <div className="w-11 h-11 rounded-xl bg-blue-600 text-white font-bold text-base flex items-center justify-center shrink-0 shadow-xs">
+                          {client.name?.[0]?.toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-slate-800 text-[14px] truncate">
+                            {capitalizeWords(client.name)}
+                          </h3>
+                          <span className="inline-block mt-0.5 text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-200 uppercase tracking-wider">
+                            Self (Primary)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-200/60">
+                        {client.date_of_birth && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400 font-medium">Date of Birth:</span>
+                            <span className="font-semibold text-slate-700">
+                              {formatDate(client.date_of_birth)}
+                              {getAge(client.date_of_birth) > 0 && (
+                                <span className="text-slate-400 ml-1">({getAge(client.date_of_birth)} yrs)</span>
+                              )}
+                            </span>
+                          </div>
+                        )}
+                        {(client as any).occupation && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400 font-medium">Occupation:</span>
+                            <span className="font-semibold text-slate-700 truncate max-w-[150px]">{(client as any).occupation}</span>
+                          </div>
+                        )}
+                        {client.phone && (
+                          <div className="flex items-center justify-between">
+                            <span className="text-slate-400 font-medium">Phone:</span>
+                            <a href={`tel:${client.phone}`} className="font-semibold text-blue-600 hover:underline">
+                              {client.phone}
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-slate-500">Documents Vault</span>
+                      <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
+                        {clientDocs.length} {clientDocs.length === 1 ? "file" : "files"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Family Members Cards */}
                   {familyMembers.map((member) => {
                     const memberDocs = allDocuments.filter((d) => d.family_member_id === member.id);
                     return (
@@ -348,7 +397,6 @@ export default function ClientPortalDashboard() {
                     );
                   })}
                 </div>
-              )}
             </div>
 
             {/* Documents Section (Grouped by Member) */}
