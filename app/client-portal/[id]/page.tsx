@@ -49,6 +49,7 @@ interface ClientData {
   anniversaryDate?: string;
   gender?: string;
   occupation?: string;
+  profile_pic?: string;
   documents?: DocData[];
   family_members?: FamilyMemberData[];
 }
@@ -224,9 +225,17 @@ export default function ClientPortalDashboard() {
         <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-7 shadow-xs">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-slate-100">
             <div className="flex items-center gap-4">
-              <div className="w-16 h-16 rounded-2xl bg-[#005A87] text-white font-extrabold text-2xl flex items-center justify-center shrink-0 shadow-md shadow-[#005A87]/20">
-                {client.name?.[0]?.toUpperCase()}
-              </div>
+              {client.profile_pic ? (
+                <img
+                  src={client.profile_pic}
+                  alt={client.name}
+                  className="w-16 h-16 rounded-2xl object-cover ring-2 ring-slate-100 shadow-md shadow-[#005A87]/15 shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-2xl bg-[#005A87] text-white font-extrabold text-2xl flex items-center justify-center shrink-0 shadow-md shadow-[#005A87]/20">
+                  {client.name?.[0]?.toUpperCase()}
+                </div>
+              )}
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-xl sm:text-2xl font-black text-[#0f172a]">
@@ -237,7 +246,7 @@ export default function ClientPortalDashboard() {
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 font-medium mt-1">
-                  Client ID: #{client.id.slice(0, 8)} · Managing vault records for primary client &amp; family
+                  Client ID: #{client.id.slice(0, 8)}
                 </p>
               </div>
             </div>
@@ -258,9 +267,10 @@ export default function ClientPortalDashboard() {
             </div>
           </div>
 
-          {/* Quick contact strip */}
-          <div className="pt-5 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
-            <div className="flex items-center gap-3">
+          {/* Quick contact strip: Email closer to Phone, Address closer to Email and showing completely */}
+          <div className="pt-5 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
+            {/* Phone */}
+            <div className="flex items-center gap-2.5 shrink-0">
               <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#005A87] flex items-center justify-center shrink-0">
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
@@ -268,35 +278,37 @@ export default function ClientPortalDashboard() {
               </div>
               <div>
                 <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Phone</div>
-                <div className="font-bold text-slate-700">{client.phone}</div>
+                <div className="font-bold text-slate-800">{client.phone}</div>
               </div>
             </div>
 
+            {/* Email - right next to phone */}
             {client.email && (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                   </svg>
                 </div>
-                <div className="min-w-0">
+                <div>
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email</div>
-                  <div className="font-bold text-slate-700 truncate">{client.email}</div>
+                  <div className="font-bold text-slate-800">{client.email}</div>
                 </div>
               </div>
             )}
 
+            {/* Address - right next to email, completely visible inside container */}
             {fullAddress && (
-              <div className="flex items-center gap-3 sm:col-span-1">
+              <div className="flex items-center gap-2.5 flex-1 min-w-[280px]">
                 <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Address</div>
-                  <div className="font-bold text-slate-700 truncate" title={fullAddress}>
+                  <div className="font-bold text-slate-800 leading-snug break-words">
                     {fullAddress}
                   </div>
                 </div>
@@ -334,15 +346,25 @@ export default function ClientPortalDashboard() {
               }`}
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center font-extrabold text-base shrink-0 ${
-                    selectedMemberId === "self"
-                      ? "bg-white/20 text-white"
-                      : "bg-blue-100 text-blue-700"
-                  }`}
-                >
-                  {client.name?.[0]?.toUpperCase()}
-                </div>
+                {client.profile_pic ? (
+                  <img
+                    src={client.profile_pic}
+                    alt={client.name}
+                    className={`w-11 h-11 rounded-xl object-cover ring-1 shrink-0 ${
+                      selectedMemberId === "self" ? "ring-white/40" : "ring-slate-200"
+                    }`}
+                  />
+                ) : (
+                  <div
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center font-extrabold text-base shrink-0 ${
+                      selectedMemberId === "self"
+                        ? "bg-white/20 text-white"
+                        : "bg-blue-100 text-blue-700"
+                    }`}
+                  >
+                    {client.name?.[0]?.toUpperCase()}
+                  </div>
+                )}
                 <div className="min-w-0">
                   <div className="font-extrabold text-sm truncate">
                     {capitalizeWords(client.name)}
@@ -440,17 +462,25 @@ export default function ClientPortalDashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
               <div className="flex items-center gap-4">
                 {isSelf ? (
-                  <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-sm">
-                    {client.name?.[0]?.toUpperCase()}
-                  </div>
+                  client.profile_pic ? (
+                    <img
+                      src={client.profile_pic}
+                      alt={client.name}
+                      className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-100 shadow-sm shrink-0"
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-sm shrink-0">
+                      {client.name?.[0]?.toUpperCase()}
+                    </div>
+                  )
                 ) : selectedFamilyMember?.photo_url ? (
                   <img
                     src={selectedFamilyMember.photo_url}
                     alt={selectedFamilyMember.name}
-                    className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-100 shadow-sm"
+                    className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-100 shadow-sm shrink-0"
                   />
                 ) : (
-                  <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-sm">
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-sm shrink-0">
                     {selectedFamilyMember?.name?.[0]?.toUpperCase()}
                   </div>
                 )}
@@ -469,9 +499,6 @@ export default function ClientPortalDashboard() {
                       {isSelf ? "Self (Primary)" : selectedFamilyMember?.relationship || "Family Member"}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 font-medium mt-1">
-                    Viewing complete profile details and exclusive records for this member
-                  </p>
                 </div>
               </div>
 
@@ -632,9 +659,6 @@ export default function ClientPortalDashboard() {
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
                   Documents Vault for {selectedMemberName}
                 </h3>
-                <p className="text-xs text-slate-400 font-medium mt-0.5">
-                  Records, insurance policies, and KYC documents stored exclusively for this individual
-                </p>
               </div>
               <div className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-xl self-start sm:self-auto">
                 {currentMemberDocs.length} Document{currentMemberDocs.length === 1 ? "" : "s"}
