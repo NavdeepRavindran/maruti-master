@@ -652,8 +652,8 @@ export default function ClientPortalDashboard() {
           </div>
 
           {/* Member's Documents Section (Exclusively Inside Member View) */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+          <div className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-6 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
                 <h3 className="text-base font-black text-[#0f172a] uppercase tracking-wider flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
@@ -666,13 +666,13 @@ export default function ClientPortalDashboard() {
             </div>
 
             {currentMemberDocs.length === 0 ? (
-              <div className="py-14 text-center border-2 border-dashed border-slate-100 rounded-3xl bg-slate-50/50">
-                <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="py-12 text-center border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50">
+                <div className="w-11 h-11 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2.5">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
                   </svg>
                 </div>
-                <h4 className="text-sm font-bold text-slate-700 mb-1">
+                <h4 className="text-sm font-bold text-slate-700 mb-0.5">
                   No documents for {selectedMemberName} yet
                 </h4>
                 <p className="text-xs font-medium text-slate-400 max-w-sm mx-auto">
@@ -680,42 +680,44 @@ export default function ClientPortalDashboard() {
                 </p>
               </div>
             ) : (
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {currentMemberDocs.map((doc) => (
                   <div
                     key={doc.id}
-                    className="p-4 rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10 transition-all group bg-white flex flex-col justify-between"
+                    className="p-3.5 rounded-2xl border border-slate-200/90 hover:border-[#005A87] hover:shadow-xs transition-all group bg-white flex items-center justify-between gap-3"
                   >
-                    <div>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-blue-50 group-hover:border-blue-200 transition-colors">
-                          <DocTypeIcon type={doc.file_type} />
-                        </div>
-                        <a
-                          href={doc.file_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="w-9 h-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-[#005A87] hover:text-white transition-all border border-slate-100 hover:border-transparent cursor-pointer"
-                          title="View / Download"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                          </svg>
-                        </a>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0 group-hover:bg-blue-50 transition-colors">
+                        <DocTypeIcon type={doc.file_type} />
                       </div>
-                      <h4 className="font-bold text-slate-800 text-sm mb-1 truncate" title={doc.name}>
-                        {doc.name}
-                      </h4>
-                      {doc.category && (
-                        <div className="inline-block px-2 py-0.5 bg-blue-50 text-[#005A87] text-[9px] font-black uppercase tracking-wider rounded border border-blue-100 mb-2">
-                          {doc.category}
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-slate-800 text-[13px] truncate group-hover:text-[#005A87] transition-colors" title={doc.name}>
+                          {doc.name}
+                        </h4>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          {doc.category && (
+                            <span className="inline-block px-1.5 py-0.5 bg-blue-50 text-[#005A87] text-[9px] font-bold uppercase tracking-wider rounded border border-blue-100 shrink-0">
+                              {doc.category}
+                            </span>
+                          )}
+                          <span className="text-[10px] font-medium text-slate-400 shrink-0">
+                            {formatSize(doc.file_size)} · {formatDate(doc.created_at)}
+                          </span>
                         </div>
-                      )}
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between pt-3 border-t border-slate-50 text-[10px] font-bold text-slate-400">
-                      <span>{formatSize(doc.file_size)}</span>
-                      <span>{formatDate(doc.created_at)}</span>
-                    </div>
+
+                    <a
+                      href={doc.file_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-8 h-8 rounded-xl bg-slate-50 text-slate-500 hover:bg-[#005A87] hover:text-white transition-all border border-slate-200 flex items-center justify-center shrink-0 cursor-pointer shadow-2xs"
+                      title="View / Download"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                    </a>
                   </div>
                 ))}
               </div>

@@ -1685,7 +1685,7 @@ export default function ClientProfilePage({
               </span>
             )}
           </div>
-          <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+          <div className="px-5 py-3.5 flex flex-wrap items-center gap-x-10 sm:gap-x-14 gap-y-3">
             {[
               { label: "Marital Status", value: client.marital_status },
               { label: "Alternate Mobile", value: client.alternate_mobile },
@@ -1695,11 +1695,11 @@ export default function ClientProfilePage({
             ]
               .filter((i) => i.value)
               .map(({ label, value }) => (
-                <div key={label}>
-                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest mb-1">
+                <div key={label} className="shrink-0">
+                  <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest mb-0.5">
                     {label}
                   </p>
-                  <p className="text-[13px] font-bold text-black break-words">
+                  <p className="text-[13px] font-bold text-black">
                     {value}
                   </p>
                 </div>
