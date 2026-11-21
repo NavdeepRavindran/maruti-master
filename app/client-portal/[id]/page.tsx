@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   formatFamilyName,
@@ -47,6 +47,8 @@ interface ClientData {
   date_of_birth: string;
   anniversary_date?: string;
   anniversaryDate?: string;
+  gender?: string;
+  occupation?: string;
   documents?: DocData[];
   family_members?: FamilyMemberData[];
 }
@@ -87,7 +89,7 @@ export default function ClientPortalDashboard() {
   const params = useParams();
   const [client, setClient] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [docFilter, setDocFilter] = useState<string>("all");
+  const [selectedMemberId, setSelectedMemberId] = useState<string>("self");
 
   useEffect(() => {
     fetchClientData();
@@ -156,13 +158,28 @@ export default function ClientPortalDashboard() {
       .join(", ")
   ) || (client.address ? formatAddress(client.address) : "");
 
+  const isSelf = selectedMemberId === "self";
+  const selectedFamilyMember = !isSelf
+    ? familyMembers.find((m) => m.id === selectedMemberId)
+    : null;
+
+  const currentMemberDocs = isSelf
+    ? clientDocs
+    : allDocuments.filter((d) => d.family_member_id === selectedMemberId);
+
+  const selectedMemberName = isSelf
+    ? capitalizeWords(client.name)
+    : selectedFamilyMember
+    ? formatFamilyName(selectedFamilyMember.name)
+    : "";
+
   return (
     <div className="min-h-screen bg-[#f8fafc] font-['DM_Sans'] pb-20">
       {/* Top Navbar */}
-      <nav className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 shadow-sm">
+      <nav className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 shadow-xs">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-blue-600 rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-blue-600/20">
+            <div className="w-10 h-10 bg-[#005A87] rounded-xl flex items-center justify-center text-white font-bold shadow-md shadow-[#005A87]/20">
               <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
               </svg>
@@ -174,7 +191,7 @@ export default function ClientPortalDashboard() {
           </div>
           <button
             onClick={handleLogout}
-            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition-colors flex items-center gap-2"
+            className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-xs hover:bg-slate-50 transition-colors flex items-center gap-2 cursor-pointer"
           >
             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -184,431 +201,501 @@ export default function ClientPortalDashboard() {
         </div>
       </nav>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-10">
-        {/* Welcome Banner */}
-        <div className="bg-gradient-to-r from-[#0f172a] to-blue-900 rounded-3xl p-6 sm:p-10 md:p-12 text-white mb-8 shadow-xl shadow-blue-900/10 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl transform translate-x-1/2 -translate-y-1/2"></div>
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 pt-8 sm:pt-10 space-y-8">
+        {/* ── Welcome Banner with Modern High-Contrast Gradient (img 3 updated) ── */}
+        <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 rounded-3xl p-6 sm:p-10 md:p-12 text-white shadow-xl shadow-slate-950/25 relative overflow-hidden border border-slate-800/80">
+          <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl transform translate-x-1/3 -translate-y-1/3 pointer-events-none"></div>
+          <div className="absolute bottom-0 right-1/4 w-60 h-60 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
           <div className="relative z-10">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-black mb-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-[11px] font-bold text-slate-200 border border-white/15 uppercase tracking-widest mb-3.5 shadow-xs">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              Secure Client Vault
+            </div>
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight mb-2.5">
               Welcome back, {client.name.split(" ")[0]}
             </h1>
-            <p className="text-blue-200 font-medium max-w-xl text-sm sm:text-base">
+            <p className="text-slate-300 font-medium max-w-xl text-sm sm:text-base leading-relaxed">
               Your secure vault for insurance policies, health records, and family KYC documents.
             </p>
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-8">
-          {/* Left Column: Personal Profile Info */}
-          <div className="lg:col-span-1 space-y-8">
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-              <h2 className="font-black text-[#0f172a] text-lg mb-6 flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                  </svg>
-                </span>
-                Profile Info
-              </h2>
-              <div className="space-y-4">
-                <div>
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Full Name</div>
-                  <div className="font-bold text-slate-800 text-[14px]">{capitalizeWords(client.name)}</div>
+        {/* ── Top Profile Overview Banner / Card ── */}
+        <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-7 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-slate-100">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-[#005A87] text-white font-extrabold text-2xl flex items-center justify-center shrink-0 shadow-md shadow-[#005A87]/20">
+                {client.name?.[0]?.toUpperCase()}
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h2 className="text-xl sm:text-2xl font-black text-[#0f172a]">
+                    {capitalizeWords(client.name)}
+                  </h2>
+                  <span className="text-[10px] font-bold text-[#005A87] bg-blue-50 border border-blue-200/80 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                    Primary Account Holder
+                  </span>
                 </div>
-                <div>
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Phone Number</div>
-                  <div className="font-bold text-slate-700 text-[13px]">{client.phone}</div>
+                <p className="text-xs text-slate-400 font-medium mt-1">
+                  Client ID: #{client.id.slice(0, 8)} · Managing vault records for primary client &amp; family
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-2.5 text-center min-w-[100px]">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Family</div>
+                <div className="text-base font-extrabold text-slate-800 mt-0.5">
+                  {familyMembers.length + 1} {familyMembers.length + 1 === 1 ? "Member" : "Members"}
                 </div>
-                {client.email && (
-                  <div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Email Address</div>
-                    <div className="font-bold text-slate-700 text-[13px] break-words">{client.email}</div>
-                  </div>
-                )}
-                <div>
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Date of Birth</div>
-                  <div className="font-bold text-slate-700 text-[13px]">
-                    {formatDate(client.date_of_birth)}
-                    {getAge(client.date_of_birth) > 0 && (
-                      <span className="text-slate-400 text-xs font-medium ml-1.5">
-                        ({getAge(client.date_of_birth)} yrs)
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {(client.anniversary_date || client.anniversaryDate) && (
-                  <div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Anniversary</div>
-                    <div className="font-bold text-slate-700 text-[13px]">
-                      {formatDate(client.anniversary_date || client.anniversaryDate)}
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Address</div>
-                  <div className="font-bold text-slate-700 text-[13px] leading-snug break-words">
-                    {fullAddress || "Not provided"}
-                  </div>
+              </div>
+              <div className="bg-slate-50 border border-slate-100 rounded-2xl px-4 py-2.5 text-center min-w-[100px]">
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Documents</div>
+                <div className="text-base font-extrabold text-[#005A87] mt-0.5">
+                  {allDocuments.length} Total
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Family Members & Documents per member */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Family Members Section */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="font-black text-[#0f172a] text-lg flex items-center gap-2.5">
-                  <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </span>
-                  Family Members
-                </h2>
-                <div className="text-xs font-bold text-slate-500 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                  {familyMembers.length + 1} {familyMembers.length + 1 === 1 ? "Member" : "Members"}
-                </div>
+          {/* Quick contact strip */}
+          <div className="pt-5 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#005A87] flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                </svg>
               </div>
-
-                <div className="grid sm:grid-cols-2 gap-4">
-                  {/* Self Member Card */}
-                  <div className="p-4 rounded-2xl bg-blue-50/40 border border-blue-200/80 hover:border-blue-300 hover:bg-white transition-all shadow-xs flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-start gap-3 mb-3">
-                        <div className="w-11 h-11 rounded-xl bg-blue-600 text-white font-bold text-base flex items-center justify-center shrink-0 shadow-xs">
-                          {client.name?.[0]?.toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-bold text-slate-800 text-[14px] truncate">
-                            {capitalizeWords(client.name)}
-                          </h3>
-                          <span className="inline-block mt-0.5 text-[10px] font-bold text-blue-700 bg-blue-100/80 px-2 py-0.5 rounded-full border border-blue-200 uppercase tracking-wider">
-                            Self (Primary)
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-200/60">
-                        {client.date_of_birth && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400 font-medium">Date of Birth:</span>
-                            <span className="font-semibold text-slate-700">
-                              {formatDate(client.date_of_birth)}
-                              {getAge(client.date_of_birth) > 0 && (
-                                <span className="text-slate-400 ml-1">({getAge(client.date_of_birth)} yrs)</span>
-                              )}
-                            </span>
-                          </div>
-                        )}
-                        {(client as any).occupation && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400 font-medium">Occupation:</span>
-                            <span className="font-semibold text-slate-700 truncate max-w-[150px]">{(client as any).occupation}</span>
-                          </div>
-                        )}
-                        {client.phone && (
-                          <div className="flex items-center justify-between">
-                            <span className="text-slate-400 font-medium">Phone:</span>
-                            <a href={`tel:${client.phone}`} className="font-semibold text-blue-600 hover:underline">
-                              {client.phone}
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-slate-500">Documents Vault</span>
-                      <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md">
-                        {clientDocs.length} {clientDocs.length === 1 ? "file" : "files"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Family Members Cards */}
-                  {familyMembers.map((member) => {
-                    const memberDocs = allDocuments.filter((d) => d.family_member_id === member.id);
-                    return (
-                      <div
-                        key={member.id}
-                        className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/80 hover:border-blue-200 hover:bg-white transition-all shadow-xs flex flex-col justify-between"
-                      >
-                        <div>
-                          <div className="flex items-start gap-3 mb-3">
-                            {member.photo_url ? (
-                              <img
-                                src={member.photo_url}
-                                alt={member.name}
-                                className="w-11 h-11 rounded-xl object-cover ring-1 ring-slate-200 shrink-0"
-                              />
-                            ) : (
-                              <div className="w-11 h-11 rounded-xl bg-blue-100 text-blue-700 font-bold text-base flex items-center justify-center shrink-0">
-                                {member.name?.[0]?.toUpperCase()}
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-bold text-slate-800 text-[14px] truncate">
-                                {formatFamilyName(member.name)}
-                              </h3>
-                              <span className="inline-block mt-0.5 text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 uppercase tracking-wider">
-                                {member.relationship}
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className="space-y-1.5 text-xs text-slate-600 pt-2 border-t border-slate-200/60">
-                            {member.date_of_birth && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400 font-medium">Date of Birth:</span>
-                                <span className="font-semibold text-slate-700">
-                                  {formatDate(member.date_of_birth)}
-                                  {getAge(member.date_of_birth) > 0 && (
-                                    <span className="text-slate-400 ml-1">({getAge(member.date_of_birth)} yrs)</span>
-                                  )}
-                                </span>
-                              </div>
-                            )}
-                            {member.occupation && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400 font-medium">Occupation:</span>
-                                <span className="font-semibold text-slate-700 truncate max-w-[150px]">{member.occupation}</span>
-                              </div>
-                            )}
-                            {member.phone && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400 font-medium">Phone:</span>
-                                <a href={`tel:${member.phone}`} className="font-semibold text-blue-600 hover:underline">
-                                  {member.phone}
-                                </a>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="mt-3 pt-2.5 border-t border-slate-200/60 flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-slate-500">Documents Vault</span>
-                          <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md">
-                            {memberDocs.length} {memberDocs.length === 1 ? "file" : "files"}
-                          </span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div>
+                <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Phone</div>
+                <div className="font-bold text-slate-700">{client.phone}</div>
+              </div>
             </div>
 
-            {/* Documents Section (Grouped by Member) */}
-            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-                <div>
-                  <h2 className="font-black text-[#0f172a] text-lg flex items-center gap-2.5">
-                    <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
-                      </svg>
-                    </span>
-                    Documents Vault
-                  </h2>
-                  <p className="text-xs text-slate-400 font-medium mt-0.5">
-                    Categorized records for you and each family member
-                  </p>
+            {client.email && (
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  </svg>
                 </div>
-                <div className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 self-start sm:self-auto">
-                  {allDocuments.length} Total Files
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Email</div>
+                  <div className="font-bold text-slate-700 truncate">{client.email}</div>
                 </div>
               </div>
+            )}
 
-              {/* Filter Tabs by Member */}
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 mb-6">
-                <button
-                  type="button"
-                  onClick={() => setDocFilter("all")}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                    docFilter === "all"
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80"
+            {fullAddress && (
+              <div className="flex items-center gap-3 sm:col-span-1">
+                <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Address</div>
+                  <div className="font-bold text-slate-700 truncate" title={fullAddress}>
+                    {fullAddress}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* ── Family Members List Clickable Buttons ── */}
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-black text-[#0f172a] uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#005A87]"></span>
+                Select Family Member
+              </h2>
+              <p className="text-xs text-slate-500 font-medium mt-0.5">
+                Click any member to view their complete profile details and dedicated documents
+              </p>
+            </div>
+            <div className="text-xs font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1.5 rounded-xl shadow-2xs">
+              {familyMembers.length + 1} Profile{familyMembers.length + 1 === 1 ? "" : "s"} Available
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
+            {/* Self (Primary) Button */}
+            <button
+              type="button"
+              onClick={() => setSelectedMemberId("self")}
+              className={`p-4 rounded-2xl text-left transition-all cursor-pointer flex items-center justify-between gap-3 border ${
+                selectedMemberId === "self"
+                  ? "bg-[#005A87] text-white border-[#005A87] shadow-md shadow-[#005A87]/20 ring-2 ring-[#005A87]/30"
+                  : "bg-white text-slate-800 border-slate-200 hover:border-slate-300 hover:bg-slate-50/80 shadow-xs"
+              }`}
+            >
+              <div className="flex items-center gap-3 min-w-0">
+                <div
+                  className={`w-11 h-11 rounded-xl flex items-center justify-center font-extrabold text-base shrink-0 ${
+                    selectedMemberId === "self"
+                      ? "bg-white/20 text-white"
+                      : "bg-blue-100 text-blue-700"
                   }`}
                 >
-                  All ({allDocuments.length})
-                </button>
+                  {client.name?.[0]?.toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <div className="font-extrabold text-sm truncate">
+                    {capitalizeWords(client.name)}
+                  </div>
+                  <div
+                    className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${
+                      selectedMemberId === "self" ? "text-blue-200" : "text-blue-600"
+                    }`}
+                  >
+                    Self (Primary)
+                  </div>
+                </div>
+              </div>
+              <span
+                className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full shrink-0 ${
+                  selectedMemberId === "self"
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {clientDocs.length} {clientDocs.length === 1 ? "doc" : "docs"}
+              </span>
+            </button>
+
+            {/* Other Family Members Buttons */}
+            {familyMembers.map((member) => {
+              const memberDocCount = allDocuments.filter(
+                (d) => d.family_member_id === member.id
+              ).length;
+              const isSelected = selectedMemberId === member.id;
+
+              return (
                 <button
+                  key={member.id}
                   type="button"
-                  onClick={() => setDocFilter("client")}
-                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                    docFilter === "client"
-                      ? "bg-blue-600 text-white shadow-xs"
-                      : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80"
+                  onClick={() => setSelectedMemberId(member.id)}
+                  className={`p-4 rounded-2xl text-left transition-all cursor-pointer flex items-center justify-between gap-3 border ${
+                    isSelected
+                      ? "bg-[#005A87] text-white border-[#005A87] shadow-md shadow-[#005A87]/20 ring-2 ring-[#005A87]/30"
+                      : "bg-white text-slate-800 border-slate-200 hover:border-slate-300 hover:bg-slate-50/80 shadow-xs"
                   }`}
                 >
-                  {capitalizeWords(client.name)} (Self) ({clientDocs.length})
+                  <div className="flex items-center gap-3 min-w-0">
+                    {member.photo_url ? (
+                      <img
+                        src={member.photo_url}
+                        alt={member.name}
+                        className={`w-11 h-11 rounded-xl object-cover ring-1 shrink-0 ${
+                          isSelected ? "ring-white/40" : "ring-slate-200"
+                        }`}
+                      />
+                    ) : (
+                      <div
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center font-extrabold text-base shrink-0 ${
+                          isSelected
+                            ? "bg-white/20 text-white"
+                            : "bg-indigo-100 text-indigo-700"
+                        }`}
+                      >
+                        {member.name?.[0]?.toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-extrabold text-sm truncate">
+                        {formatFamilyName(member.name)}
+                      </div>
+                      <div
+                        className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${
+                          isSelected ? "text-blue-200" : "text-indigo-600"
+                        }`}
+                      >
+                        {member.relationship || "Family"}
+                      </div>
+                    </div>
+                  </div>
+                  <span
+                    className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full shrink-0 ${
+                      isSelected
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {memberDocCount} {memberDocCount === 1 ? "doc" : "docs"}
+                  </span>
                 </button>
-                {familyMembers.map((fm) => {
-                  const count = allDocuments.filter((d) => d.family_member_id === fm.id).length;
-                  return (
-                    <button
-                      key={fm.id}
-                      type="button"
-                      onClick={() => setDocFilter(fm.id)}
-                      className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0 ${
-                        docFilter === fm.id
-                          ? "bg-indigo-600 text-white shadow-xs"
-                          : "bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200/80"
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── Selected Member's Dedicated Container (Profile Info + Documents Inside) ── */}
+        <div className="space-y-6">
+          {/* Member Profile Info Card */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+              <div className="flex items-center gap-4">
+                {isSelf ? (
+                  <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-sm">
+                    {client.name?.[0]?.toUpperCase()}
+                  </div>
+                ) : selectedFamilyMember?.photo_url ? (
+                  <img
+                    src={selectedFamilyMember.photo_url}
+                    alt={selectedFamilyMember.name}
+                    className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-100 shadow-sm"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-600 text-white font-extrabold text-2xl flex items-center justify-center shadow-sm">
+                    {selectedFamilyMember?.name?.[0]?.toUpperCase()}
+                  </div>
+                )}
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xl font-black text-[#0f172a]">
+                      {selectedMemberName}
+                    </h3>
+                    <span
+                      className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider ${
+                        isSelf
+                          ? "bg-blue-50 text-blue-700 border border-blue-200"
+                          : "bg-indigo-50 text-indigo-700 border border-indigo-200"
                       }`}
                     >
-                      {formatFamilyName(fm.name)} ({count})
-                    </button>
-                  );
-                })}
+                      {isSelf ? "Self (Primary)" : selectedFamilyMember?.relationship || "Family Member"}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 font-medium mt-1">
+                    Viewing complete profile details and exclusive records for this member
+                  </p>
+                </div>
               </div>
 
-              {allDocuments.length === 0 ? (
-                <div className="py-16 text-center border-2 border-dashed border-slate-100 rounded-3xl">
-                  <svg className="w-12 h-12 text-slate-300 mx-auto mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <div className="text-xs font-bold text-slate-600 bg-slate-50 border border-slate-100 px-3.5 py-1.5 rounded-xl self-start sm:self-auto">
+                {currentMemberDocs.length} {currentMemberDocs.length === 1 ? "Record in Vault" : "Records in Vault"}
+              </div>
+            </div>
+
+            {/* Profile Info Details Grid */}
+            <div className="pt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+              {isSelf ? (
+                <>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Full Name
+                    </div>
+                    <div className="font-bold text-slate-800 text-[14px]">
+                      {capitalizeWords(client.name)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Phone Number
+                    </div>
+                    <div className="font-bold text-slate-700 text-[13px]">
+                      {client.phone}
+                    </div>
+                  </div>
+                  {client.email && (
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                        Email Address
+                      </div>
+                      <div className="font-bold text-slate-700 text-[13px] break-words">
+                        {client.email}
+                      </div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Date of Birth
+                    </div>
+                    <div className="font-bold text-slate-700 text-[13px]">
+                      {formatDate(client.date_of_birth)}
+                      {getAge(client.date_of_birth) > 0 && (
+                        <span className="text-slate-400 text-xs font-medium ml-1.5">
+                          ({getAge(client.date_of_birth)} yrs)
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  {(client.anniversary_date || client.anniversaryDate) && (
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                        Anniversary
+                      </div>
+                      <div className="font-bold text-slate-700 text-[13px]">
+                        {formatDate(client.anniversary_date || client.anniversaryDate)}
+                      </div>
+                    </div>
+                  )}
+                  {client.occupation && (
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                        Occupation
+                      </div>
+                      <div className="font-bold text-slate-700 text-[13px]">
+                        {client.occupation}
+                      </div>
+                    </div>
+                  )}
+                  <div className="col-span-2">
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Address
+                    </div>
+                    <div className="font-bold text-slate-700 text-[13px] leading-snug break-words">
+                      {fullAddress || "Not provided"}
+                    </div>
+                  </div>
+                </>
+              ) : selectedFamilyMember ? (
+                <>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Profile Name
+                    </div>
+                    <div className="font-bold text-[#005A87] text-[14px]">
+                      {formatFamilyName(selectedFamilyMember.name)}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Full Name
+                    </div>
+                    <div className="font-bold text-slate-800 text-[14px]">
+                      {selectedFamilyMember.name}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Relationship
+                    </div>
+                    <div className="font-bold text-indigo-700 text-[13px]">
+                      {selectedFamilyMember.relationship || "Family"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Date of Birth
+                    </div>
+                    <div className="font-bold text-slate-700 text-[13px]">
+                      {selectedFamilyMember.date_of_birth
+                        ? formatDate(selectedFamilyMember.date_of_birth)
+                        : "Not specified"}
+                      {selectedFamilyMember.date_of_birth &&
+                        getAge(selectedFamilyMember.date_of_birth) > 0 && (
+                          <span className="text-slate-400 text-xs font-medium ml-1.5">
+                            ({getAge(selectedFamilyMember.date_of_birth)} yrs)
+                          </span>
+                        )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Phone Number
+                    </div>
+                    <div className="font-bold text-slate-700 text-[13px]">
+                      {selectedFamilyMember.phone ? (
+                        <a
+                          href={`tel:${selectedFamilyMember.phone}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {selectedFamilyMember.phone}
+                        </a>
+                      ) : (
+                        "Not provided"
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                      Occupation
+                    </div>
+                    <div className="font-bold text-slate-700 text-[13px]">
+                      {selectedFamilyMember.occupation || "Not specified"}
+                    </div>
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+
+          {/* Member's Documents Section (Exclusively Inside Member View) */}
+          <div className="bg-white rounded-3xl border border-slate-200 p-6 sm:p-8 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+              <div>
+                <h3 className="text-base font-black text-[#0f172a] uppercase tracking-wider flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                  Documents Vault for {selectedMemberName}
+                </h3>
+                <p className="text-xs text-slate-400 font-medium mt-0.5">
+                  Records, insurance policies, and KYC documents stored exclusively for this individual
+                </p>
+              </div>
+              <div className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-100 px-3 py-1.5 rounded-xl self-start sm:self-auto">
+                {currentMemberDocs.length} Document{currentMemberDocs.length === 1 ? "" : "s"}
+              </div>
+            </div>
+
+            {currentMemberDocs.length === 0 ? (
+              <div className="py-14 text-center border-2 border-dashed border-slate-100 rounded-3xl bg-slate-50/50">
+                <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-3">
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z" />
                   </svg>
-                  <h3 className="text-base font-bold text-slate-700 mb-1">No documents yet</h3>
-                  <p className="text-xs font-medium text-slate-400">Your agent hasn&apos;t uploaded any documents to your vault.</p>
                 </div>
-              ) : (
-                <div className="space-y-6">
-                  {/* Client / Self Documents Group */}
-                  {(docFilter === "all" || docFilter === "client") && (
-                    <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-xs">
-                      <div className="px-4 py-3 bg-gradient-to-r from-blue-50/60 to-white border-b border-slate-100 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-blue-600"></span>
-                          <span className="font-bold text-xs uppercase tracking-wider text-slate-800">
-                            {capitalizeWords(client.name)} (Self)
-                          </span>
+                <h4 className="text-sm font-bold text-slate-700 mb-1">
+                  No documents for {selectedMemberName} yet
+                </h4>
+                <p className="text-xs font-medium text-slate-400 max-w-sm mx-auto">
+                  Your insurance agent has not uploaded any documents under {selectedMemberName}&apos;s profile yet.
+                </p>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-4">
+                {currentMemberDocs.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="p-4 rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10 transition-all group bg-white flex flex-col justify-between"
+                  >
+                    <div>
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-blue-50 group-hover:border-blue-200 transition-colors">
+                          <DocTypeIcon type={doc.file_type} />
                         </div>
-                        <span className="text-[11px] font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                          {clientDocs.length} {clientDocs.length === 1 ? "document" : "documents"}
-                        </span>
+                        <a
+                          href={doc.file_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="w-9 h-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-[#005A87] hover:text-white transition-all border border-slate-100 hover:border-transparent cursor-pointer"
+                          title="View / Download"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                        </a>
                       </div>
-
-                      {clientDocs.length === 0 ? (
-                        <div className="py-6 text-center text-xs text-slate-400 font-medium">
-                          No documents for {capitalizeWords(client.name)} yet.
-                        </div>
-                      ) : (
-                        <div className="p-4 grid sm:grid-cols-2 gap-4">
-                          {clientDocs.map((doc) => (
-                            <div
-                              key={doc.id}
-                              className="p-4 rounded-2xl border border-slate-200 hover:border-blue-300 hover:shadow-lg hover:shadow-blue-500/10 transition-all group bg-white flex flex-col justify-between"
-                            >
-                              <div>
-                                <div className="flex items-start justify-between mb-3">
-                                  <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-blue-50 group-hover:border-blue-200 transition-colors">
-                                    <DocTypeIcon type={doc.file_type} />
-                                  </div>
-                                  <a
-                                    href={doc.file_url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="w-9 h-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all border border-slate-100 hover:border-transparent"
-                                    title="View / Download"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                    </svg>
-                                  </a>
-                                </div>
-                                <h4 className="font-bold text-slate-800 text-sm mb-1 truncate" title={doc.name}>
-                                  {doc.name}
-                                </h4>
-                                {doc.category && (
-                                  <div className="inline-block px-2 py-0.5 bg-blue-50 text-blue-600 text-[9px] font-black uppercase tracking-wider rounded border border-blue-100 mb-2">
-                                    {doc.category}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex items-center justify-between pt-3 border-t border-slate-50 text-[10px] font-bold text-slate-400">
-                                <span>{formatSize(doc.file_size)}</span>
-                                <span>{formatDate(doc.created_at)}</span>
-                              </div>
-                            </div>
-                          ))}
+                      <h4 className="font-bold text-slate-800 text-sm mb-1 truncate" title={doc.name}>
+                        {doc.name}
+                      </h4>
+                      {doc.category && (
+                        <div className="inline-block px-2 py-0.5 bg-blue-50 text-[#005A87] text-[9px] font-black uppercase tracking-wider rounded border border-blue-100 mb-2">
+                          {doc.category}
                         </div>
                       )}
                     </div>
-                  )}
-
-                  {/* Family Members Individual Documents Groups */}
-                  {familyMembers
-                    .filter((fm) => docFilter === "all" || docFilter === fm.id)
-                    .map((fm) => {
-                      const fmDocs = allDocuments.filter((d) => d.family_member_id === fm.id);
-                      return (
-                        <div key={fm.id} className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-xs">
-                          <div className="px-4 py-3 bg-gradient-to-r from-indigo-50/60 to-white border-b border-slate-100 flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-                              <span className="font-bold text-xs uppercase tracking-wider text-slate-800">
-                                {formatFamilyName(fm.name)}
-                              </span>
-                              <span className="text-[10px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                                {fm.relationship}
-                              </span>
-                            </div>
-                            <span className="text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                              {fmDocs.length} {fmDocs.length === 1 ? "document" : "documents"}
-                            </span>
-                          </div>
-
-                          {fmDocs.length === 0 ? (
-                            <div className="py-6 text-center text-xs text-slate-400 font-medium">
-                              No documents for {formatFamilyName(fm.name)} yet.
-                            </div>
-                          ) : (
-                            <div className="p-4 grid sm:grid-cols-2 gap-4">
-                              {fmDocs.map((doc) => (
-                                <div
-                                  key={doc.id}
-                                  className="p-4 rounded-2xl border border-slate-200 hover:border-indigo-300 hover:shadow-lg hover:shadow-indigo-500/10 transition-all group bg-white flex flex-col justify-between"
-                                >
-                                  <div>
-                                    <div className="flex items-start justify-between mb-3">
-                                      <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:bg-indigo-50 group-hover:border-indigo-200 transition-colors">
-                                        <DocTypeIcon type={doc.file_type} />
-                                      </div>
-                                      <a
-                                        href={doc.file_url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="w-9 h-9 rounded-xl bg-slate-50 text-slate-400 flex items-center justify-center hover:bg-indigo-600 hover:text-white transition-all border border-slate-100 hover:border-transparent"
-                                        title="View / Download"
-                                      >
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                                        </svg>
-                                      </a>
-                                    </div>
-                                    <h4 className="font-bold text-slate-800 text-sm mb-1 truncate" title={doc.name}>
-                                      {doc.name}
-                                    </h4>
-                                    {doc.category && (
-                                      <div className="inline-block px-2 py-0.5 bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-wider rounded border border-indigo-100 mb-2">
-                                        {doc.category}
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center justify-between pt-3 border-t border-slate-50 text-[10px] font-bold text-slate-400">
-                                    <span>{formatSize(doc.file_size)}</span>
-                                    <span>{formatDate(doc.created_at)}</span>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
-              )}
-            </div>
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-50 text-[10px] font-bold text-slate-400">
+                      <span>{formatSize(doc.file_size)}</span>
+                      <span>{formatDate(doc.created_at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </main>

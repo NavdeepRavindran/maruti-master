@@ -538,6 +538,9 @@ export default function ClientProfilePage({
         throw new Error(e.error || "Failed to update family member.");
       }
       toast.success("Family member updated successfully!");
+      if (viewingFamilyMember && editingFamilyMember && viewingFamilyMember.id === editingFamilyMember.id) {
+        setViewingFamilyMember(editingFamilyMember);
+      }
       setEditingFamilyMember(null);
       setEditFamilyModalError(null);
       fetchClient();
@@ -666,6 +669,9 @@ export default function ClientProfilePage({
       const res = await fetch(`/api/clients/${id}/family/${fid}`, { method: "DELETE", headers });
       if (res.ok) {
         toast.success("Family member moved to Recycle Bin.");
+        if (viewingFamilyMember?.id === fid) {
+          setViewingFamilyMember(null);
+        }
         fetchClient();
       } else {
         const err = await res.json().catch(() => ({}));
@@ -882,7 +888,370 @@ export default function ClientProfilePage({
 
   return (
     <div className="min-h-screen bg-[#F7F9FC]">
-      {/* ── Top nav bar ─────────────────────────────────────────── */}
+      {viewingFamilyMember ? (
+        <div>
+          {/* ── Top nav bar for Family Member Screen ── */}
+          <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 sm:px-6 h-16 flex items-center justify-between">
+            <button
+              type="button"
+              onClick={() => setViewingFamilyMember(null)}
+              className="flex items-center gap-2 text-[13px] font-bold text-[#005A87] hover:text-[#00476b] transition-colors cursor-pointer"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 19l-7-7 7-7"
+                />
+              </svg>
+              <span>Back to {fullName}</span>
+            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDocForm({
+                    name: `${formatFamilyName(viewingFamilyMember.name)} Document`,
+                    file_name: "",
+                    file_size: 0,
+                    file_url: "",
+                    family_member_id: viewingFamilyMember.id,
+                    category: "KYC / Identity",
+                  });
+                  setShowDocModal(true);
+                }}
+                className="flex items-center gap-1.5 px-3.5 h-10 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95 shadow-xs cursor-pointer"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                  />
+                </svg>
+                <span>Upload Doc</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditingFamilyMember(viewingFamilyMember)}
+                className="flex items-center gap-1.5 px-3.5 h-10 bg-white border border-slate-200 text-[#1F2937] rounded-xl text-xs font-bold hover:border-[#0E7AC7] hover:text-[#005A87] transition-all cursor-pointer"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                  />
+                </svg>
+                <span>Edit</span>
+              </button>
+            </div>
+          </div>
+
+          {/* ── Hero / Profile Header for Family Member ── */}
+          <div className="bg-white border-b border-slate-100">
+            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+              <div className="flex flex-col sm:flex-row sm:items-end gap-5">
+                <div className="shrink-0 relative group">
+                  {viewingFamilyMember.photo_url ? (
+                    <img
+                      src={viewingFamilyMember.photo_url}
+                      alt={viewingFamilyMember.name}
+                      className="w-20 h-20 sm:w-24 sm:h-24 rounded-[22px] object-cover ring-4 ring-white shadow-xl"
+                    />
+                  ) : (
+                    <div
+                      className={`w-20 h-20 sm:w-24 sm:h-24 rounded-[22px] bg-gradient-to-br ${getGradient(viewingFamilyMember.name)} flex items-center justify-center text-white font-bold text-3xl sm:text-4xl ring-4 ring-white shadow-xl`}
+                    >
+                      {viewingFamilyMember.name[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  {/* Photo Upload Overlay Button */}
+                  <button
+                    type="button"
+                    onClick={() => familyPhotoInputRef.current?.click()}
+                    disabled={uploadingFamilyPhoto}
+                    className="absolute inset-0 rounded-[22px] bg-black/0 group-hover:bg-black/50 flex flex-col items-center justify-center transition-all opacity-0 group-hover:opacity-100 text-white cursor-pointer"
+                    title="Change Profile Photo"
+                  >
+                    <svg className="w-5 h-5 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    <span className="text-[10px] font-bold">{uploadingFamilyPhoto ? "Uploading..." : "Upload"}</span>
+                  </button>
+                  <input
+                    ref={familyPhotoInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={(e) => handleFamilyPhotoUpload(e, viewingFamilyMember.id)}
+                    className="hidden"
+                  />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h1 className="text-2xl sm:text-[28px] font-bold text-black tracking-wide">
+                        {formatFamilyName(viewingFamilyMember.name)}
+                      </h1>
+                      <div className="mt-1 flex items-center gap-2 text-xs font-semibold text-[#6B7280] flex-wrap">
+                        <span>Family Member of <strong className="text-[#0E7AC7]">{fullName}</strong></span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 mt-3">
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-[#7C6CF6]/10 text-[#7C6CF6]">
+                          {viewingFamilyMember.relationship}
+                        </span>
+                        {viewingFamilyMember.occupation && (
+                          <span className="px-3 py-1 rounded-full text-[11px] font-semibold bg-[#F7F9FC] text-[#6B7280]">
+                            💼 {viewingFamilyMember.occupation}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Quick stats row */}
+                  <div className="flex flex-wrap gap-4 sm:gap-6 mt-5">
+                    <div>
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">Age</p>
+                      <p className="text-[16px] font-bold text-[#1F2937] mt-0.5">{getAge(viewingFamilyMember.date_of_birth)} yrs</p>
+                    </div>
+                    <div className="w-px bg-slate-100" />
+                    <div>
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">DOB</p>
+                      <p className="text-[16px] font-bold text-[#1F2937] mt-0.5">{formatDate(viewingFamilyMember.date_of_birth)}</p>
+                    </div>
+                    <div className="w-px bg-slate-100" />
+                    <div>
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">Documents</p>
+                      <p className="text-[16px] font-bold text-[#7C6CF6] mt-0.5">
+                        {docs.filter((d) => d.family_member_id === viewingFamilyMember.id && !d.is_deleted).length}
+                      </p>
+                    </div>
+                    <div className="w-px bg-slate-100" />
+                    <div>
+                      <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest">Relationship</p>
+                      <p className="text-[16px] font-bold text-[#0E7AC7] mt-0.5">{viewingFamilyMember.relationship}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Contact strip */}
+              {viewingFamilyMember.phone && (
+                <div className="mt-6 pt-5 border-t border-slate-100 flex flex-wrap gap-3 sm:gap-4">
+                  <a
+                    href={`tel:${viewingFamilyMember.phone}`}
+                    className="flex items-center gap-2 text-[13px] font-semibold text-[#1F2937] hover:text-[#005A87] transition-colors"
+                  >
+                    <span className="w-9 h-9 rounded-xl bg-[#DDF3FF] flex items-center justify-center shrink-0">
+                      <svg className="w-4 h-4 text-[#005A87]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                      </svg>
+                    </span>
+                    {viewingFamilyMember.phone}
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ── Main content for Family Member Screen ── */}
+          <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 space-y-4 sm:space-y-5">
+            {/* Member Details card */}
+            <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-slate-50 flex items-center justify-between">
+                <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
+                  Personal Details
+                </h2>
+                <span className="text-[11px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  {viewingFamilyMember.relationship}
+                </span>
+              </div>
+              <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
+                {[
+                  { label: "Profile Name", value: formatFamilyName(viewingFamilyMember.name) },
+                  { label: "Full Name", value: viewingFamilyMember.name },
+                  { label: "Date of Birth", value: `${formatDate(viewingFamilyMember.date_of_birth)} (${getAge(viewingFamilyMember.date_of_birth)} yrs)` },
+                  { label: "Relationship", value: viewingFamilyMember.relationship },
+                  { label: "Phone", value: viewingFamilyMember.phone || "—" },
+                  { label: "Occupation", value: viewingFamilyMember.occupation || "—" },
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest mb-1">
+                      {label}
+                    </p>
+                    <p className={`text-[13px] font-bold break-words ${label === "Profile Name" ? "text-[#0E7AC7]" : "text-black"}`}>
+                      {value}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Member Documents card */}
+            <div className="bg-white rounded-[22px] border border-slate-100 overflow-hidden shadow-sm">
+              <div className="px-5 py-4 border-b border-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-xs font-bold text-[#6B7280] uppercase tracking-widest">
+                    Documents for {formatFamilyName(viewingFamilyMember.name)}
+                  </h2>
+                  <p className="text-[11px] text-[#6B7280]">
+                    Manage KYC and policy documents uploaded specifically for this member
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocForm({
+                      name: `${formatFamilyName(viewingFamilyMember.name)} Document`,
+                      file_name: "",
+                      file_size: 0,
+                      file_url: "",
+                      family_member_id: viewingFamilyMember.id,
+                      category: "KYC / Identity",
+                    });
+                    setShowDocModal(true);
+                  }}
+                  className="flex items-center gap-1.5 px-3.5 h-9 bg-[#005A87] text-white rounded-xl text-xs font-bold hover:bg-[#00476b] transition-all active:scale-95 shadow-xs self-start sm:self-auto cursor-pointer"
+                >
+                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span>Upload Doc</span>
+                </button>
+              </div>
+
+              <div className="p-5">
+                {(() => {
+                  const memberDocs = docs.filter(
+                    (d) =>
+                      d.family_member_id === viewingFamilyMember.id &&
+                      !d.is_deleted &&
+                      !(typeof d.name === "string" && d.name.startsWith("[RECYCLE_BIN]"))
+                  );
+                  if (memberDocs.length === 0) {
+                    return (
+                      <div className="p-8 text-center bg-[#F7F9FC] rounded-2xl border border-dashed border-slate-200">
+                        <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#005A87] flex items-center justify-center mx-auto mb-3">
+                          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <p className="text-sm font-bold text-[#1F2937] mb-1">
+                          No documents for {formatFamilyName(viewingFamilyMember.name)} yet
+                        </p>
+                        <p className="text-xs text-[#6B7280] mb-4 max-w-sm mx-auto">
+                          Upload identity proof, medical records, or insurance policies under their name.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDocForm({
+                              name: `${formatFamilyName(viewingFamilyMember.name)} Document`,
+                              file_name: "",
+                              file_size: 0,
+                              file_url: "",
+                              family_member_id: viewingFamilyMember.id,
+                              category: "KYC / Identity",
+                            });
+                            setShowDocModal(true);
+                          }}
+                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-[#005A87] hover:bg-[#DDF3FF] transition-all shadow-xs cursor-pointer"
+                        >
+                          Upload First Document →
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="grid sm:grid-cols-2 gap-3">
+                      {memberDocs.map((doc) => (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between p-3.5 rounded-2xl bg-white border border-slate-200/90 hover:border-[#0E7AC7] hover:shadow-xs transition-all group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-bold text-[11px] shrink-0 ${docColor(doc.file_type)}`}>
+                              {doc.file_type}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-[13px] font-bold text-[#1F2937] truncate group-hover:text-[#005A87] transition-colors" title={doc.name}>
+                                {doc.name}
+                              </p>
+                              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium mt-0.5">
+                                <span>{doc.category || "Document"}</span>
+                                <span>·</span>
+                                <span>{formatSize(doc.file_size)}</span>
+                                <span>·</span>
+                                <span>{formatDate(doc.created_at)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0 ml-2">
+                            <button
+                              type="button"
+                              onClick={() => setViewingDoc(doc)}
+                              title="View Document"
+                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all cursor-pointer"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                              </svg>
+                            </button>
+                            <a
+                              href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
+                              download={doc.file_name}
+                              title="Download"
+                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all cursor-pointer"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                              </svg>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => deleteDocument(doc.id)}
+                              title="Delete"
+                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#F7F9FC] text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all cursor-pointer"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* ── Top nav bar ─────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 sm:px-6 h-16 flex items-center justify-between">
         <Link
           href={backHref}
@@ -1318,28 +1687,19 @@ export default function ClientProfilePage({
           </div>
           <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
             {[
-              { label: "Surname", value: formatClientDisplayName(client.name, client.surname).surname || "—" },
-              { label: "First Name", value: formatClientDisplayName(client.name, client.surname).firstName },
               { label: "Marital Status", value: client.marital_status },
               { label: "Alternate Mobile", value: client.alternate_mobile },
-              {
-                label: "Anniversary",
-                value: (client.anniversary_date || (client as any).anniversaryDate)
-                  ? formatDate(client.anniversary_date || (client as any).anniversaryDate)
-                  : "—",
-              },
               { label: "City", value: formatAddress(client.city) },
               { label: "State", value: formatAddress(client.state) },
               { label: "PIN Code", value: client.pin_code },
-              { label: "Full Address", value: fullAddress || "—" },
             ]
               .filter((i) => i.value)
               .map(({ label, value }) => (
-                <div key={label} className={label === "Full Address" ? "col-span-2 sm:col-span-3" : ""}>
+                <div key={label}>
                   <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest mb-1">
                     {label}
                   </p>
-                  <p className={`text-[13px] font-bold break-words ${label === "Surname" ? "text-[#0E7AC7]" : "text-black"}`}>
+                  <p className="text-[13px] font-bold text-black break-words">
                     {value}
                   </p>
                 </div>
@@ -2302,9 +2662,14 @@ export default function ClientProfilePage({
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
-                            <p className="text-[14px] font-bold text-[#1F2937] group-hover:text-[#005A87] transition-colors">
+                            <button
+                              type="button"
+                              onClick={() => setViewingFamilyMember(fm)}
+                              className="text-[14px] font-bold text-[#1F2937] group-hover:text-[#005A87] hover:underline transition-colors text-left cursor-pointer"
+                              title={`View ${formatFamilyName(fm.name)}'s Profile`}
+                            >
                               {formatFamilyName(fm.name)}
-                            </p>
+                            </button>
                             <div className="flex items-center gap-2 mt-1 flex-wrap">
                               <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded uppercase tracking-wider">
                                 {fm.relationship}
@@ -2518,6 +2883,8 @@ export default function ClientProfilePage({
           </div>
         )}
       </div>
+        </>
+      )}
 
       {/* ── Edit Client Modal ────────────────────────────────────── */}
       {showEditModal && (
@@ -3452,289 +3819,7 @@ export default function ClientProfilePage({
         </div>
       )}
 
-      {/* ── Separate Family Member Profile Modal ───────────────── */}
-      {viewingFamilyMember && (
-        <div className="fixed inset-0 z-[10001] flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div
-            className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm"
-            onClick={() => setViewingFamilyMember(null)}
-          />
-          <div className="relative bg-white w-full sm:max-w-xl rounded-t-[28px] sm:rounded-[22px] shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
-            {/* Profile Header */}
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-[#F7F9FC]/70">
-              <div className="flex items-center gap-3.5 min-w-0">
-                <div className="relative group shrink-0">
-                  {viewingFamilyMember.photo_url ? (
-                    <img
-                      src={viewingFamilyMember.photo_url}
-                      alt={viewingFamilyMember.name}
-                      className="w-14 h-14 rounded-2xl object-cover ring-2 ring-white shadow-md"
-                    />
-                  ) : (
-                    <div
-                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${getGradient(viewingFamilyMember.name)} flex items-center justify-center text-white font-bold text-xl shadow-md`}
-                    >
-                      {viewingFamilyMember.name[0]?.toUpperCase()}
-                    </div>
-                  )}
-                  {/* Photo Upload Overlay Button */}
-                  <button
-                    type="button"
-                    onClick={() => familyPhotoInputRef.current?.click()}
-                    disabled={uploadingFamilyPhoto}
-                    className="absolute inset-0 rounded-2xl bg-black/55 flex flex-col items-center justify-center transition-all opacity-0 group-hover:opacity-100 text-white cursor-pointer"
-                    title="Upload / Change Photo"
-                  >
-                    <svg className="w-4 h-4 mb-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                    <span className="text-[9px] font-bold">Photo</span>
-                  </button>
-                  <input
-                    ref={familyPhotoInputRef}
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={(e) => handleFamilyPhotoUpload(e, viewingFamilyMember.id)}
-                    className="hidden"
-                  />
-                </div>
 
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h2 className="text-base font-bold text-[#1F2937] truncate">
-                      {formatFamilyName(viewingFamilyMember.name)}
-                    </h2>
-                    <span className="text-[10px] font-bold text-[#7C6CF6] bg-[#7C6CF6]/10 px-2 py-0.5 rounded-full uppercase tracking-wider shrink-0">
-                      {viewingFamilyMember.relationship}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => familyPhotoInputRef.current?.click()}
-                      disabled={uploadingFamilyPhoto}
-                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-sky-50 border border-sky-200/80 text-[11px] font-semibold text-[#0E7AC7] hover:bg-sky-100 hover:border-sky-300 transition-all cursor-pointer shadow-2xs"
-                      title={viewingFamilyMember.photo_url ? "Change Profile Photo" : "Upload Profile Photo"}
-                    >
-                      <svg className="w-3 h-3 text-[#0E7AC7]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                      </svg>
-                      <span>{uploadingFamilyPhoto ? "Uploading..." : viewingFamilyMember.photo_url ? "Edit Photo" : "Add Photo"}</span>
-                    </button>
-                  </div>
-                  <p className="text-xs text-[#6B7280] truncate mt-0.5">
-                    {(() => {
-                      const { firstName, surname } = formatClientDisplayName(client?.name, client?.surname);
-                      return (
-                        <>
-                          Family Profile · Client:{" "}
-                          {surname && <span className="text-[#0E7AC7] font-semibold mr-1">{surname}</span>}
-                          <span className="text-black font-semibold">{firstName}</span>
-                        </>
-                      );
-                    })()}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setViewingFamilyMember(null)}
-                className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-slate-200/60 text-[#6B7280] transition-colors shrink-0"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Profile Content */}
-            <div className="p-6 space-y-5 overflow-y-auto flex-1">
-              {/* Individual Details Grid */}
-              <div>
-                <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-wider mb-2.5">
-                  Individual Details
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-[#F7F9FC] p-3 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Date of Birth</p>
-                    <p className="text-[13px] font-bold text-[#1F2937]">{formatDate(viewingFamilyMember.date_of_birth)}</p>
-                  </div>
-                  <div className="bg-[#F7F9FC] p-3 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Age</p>
-                    <p className="text-[13px] font-bold text-[#1F2937]">{getAge(viewingFamilyMember.date_of_birth)} years</p>
-                  </div>
-                  <div className="bg-[#F7F9FC] p-3 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Phone Number</p>
-                    <p className="text-[13px] font-bold text-[#1F2937]">
-                      {viewingFamilyMember.phone ? (
-                        <a href={`tel:${viewingFamilyMember.phone}`} className="text-[#005A87] hover:underline">
-                          {viewingFamilyMember.phone}
-                        </a>
-                      ) : (
-                        <span className="text-slate-400 font-normal">Not provided</span>
-                      )}
-                    </p>
-                  </div>
-                  <div className="bg-[#F7F9FC] p-3 rounded-2xl border border-slate-100">
-                    <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-wider mb-1">Occupation</p>
-                    <p className="text-[13px] font-bold text-[#1F2937]">
-                      {viewingFamilyMember.occupation || <span className="text-slate-400 font-normal">Not specified</span>}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Dedicated Document Management Section */}
-              <div>
-                <div className="flex items-center justify-between mb-2.5">
-                  <div>
-                    <h3 className="text-xs font-bold text-[#6B7280] uppercase tracking-wider">
-                      Documents for {formatFamilyName(viewingFamilyMember.name)}
-                    </h3>
-                    <p className="text-[11px] text-slate-500">
-                      Manage documents uploaded specifically for this member
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDocForm({
-                        name: `${formatFamilyName(viewingFamilyMember.name)} Document`,
-                        file_name: "",
-                        file_size: 0,
-                        file_url: "",
-                        family_member_id: viewingFamilyMember.id,
-                        category: "KYC / Identity",
-                      });
-                      setShowDocModal(true);
-                    }}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-[#005A87] text-white text-xs font-bold hover:bg-[#00476b] transition-all shadow-sm"
-                  >
-                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
-                    </svg>
-                    Upload Doc
-                  </button>
-                </div>
-
-                {/* Member's Documents List */}
-                {(() => {
-                  const memberDocs = docs.filter((d) => d.family_member_id === viewingFamilyMember.id);
-                  if (memberDocs.length === 0) {
-                    return (
-                      <div className="p-6 text-center bg-[#F7F9FC] rounded-2xl border border-dashed border-slate-200">
-                        <p className="text-xs font-semibold text-slate-600 mb-1">
-                          No documents uploaded for {formatFamilyName(viewingFamilyMember.name)} yet
-                        </p>
-                        <p className="text-[11px] text-slate-400 mb-3">
-                          Upload identity proof, medical records, or insurance policies under their name.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDocForm({
-                              name: `${formatFamilyName(viewingFamilyMember.name)} Document`,
-                              file_name: "",
-                              file_size: 0,
-                              file_url: "",
-                              family_member_id: viewingFamilyMember.id,
-                              category: "KYC / Identity",
-                            });
-                            setShowDocModal(true);
-                          }}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-[#005A87] hover:bg-[#DDF3FF] transition-all"
-                        >
-                          Upload First Document →
-                        </button>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div className="space-y-2">
-                      {memberDocs.map((doc) => (
-                        <div
-                          key={doc.id}
-                          className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 hover:border-[#0E7AC7] transition-all group"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-[10px] shrink-0 ${docColor(doc.file_type)}`}>
-                              {doc.file_type}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-[13px] font-bold text-[#1F2937] truncate">{doc.name}</p>
-                              <div className="flex items-center gap-2 text-[10px] text-slate-500 font-medium">
-                                <span>{doc.category || "Document"}</span>
-                                <span>·</span>
-                                <span>{formatSize(doc.file_size)}</span>
-                                <span>·</span>
-                                <span>{formatDate(doc.created_at)}</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0 ml-2">
-                            <button
-                              type="button"
-                              onClick={() => setViewingDoc(doc)}
-                              title="View Document"
-                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#EEF6FF] text-[#0E7AC7] hover:bg-[#0E7AC7] hover:text-white transition-all"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                              </svg>
-                            </button>
-                            <a
-                              href={doc.file_url && doc.file_url.length > 5 ? doc.file_url : "#"}
-                              download={doc.file_name}
-                              title="Download"
-                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#DDF3FF] text-[#005A87] hover:bg-[#005A87] hover:text-white transition-all"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                            </a>
-                            <button
-                              type="button"
-                              onClick={() => deleteDocument(doc.id)}
-                              title="Delete"
-                              className="w-8 h-8 rounded-lg flex items-center justify-center bg-[#F7F9FC] text-slate-500 hover:bg-red-50 hover:text-red-600 transition-all"
-                            >
-                              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-
-            {/* Profile Footer */}
-            <div className="px-6 py-4 border-t border-slate-100 flex gap-3 shrink-0 bg-[#F7F9FC]/70">
-              <button
-                onClick={() => setViewingFamilyMember(null)}
-                className="flex-1 h-11 rounded-2xl border border-slate-200 text-[13px] font-bold text-[#1F2937] hover:bg-white transition-all"
-              >
-                Close Profile
-              </button>
-              <button
-                onClick={() => {
-                  const m = viewingFamilyMember;
-                  setViewingFamilyMember(null);
-                  setEditingFamilyMember(m);
-                }}
-                className="flex-1 h-11 rounded-2xl bg-[#005A87] text-white text-[13px] font-bold hover:bg-[#00476b] transition-all flex items-center justify-center gap-1.5 shadow-sm"
-              >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Edit Details
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Edit Family Member Modal ── */}
       {editingFamilyMember && (
