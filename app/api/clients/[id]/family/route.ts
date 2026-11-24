@@ -37,9 +37,24 @@ export async function GET(
       return "";
     };
 
+    const getFamilyEmail = (m: any) => {
+      if (m.email) return m.email;
+      if (typeof m.name === "string") {
+        const match = m.name.match(/\[EMAIL:\s*(.*?)\]/i);
+        if (match) return match[1].trim();
+      }
+      return "";
+    };
+
     const cleanFamilyName = (m: any) => {
       const raw = typeof m.name === "string" ? m.name : "";
-      return formatFamilyName(raw.replace(/^\[RECYCLE_BIN\]\s*/, "").replace(/\[OCC:\s*.*?\]/g, "").trim());
+      return formatFamilyName(
+        raw
+          .replace(/^\[RECYCLE_BIN\]\s*/, "")
+          .replace(/\[OCC:\s*.*?\]/g, "")
+          .replace(/\[EMAIL:\s*.*?\]/gi, "")
+          .trim()
+      );
     };
 
     const activeMembers = (data || [])
@@ -48,6 +63,7 @@ export async function GET(
         ...m,
         name: cleanFamilyName(m),
         occupation: getFamilyOccupation(m),
+        email: getFamilyEmail(m),
         is_deleted: false,
       }));
 
@@ -57,6 +73,7 @@ export async function GET(
         ...m,
         name: cleanFamilyName(m),
         occupation: getFamilyOccupation(m),
+        email: getFamilyEmail(m),
         is_deleted: true,
       }));
 
@@ -94,7 +111,10 @@ export async function POST(
 
   const cleanName = formatFamilyName(body.name);
   const rawOccupation = (body.occupation || "").trim();
-  const storedName = rawOccupation ? `${cleanName} [OCC: ${rawOccupation}]` : cleanName;
+  const rawEmail = (body.email || "").trim();
+  let storedName = cleanName;
+  if (rawOccupation) storedName += ` [OCC: ${rawOccupation}]`;
+  if (rawEmail) storedName += ` [EMAIL: ${rawEmail}]`;
 
   try {
     if (!supabaseAdmin) throw new Error("Supabase client not initialized");
@@ -107,6 +127,7 @@ export async function POST(
     };
     if (body.phone) insertPayload.phone = body.phone;
     if (rawOccupation) insertPayload.occupation = rawOccupation;
+    if (rawEmail) insertPayload.email = rawEmail;
     if (body.photo_url) insertPayload.photo_url = body.photo_url;
 
     let res = await supabaseAdmin
@@ -116,7 +137,7 @@ export async function POST(
       .single();
 
     if (res.error) {
-      // Schema resilience: retry removing unknown column (like occupation or photo_url if column does not exist)
+      // Schema resilience: retry removing unknown column (like occupation, email or photo_url if column does not exist)
       let cur = { ...insertPayload };
       let lastErr: any = res.error;
       while (lastErr) {
@@ -148,6 +169,7 @@ export async function POST(
       ...res.data,
       name: cleanName,
       occupation: rawOccupation,
+      email: res.data?.email || rawEmail || null,
       photo_url: res.data?.photo_url || body.photo_url || null,
     };
 

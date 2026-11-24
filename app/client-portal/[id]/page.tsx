@@ -17,6 +17,7 @@ interface FamilyMemberData {
   date_of_birth?: string;
   relationship?: string;
   phone?: string;
+  email?: string;
   occupation?: string;
   photo_url?: string;
 }
@@ -521,24 +522,6 @@ export default function ClientPortalDashboard() {
                   </div>
                   <div>
                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                      Phone Number
-                    </div>
-                    <div className="font-bold text-slate-700 text-[13px]">
-                      {client.phone}
-                    </div>
-                  </div>
-                  {client.email && (
-                    <div>
-                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                        Email Address
-                      </div>
-                      <div className="font-bold text-slate-700 text-[13px] break-words">
-                        {client.email}
-                      </div>
-                    </div>
-                  )}
-                  <div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                       Date of Birth
                     </div>
                     <div className="font-bold text-slate-700 text-[13px]">
@@ -570,31 +553,15 @@ export default function ClientPortalDashboard() {
                       </div>
                     </div>
                   )}
-                  <div className="col-span-2">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                      Address
-                    </div>
-                    <div className="font-bold text-slate-700 text-[13px] leading-snug break-words">
-                      {fullAddress || "Not provided"}
-                    </div>
-                  </div>
                 </>
               ) : selectedFamilyMember ? (
                 <>
                   <div>
                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                      Profile Name
-                    </div>
-                    <div className="font-bold text-[#005A87] text-[14px]">
-                      {formatFamilyName(selectedFamilyMember.name)}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                       Full Name
                     </div>
                     <div className="font-bold text-slate-800 text-[14px]">
-                      {selectedFamilyMember.name}
+                      {formatFamilyName(selectedFamilyMember.name)}
                     </div>
                   </div>
                   <div>
@@ -638,6 +605,21 @@ export default function ClientPortalDashboard() {
                       )}
                     </div>
                   </div>
+                  {selectedFamilyMember.email && (
+                    <div>
+                      <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                        Email Address
+                      </div>
+                      <div className="font-bold text-slate-700 text-[13px] break-words">
+                        <a
+                          href={`mailto:${selectedFamilyMember.email}`}
+                          className="text-blue-600 hover:underline"
+                        >
+                          {selectedFamilyMember.email}
+                        </a>
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
                       Occupation

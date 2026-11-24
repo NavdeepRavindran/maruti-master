@@ -80,8 +80,13 @@ CREATE TABLE IF NOT EXISTS public.family_members (
   date_of_birth DATE NOT NULL,
   relationship TEXT NOT NULL,
   phone TEXT,
+  email TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE public.family_members ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.family_members ADD COLUMN IF NOT EXISTS occupation TEXT;
+ALTER TABLE public.family_members ADD COLUMN IF NOT EXISTS photo_url TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_family_client ON public.family_members (client_id);
 

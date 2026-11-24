@@ -24,10 +24,10 @@ export async function PUT(
   try {
     if (!supabaseAdmin) throw new Error("Supabase Admin client not initialized");
 
-    // Fetch current family member to preserve existing name / occupation if not supplied
+    // Fetch current family member to preserve existing name / occupation / email if not supplied
     const { data: currentFm } = await supabaseAdmin
       .from("family_members")
-      .select("name, phone, relationship, date_of_birth, photo_url")
+      .select("name, phone, relationship, date_of_birth, photo_url, email")
       .eq("id", fid)
       .maybeSingle();
 
@@ -39,13 +39,25 @@ export async function PUT(
     const existingOcc = existingOccMatch ? existingOccMatch[1].trim() : "";
     const targetOcc = body.occupation !== undefined ? (body.occupation || "").trim() : existingOcc;
 
+    // Determine target email
+    const existingEmailMatch = currentRawName.match(/\[EMAIL:\s*(.*?)\]/i);
+    const existingEmail = currentFm?.email || (existingEmailMatch ? existingEmailMatch[1].trim() : "");
+    const targetEmail = body.email !== undefined ? (body.email || "").trim() : existingEmail;
+
     const baseName = body.name !== undefined 
       ? formatFamilyName(body.name) 
-      : currentRawName.replace(/^\[RECYCLE_BIN\]\s*/, "").replace(/\[OCC:\s*.*?\]/g, "").trim();
+      : currentRawName
+          .replace(/^\[RECYCLE_BIN\]\s*/, "")
+          .replace(/\[OCC:\s*.*?\]/g, "")
+          .replace(/\[EMAIL:\s*.*?\]/gi, "")
+          .trim();
 
     let finalName = baseName;
     if (targetOcc) {
       finalName = `${finalName} [OCC: ${targetOcc}]`;
+    }
+    if (targetEmail) {
+      finalName = `${finalName} [EMAIL: ${targetEmail}]`;
     }
     if (isDeleted) {
       finalName = `[RECYCLE_BIN] ${finalName}`;
@@ -57,6 +69,7 @@ export async function PUT(
     if (body.relationship !== undefined) updatePayload.relationship = body.relationship;
     if (body.date_of_birth !== undefined) updatePayload.date_of_birth = body.date_of_birth;
     if (body.phone !== undefined) updatePayload.phone = body.phone;
+    if (targetEmail !== undefined) updatePayload.email = targetEmail || null;
     if (targetOcc) updatePayload.occupation = targetOcc;
     if (body.photo_url !== undefined) updatePayload.photo_url = body.photo_url;
     if (body.notes !== undefined) updatePayload.notes = body.notes;

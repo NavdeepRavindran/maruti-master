@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -172,6 +173,20 @@ export default function BirthdaysPage() {
   const [shareStatus, setShareStatus] = useState<"idle"|"success"|"error">("idle");
   const [clientPhoto, setClientPhoto] = useState<string|null>(null);
   const photoInputRef = useRef<HTMLInputElement>(null);
+  const [blessingDropdownOpen, setBlessingDropdownOpen] = useState(false);
+  const blessingDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (blessingDropdownRef.current && !blessingDropdownRef.current.contains(e.target as Node)) {
+        setBlessingDropdownOpen(false);
+      }
+    }
+    if (blessingDropdownOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [blessingDropdownOpen]);
 
   const templates = activeTab==="birthdays" ? BIRTHDAY_TEMPLATES : ANNIVERSARY_TEMPLATES;
   const messages  = activeTab==="birthdays" ? BIRTHDAY_MESSAGES  : ANNIVERSARY_MESSAGES;
@@ -248,6 +263,7 @@ export default function BirthdaysPage() {
     setFaithFilter("all");
     setShareStatus("idle");
     setClientPhoto(null);
+    setBlessingDropdownOpen(false);
   };
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -388,44 +404,56 @@ export default function BirthdaysPage() {
   canvas.toBlob(b=>b?resolve(b):reject("Blob null"),"image/png",0.97);
 });
 
- const handleShare = async () => {
-  if (!selectedPerson) return;
-  setGenerating(true); setShareStatus("idle");
-  try {
-    const blob = await generateCardBlob();
-    const prefix = activeTab==="birthdays"?"birthday":"anniversary";
-    const fileName = `${prefix}-${selectedPerson.name.replace(/\s+/g,"-").toLowerCase()}.png`;
+  const handleShare = async () => {
+    if (!selectedPerson) return;
+    setGenerating(true);
+    setShareStatus("idle");
+    try {
+      const blob = await generateCardBlob();
+      const prefix = activeTab === "birthdays" ? "birthday" : "anniversary";
+      const fileName = `${prefix}-${selectedPerson.name.replace(/\s+/g, "-").toLowerCase()}.png`;
 
-    const waText = [
-      selectedTemplate.tamilWish,"",message,"",`— ${senderName}`,"Maruthi Insure Care"
-    ].join("\n");
+      const raw = (selectedPerson.phone || "").replace(/\D/g, "").replace(/^0+/, "");
+      const waNumber = raw.length === 10 ? `91${raw}` : raw;
 
-    const raw = (selectedPerson.phone||"").replace(/\D/g,"").replace(/^0+/,"");
-    const waNumber = raw.length===10 ? `91${raw}` : raw;
-    const waUrl = waNumber
-      ? `https://wa.me/${waNumber}?text=${encodeURIComponent(waText)}`
-      : `https://wa.me/?text=${encodeURIComponent(waText)}`;
+      const file = new File([blob], fileName, { type: "image/png" });
 
-    // Download image
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href=objectUrl; a.download=fileName;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      // If mobile or browser supports sharing files directly via Web Share API
+      if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+        });
+        setShareStatus("success");
+        return;
+      }
 
-    // Open WhatsApp to the specific number
-    setTimeout(()=>{
-      window.open(waUrl,"_blank","noopener,noreferrer");
-      URL.revokeObjectURL(objectUrl);
-    }, 700);
+      // Desktop / fallback: Copy image to clipboard and open WhatsApp chat without downloading file
+      try {
+        if (typeof navigator !== "undefined" && navigator.clipboard && typeof ClipboardItem !== "undefined") {
+          await navigator.clipboard.write([
+            new ClipboardItem({ "image/png": blob }),
+          ]);
+          toast.success("Card copied to clipboard! Paste directly in WhatsApp (Ctrl+V).");
+        }
+      } catch {
+        // clipboard write fallback
+      }
 
-    setShareStatus("success");
-  } catch(err:any) {
-    console.error("Share error:",err);
-    setShareStatus("error");
-  } finally {
-    setGenerating(false);
-  }
-};
+      const waUrl = waNumber
+        ? `https://wa.me/${waNumber}`
+        : `https://web.whatsapp.com`;
+
+      window.open(waUrl, "_blank", "noopener,noreferrer");
+      setShareStatus("success");
+    } catch (err: any) {
+      if (err.name !== "AbortError") {
+        console.error("Share error:", err);
+        setShareStatus("error");
+      }
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const handleDownload = async () => {
     if (!selectedPerson) return;
@@ -601,7 +629,7 @@ export default function BirthdaysPage() {
           border-radius: 16px;
           padding: 18px 16px;
           transition: transform .2s, box-shadow .2s;
-          cursor: default;
+          cursor: pointer;
         }
         .stat-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.07); }
         .stat-card.primary {
@@ -850,9 +878,9 @@ export default function BirthdaysPage() {
         }
         @media (min-width: 768px) {
           .modal {
-            max-width: 1040px;
-            border-radius: 20px;
-            max-height: 90vh;
+            max-width: 1140px;
+            border-radius: 24px;
+            max-height: 92vh;
             flex-direction: row;
             animation: popIn .2s ease-out;
           }
@@ -904,10 +932,11 @@ export default function BirthdaysPage() {
         }
         @media (min-width: 768px) {
           .modal-left {
-            width: 400px;
+            flex: 1.35;
+            min-width: 520px;
             border-right: 1px solid #f1f5f9;
             background: #fafbff;
-            border-radius: 20px 0 0 20px;
+            border-radius: 24px 0 0 24px;
             overflow-y: auto;
           }
         }
@@ -1061,8 +1090,8 @@ export default function BirthdaysPage() {
         /* ── Template grid ── */
         .template-grid {
           display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 7px;
+          grid-template-columns: repeat(auto-fill, minmax(95px, 1fr));
+          gap: 8px;
           max-height: 220px;
           overflow-y: auto;
           scrollbar-width: thin;
@@ -1221,10 +1250,12 @@ export default function BirthdaysPage() {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            flex: 1;
+            flex: 0.85;
+            max-width: 420px;
+            min-width: 320px;
             background: linear-gradient(160deg, #06091e 0%, #0a1650 100%);
-            border-radius: 0 20px 20px 0;
-            padding: 28px 24px;
+            border-radius: 0 24px 24px 0;
+            padding: 24px 20px;
             position: relative;
             overflow: hidden;
           }
@@ -1436,12 +1467,18 @@ export default function BirthdaysPage() {
         {/* Stats */}
         <div className="stats-grid">
           {[
-            { label:"Today",      value:currentStats.today,     icon:"📆", primary:false },
-            { label:"This Week",  value:currentStats.thisWeek,  icon:"✨", primary:true  },
-            { label:"This Month", value:currentStats.thisMonth, icon:activeTab==="birthdays"?"🍰":"💍", primary:false },
-            { label:"All Time",   value:currentStats.total,     icon:"🎈", primary:false },
+            { label:"Today",      rangeKey:"today", value:currentStats.today,     icon:"📆" },
+            { label:"This Week",  rangeKey:"week",  value:currentStats.thisWeek,  icon:"✨" },
+            { label:"This Month", rangeKey:"month", value:currentStats.thisMonth, icon:activeTab==="birthdays"?"🍰":"💍" },
+            { label:"All Time",   rangeKey:"all",   value:currentStats.total,     icon:"🎈" },
           ].map(s=>(
-            <div key={s.label} className={`stat-card${s.primary?" primary":""}`}>
+            <div
+              key={s.label}
+              className={`stat-card${range===s.rangeKey?" primary":""}`}
+              onClick={()=>setRange(s.rangeKey)}
+              style={{ cursor: "pointer" }}
+              title={`View ${s.label}`}
+            >
               <div className="stat-icon">{s.icon}</div>
               <div className="stat-value">{loading?"–":s.value}</div>
               <div className="stat-label">{s.label}</div>
@@ -1451,9 +1488,9 @@ export default function BirthdaysPage() {
 
         {/* Range filter */}
         <div className="range-filter">
-          {(["week","month","all"] as const).map(r=>(
+          {(["today","week","month","all"] as const).map(r=>(
             <button key={r} className={`range-btn${range===r?" active":""}`} onClick={()=>setRange(r)}>
-              {r==="all"?"All Time":r.charAt(0).toUpperCase()+r.slice(1)}
+              {r==="all"?"All Time":r==="today"?"Today":r==="week"?"This Week":"This Month"}
             </button>
           ))}
         </div>
@@ -1464,7 +1501,7 @@ export default function BirthdaysPage() {
             <span className="list-head-title">
               {activeTab==="birthdays"?"Birthday":"Anniversary"} List
             </span>
-            <span className="list-count">{currentList.length} {range==="all"?"total":range==="month"?"this month":"this week"}</span>
+            <span className="list-count">{currentList.length} {range==="all"?"total":range==="month"?"this month":range==="week"?"this week":"today"}</span>
           </div>
 
           {loading ? (
@@ -1627,18 +1664,79 @@ export default function BirthdaysPage() {
                 {/* Message */}
                 <div>
                   <label className="field-label">English Blessing</label>
-                  <select
-                    className="form-select"
-                    value={message}
-                    onChange={e=>setMessage(e.target.value)}
-                  >
-                    {messages.map((m,i)=><option key={i} value={m}>{m.slice(0,58)}…</option>)}
-                  </select>
+                  <div className="relative" ref={blessingDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setBlessingDropdownOpen(!blessingDropdownOpen)}
+                      className="w-full flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-blue-400 hover:bg-slate-50/50 transition-all text-left shadow-2xs group"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-[12px] font-semibold text-slate-800 line-clamp-1 group-hover:text-blue-700">
+                          {message}
+                        </span>
+                      </div>
+                      <svg
+                        className={`w-4 h-4 text-slate-400 shrink-0 transition-transform duration-200 ${blessingDropdownOpen ? "rotate-180 text-blue-600" : ""}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+
+                    {blessingDropdownOpen && (
+                      <div className="absolute top-full left-0 right-0 mt-1.5 z-50 bg-white border border-slate-200 rounded-2xl shadow-xl max-h-64 overflow-y-auto p-1.5 space-y-1">
+                        {messages.map((m, i) => {
+                          const isSelected = message === m;
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => {
+                                setMessage(m);
+                                setBlessingDropdownOpen(false);
+                              }}
+                              className={`w-full text-left p-2.5 rounded-xl text-xs transition-colors flex items-start gap-2.5 ${
+                                isSelected
+                                  ? "bg-blue-50/90 text-blue-900 font-semibold"
+                                  : "hover:bg-slate-50 text-slate-700 font-medium"
+                              }`}
+                            >
+                              <span
+                                className={`w-5 h-5 rounded-md shrink-0 flex items-center justify-center text-[10px] font-bold ${
+                                  isSelected
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-slate-100 text-slate-500"
+                                }`}
+                              >
+                                {i + 1}
+                              </span>
+                              <span className="flex-1 leading-snug">{m}</span>
+                              {isSelected && (
+                                <svg
+                                  className="w-4 h-4 text-blue-600 shrink-0 mt-0.5"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                  strokeWidth={2.5}
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                   <textarea
                     className="form-textarea"
                     value={message}
                     onChange={e=>setMessage(e.target.value)}
                     rows={3}
+                    placeholder="Customize blessing text..."
                   />
                 </div>
 
@@ -1666,13 +1764,8 @@ export default function BirthdaysPage() {
                   ⬇ Download PNG card
                 </button>
 
-                {shareStatus==="success"&&<p className="status-ok">✓ Card sent / downloaded successfully!</p>}
+                {shareStatus==="success"&&<p className="status-ok">✓ Card ready / sent to WhatsApp!</p>}
                 {shareStatus==="error"  &&<p className="status-err">⚠ Failed. Try downloading and sharing manually.</p>}
-
-                <p className="send-note">
-                  <b>Mobile:</b> native share sheet → pick WhatsApp.<br/>
-                  <b>Desktop:</b> image downloads + WhatsApp opens to <b>{selectedPerson.phone||"contact"}</b>.
-                </p>
 
               </div>
             </div>

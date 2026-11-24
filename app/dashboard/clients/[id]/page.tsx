@@ -52,6 +52,7 @@ interface FamilyMember {
   date_of_birth: string;
   relationship: string;
   phone?: string;
+  email?: string;
   occupation?: string;
   photo_url?: string;
   is_deleted?: boolean;
@@ -151,6 +152,7 @@ export default function ClientProfilePage({
     date_of_birth: "",
     relationship: "",
     phone: "",
+    email: "",
     occupation: "",
   });
   const [docFilterMember, setDocFilterMember] = useState<string>("all");
@@ -530,6 +532,7 @@ export default function ClientProfilePage({
           relationship: editingFamilyMember.relationship,
           date_of_birth: editingFamilyMember.date_of_birth,
           phone: editingFamilyMember.phone,
+          email: editingFamilyMember.email || "",
           occupation: editingFamilyMember.occupation || "",
         }),
       });
@@ -644,6 +647,7 @@ export default function ClientProfilePage({
         date_of_birth: "",
         relationship: "",
         phone: "",
+        email: "",
         occupation: "",
       });
       toast.success("Family member added.");
@@ -1057,19 +1061,35 @@ export default function ClientProfilePage({
               </div>
 
               {/* Contact strip */}
-              {viewingFamilyMember.phone && (
+              {/* Member Contact info */}
+              {(viewingFamilyMember.phone || viewingFamilyMember.email) && (
                 <div className="mt-6 pt-5 border-t border-slate-100 flex flex-wrap gap-3 sm:gap-4">
-                  <a
-                    href={`tel:${viewingFamilyMember.phone}`}
-                    className="flex items-center gap-2 text-[13px] font-semibold text-[#1F2937] hover:text-[#005A87] transition-colors"
-                  >
-                    <span className="w-9 h-9 rounded-xl bg-[#DDF3FF] flex items-center justify-center shrink-0">
-                      <svg className="w-4 h-4 text-[#005A87]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                      </svg>
-                    </span>
-                    {viewingFamilyMember.phone}
-                  </a>
+                  {viewingFamilyMember.phone && (
+                    <a
+                      href={`tel:${viewingFamilyMember.phone}`}
+                      className="flex items-center gap-2 text-[13px] font-semibold text-[#1F2937] hover:text-[#005A87] transition-colors"
+                    >
+                      <span className="w-9 h-9 rounded-xl bg-[#DDF3FF] flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-[#005A87]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                        </svg>
+                      </span>
+                      {viewingFamilyMember.phone}
+                    </a>
+                  )}
+                  {viewingFamilyMember.email && (
+                    <a
+                      href={`mailto:${viewingFamilyMember.email}`}
+                      className="flex items-center gap-2 text-[13px] font-semibold text-[#1F2937] hover:text-[#005A87] transition-colors"
+                    >
+                      <span className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center shrink-0">
+                        <svg className="w-4 h-4 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                      </span>
+                      {viewingFamilyMember.email}
+                    </a>
+                  )}
                 </div>
               )}
             </div>
@@ -1089,18 +1109,18 @@ export default function ClientProfilePage({
               </div>
               <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-4">
                 {[
-                  { label: "Profile Name", value: formatFamilyName(viewingFamilyMember.name) },
-                  { label: "Full Name", value: viewingFamilyMember.name },
-                  { label: "Date of Birth", value: `${formatDate(viewingFamilyMember.date_of_birth)} (${getAge(viewingFamilyMember.date_of_birth)} yrs)` },
+                  { label: "Full Name", value: formatFamilyName(viewingFamilyMember.name) },
                   { label: "Relationship", value: viewingFamilyMember.relationship },
+                  { label: "Date of Birth", value: `${formatDate(viewingFamilyMember.date_of_birth)} (${getAge(viewingFamilyMember.date_of_birth)} yrs)` },
                   { label: "Phone", value: viewingFamilyMember.phone || "—" },
+                  { label: "Email", value: viewingFamilyMember.email || "—" },
                   { label: "Occupation", value: viewingFamilyMember.occupation || "—" },
                 ].map(({ label, value }) => (
                   <div key={label}>
                     <p className="text-[10px] font-bold text-[#6B7280] uppercase tracking-widest mb-1">
                       {label}
                     </p>
-                    <p className={`text-[13px] font-bold break-words ${label === "Profile Name" ? "text-[#0E7AC7]" : "text-black"}`}>
+                    <p className="text-[13px] font-bold break-words text-black">
                       {value}
                     </p>
                   </div>
@@ -2687,6 +2707,11 @@ export default function ClientProfilePage({
                                   · {fm.phone}
                                 </span>
                               )}
+                              {fm.email && (
+                                <span className="text-[11px] text-[#6B7280] font-medium">
+                                  · ✉ {fm.email}
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -2841,6 +2866,11 @@ export default function ClientProfilePage({
                               {fm.phone && (
                                 <span className="text-[11px] text-[#6B7280] font-medium">
                                   · {fm.phone}
+                                </span>
+                              )}
+                              {fm.email && (
+                                <span className="text-[11px] text-[#6B7280] font-medium">
+                                  · ✉ {fm.email}
                                 </span>
                               )}
                             </div>
@@ -3479,7 +3509,7 @@ export default function ClientProfilePage({
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className={labelCls}>Phone</label>
                   <input
@@ -3487,6 +3517,18 @@ export default function ClientProfilePage({
                     value={familyForm.phone}
                     onChange={(e) =>
                       setFamilyForm({ ...familyForm, phone: e.target.value })
+                    }
+                    className={inputCls}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Email</label>
+                  <input
+                    type="email"
+                    value={familyForm.email}
+                    onChange={(e) =>
+                      setFamilyForm({ ...familyForm, email: e.target.value })
                     }
                     className={inputCls}
                     placeholder="Optional"
@@ -3964,7 +4006,7 @@ export default function ClientProfilePage({
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className={labelCls}>Phone</label>
                   <input
@@ -3974,6 +4016,21 @@ export default function ClientProfilePage({
                       setEditingFamilyMember({
                         ...editingFamilyMember,
                         phone: e.target.value.replace(/\D/g, ""),
+                      })
+                    }
+                    className={inputCls}
+                    placeholder="Optional"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Email</label>
+                  <input
+                    type="email"
+                    value={editingFamilyMember.email || ""}
+                    onChange={(e) =>
+                      setEditingFamilyMember({
+                        ...editingFamilyMember,
+                        email: e.target.value,
                       })
                     }
                     className={inputCls}

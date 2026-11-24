@@ -23,6 +23,7 @@ export interface FormFamilyMember {
   relationship: string;
   date_of_birth: string;
   phone: string;
+  email?: string;
   occupation?: string;
 }
 
@@ -481,6 +482,7 @@ setForm(prev => ({
             relationship: fm.relationship || "Other",
             date_of_birth: fm.date_of_birth || "2000-01-01",
             phone: fm.phone || null,
+            email: fm.email || null,
             occupation: fm.occupation || "",
           };
           if (fm.id) {
@@ -682,10 +684,12 @@ setForm(prev => ({
           const data = await res.json();
           const rawFm = data.family_members || [];
           setFamilyMembers(rawFm.map((fm: any) => ({
+            id: fm.id,
             name: fm.name || "",
             relationship: fm.relationship || "",
             date_of_birth: fm.date_of_birth || "",
             phone: fm.phone || "",
+            email: fm.email || "",
             occupation: fm.occupation || "",
           })));
         }
@@ -708,7 +712,7 @@ setForm(prev => ({
 
   const handleAddFamilyMember = () => {
     const nextIdx = familyMembers.length;
-    setFamilyMembers(prev => [...prev, { name: "", relationship: "", date_of_birth: "", phone: "", occupation: "" }]);
+    setFamilyMembers(prev => [...prev, { name: "", relationship: "", date_of_birth: "", phone: "", email: "", occupation: "" }]);
     toast.success(`Family Member #${nextIdx + 1} added! Fill in their details below.`, { icon: "👥" });
     setTimeout(() => {
       const el = document.getElementById(`family-member-card-${nextIdx}`);
@@ -1743,7 +1747,7 @@ setForm(prev => ({
                             </select>
                           </div>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                           <div>
                             <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Date of Birth</label>
                             <input
@@ -1768,6 +1772,19 @@ setForm(prev => ({
                               onChange={e => {
                                 const val = e.target.value.replace(/\D/g, "");
                                 setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, phone: val } : m));
+                              }}
+                              className="w-full px-3 py-2 rounded-xl bg-[#F7F9FC] border border-slate-200 text-xs font-semibold text-[#1F2937]"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-[#6B7280] mb-1">Email</label>
+                            <input
+                              type="email"
+                              placeholder="Optional"
+                              value={fm.email || ""}
+                              onChange={e => {
+                                const val = e.target.value;
+                                setFamilyMembers(prev => prev.map((m, i) => i === idx ? { ...m, email: val } : m));
                               }}
                               className="w-full px-3 py-2 rounded-xl bg-[#F7F9FC] border border-slate-200 text-xs font-semibold text-[#1F2937]"
                             />

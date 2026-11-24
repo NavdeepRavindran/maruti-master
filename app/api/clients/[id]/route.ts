@@ -41,15 +41,29 @@ export async function GET(
       return "";
     };
 
+    const getFamilyEmail = (fm: any) => {
+      if (fm.email) return fm.email;
+      if (typeof fm.name === "string") {
+        const match = fm.name.match(/\[EMAIL:\s*(.*?)\]/i);
+        if (match) return match[1].trim();
+      }
+      return "";
+    };
+
     const cleanFamilyName = (fm: any) => {
       const raw = typeof fm.name === "string" ? fm.name : "";
-      return raw.replace(/^\[RECYCLE_BIN\]\s*/, "").replace(/\[OCC:\s*.*?\]/g, "").trim();
+      return raw
+        .replace(/^\[RECYCLE_BIN\]\s*/, "")
+        .replace(/\[OCC:\s*.*?\]/g, "")
+        .replace(/\[EMAIL:\s*.*?\]/gi, "")
+        .trim();
     };
 
     const activeFamily = family.filter((f) => !isFamilyDeleted(f)).map((f) => ({
       ...f,
       name: cleanFamilyName(f),
       occupation: getFamilyOccupation(f),
+      email: getFamilyEmail(f),
       is_deleted: false,
     }));
 
@@ -57,6 +71,7 @@ export async function GET(
       ...f,
       name: cleanFamilyName(f),
       occupation: getFamilyOccupation(f),
+      email: getFamilyEmail(f),
       is_deleted: true,
     }));
 
