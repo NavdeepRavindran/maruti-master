@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import toast from "react-hot-toast";
 import { createClient } from "@/lib/supabase/client";
+import { getDaysUntilAnnualEvent } from "@/lib/formatUtils";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 interface CelebrationItem {
@@ -136,22 +137,34 @@ function drawFlower(ctx: CanvasRenderingContext2D, cx: number, cy: number, accen
 
 // ─── Date Utilities ───────────────────────────────────────────────────────────
 function getYears(dob: string) {
-  const b=new Date(dob), n=new Date();
-  let a=n.getFullYear()-b.getFullYear();
-  if (n.getMonth()<b.getMonth()||(n.getMonth()===b.getMonth()&&n.getDate()<b.getDate())) a--;
-  return a+1;
+  if (!dob) return 0;
+  const parts = dob.split("T")[0].split("-");
+  if (parts.length < 3) return 0;
+  const birthYear = parseInt(parts[0], 10);
+  const birthMonth = parseInt(parts[1], 10) - 1;
+  const birthDay = parseInt(parts[2], 10);
+  const now = new Date();
+  let a = now.getFullYear() - birthYear;
+  if (now.getMonth() < birthMonth || (now.getMonth() === birthMonth && now.getDate() < birthDay)) a--;
+  return a + 1;
 }
 function getNextDate(dob: string) {
-  const b=new Date(dob), n=new Date();
-  const t=new Date(n.getFullYear(),b.getMonth(),b.getDate());
-  return (t>=n?t:new Date(n.getFullYear()+1,b.getMonth(),b.getDate()))
-    .toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+  if (!dob) return "";
+  const parts = dob.split("T")[0].split("-");
+  if (parts.length < 3) return "";
+  const month = parseInt(parts[1], 10) - 1;
+  const day = parseInt(parts[2], 10);
+  const now = new Date();
+  const thisYearDate = new Date(now.getFullYear(), month, day);
+  const isToday = thisYearDate.getMonth() === now.getMonth() && thisYearDate.getDate() === now.getDate();
+  const targetYear = isToday ? now.getFullYear() : thisYearDate < now ? now.getFullYear() + 1 : now.getFullYear();
+  return new Date(targetYear, month, day).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
 }
 function daysUntil(dob: string) {
-  const b=new Date(dob), n=new Date(); n.setHours(0,0,0,0);
-  const t=new Date(n.getFullYear(),b.getMonth(),b.getDate());
-  const next=t>=n?t:new Date(n.getFullYear()+1,b.getMonth(),b.getDate());
-  return Math.ceil((next.getTime()-n.getTime())/86400000);
+  return getDaysUntilAnnualEvent(dob);
 }
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -221,7 +234,9 @@ export default function BirthdaysPage() {
       const token = session?.access_token;
       if (!token) return;
 
-      const r = await fetch(`/api/birthdays?range=${range}`, { 
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const r = await fetch(`/api/birthdays?range=${range}&date=${localDate}`, { 
         signal,
         headers: { Authorization: `Bearer ${token}` } 
       });
@@ -241,7 +256,9 @@ export default function BirthdaysPage() {
       const token = session?.access_token;
       if (!token) return;
 
-      const r = await fetch(`/api/anniversaries?range=${range}`, { 
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const r = await fetch(`/api/anniversaries?range=${range}&date=${localDate}`, { 
         signal,
         headers: { Authorization: `Bearer ${token}` } 
       });

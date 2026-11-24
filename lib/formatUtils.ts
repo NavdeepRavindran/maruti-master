@@ -237,4 +237,76 @@ export function getAge(dob?: string | null): number {
   }
 }
 
+/**
+ * Returns the current date parts { year, month: 0-indexed, day } in Indian Standard Time (Asia/Kolkata).
+ * If a YYYY-MM-DD string is supplied by client, uses that instead.
+ */
+export function getTodayDateParts(clientDateStr?: string | null): { year: number; month: number; day: number } {
+  if (clientDateStr && /^\d{4}-\d{2}-\d{2}$/.test(clientDateStr)) {
+    const [y, m, d] = clientDateStr.split("-").map(Number);
+    return { year: y, month: m - 1, day: d };
+  }
+  try {
+    const formatter = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "numeric",
+      day: "numeric",
+    });
+    const parts = formatter.formatToParts(new Date());
+    let year = new Date().getFullYear();
+    let month = new Date().getMonth();
+    let day = new Date().getDate();
+    for (const p of parts) {
+      if (p.type === "year") year = parseInt(p.value, 10);
+      if (p.type === "month") month = parseInt(p.value, 10) - 1;
+      if (p.type === "day") day = parseInt(p.value, 10);
+    }
+    return { year, month, day };
+  } catch {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth(), day: now.getDate() };
+  }
+}
+
+/**
+ * Accurately calculates days until the next occurrence of an annual event (birthday, anniversary).
+ * If event is TODAY (past midnight of the date in IST): returns 0.
+ * If event was YESTERDAY or in the past this year: calculates days until next year's occurrence (e.g. 364 days),
+ * ensuring past-midnight events are never incorrectly marked as Today or This Week.
+ */
+export function getDaysUntilAnnualEvent(
+  dateStr?: string | null,
+  ref?: { year: number; month: number; day: number }
+): number {
+  if (!dateStr) return -1;
+  const parts = dateStr.split("T")[0].split("-");
+  if (parts.length < 3) return -1;
+  const targetMonth = parseInt(parts[1], 10) - 1;
+  const targetDay = parseInt(parts[2], 10);
+  if (isNaN(targetMonth) || isNaN(targetDay)) return -1;
+
+  const today = ref || getTodayDateParts();
+
+  // If month and day match today's date exactly, it is TODAY (0 days remaining)
+  if (targetMonth === today.month && targetDay === today.day) {
+    return 0;
+  }
+
+  // Calculate day difference for this year's occurrence using UTC noon to prevent DST/midnight shifts
+  const currentYearMs = Date.UTC(today.year, targetMonth, targetDay, 12, 0, 0);
+  const todayMs = Date.UTC(today.year, today.month, today.day, 12, 0, 0);
+
+  let diffDays = Math.round((currentYearMs - todayMs) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) {
+    // Event has already passed this year (e.g. yesterday Nov 24 when today is Nov 25)
+    // Next occurrence is next year
+    const nextYearMs = Date.UTC(today.year + 1, targetMonth, targetDay, 12, 0, 0);
+    diffDays = Math.round((nextYearMs - todayMs) / (1000 * 60 * 60 * 24));
+  }
+
+  return diffDays;
+}
+
+
 

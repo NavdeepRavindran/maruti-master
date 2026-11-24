@@ -117,11 +117,13 @@ export default function DashboardPage() {
   async function fetchDashboardData(accessToken: string) {
     const headers: HeadersInit = { Authorization: `Bearer ${accessToken}` };
     try {
+      const now = new Date();
+      const localDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
       const [cR, dR, bR, aR] = await Promise.all([
-        fetch("/api/clients",                  { headers }),
-        fetch("/api/documents",                { headers }),
-        fetch("/api/birthdays?range=week",     { headers }),
-        fetch("/api/anniversaries?range=week", { headers }),
+        fetch("/api/clients",                                  { headers }),
+        fetch("/api/documents",                                { headers }),
+        fetch(`/api/birthdays?range=week&date=${localDate}`,     { headers }),
+        fetch(`/api/anniversaries?range=week&date=${localDate}`, { headers }),
       ]);
       const c = await cR.json().catch(() => ({ clients: [], total: 0 }));
       const d = await dR.json().catch(() => ({ documents: [], total: 0 }));

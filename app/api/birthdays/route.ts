@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin, supabaseAuth } from "../../../lib/supabaseClient";
-import { formatClientDisplayName } from "@/lib/formatUtils";
-
-function daysUntilBirthday(dob: string): number {
-  const birth = new Date(dob);
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const thisYear = new Date(now.getFullYear(), birth.getMonth(), birth.getDate());
-  thisYear.setHours(0, 0, 0, 0);
-  const next = thisYear >= now ? thisYear : new Date(now.getFullYear() + 1, birth.getMonth(), birth.getDate());
-  next.setHours(0, 0, 0, 0);
-  return Math.ceil((next.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-}
+import {
+  formatClientDisplayName,
+  getTodayDateParts,
+  getDaysUntilAnnualEvent,
+} from "@/lib/formatUtils";
 
 interface BirthdayEntry {
   name: string;
@@ -45,6 +38,8 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const range = searchParams.get("range") || "month";
+  const dateParam = searchParams.get("date");
+  const todayRef = getTodayDateParts(dateParam);
 
   try {
     if (!supabaseAdmin) throw new Error("No supabaseAdmin");
@@ -113,18 +108,19 @@ export async function GET(request: Request) {
       });
     }
 
-    entries.sort((a, b) => daysUntilBirthday(a.date_of_birth) - daysUntilBirthday(b.date_of_birth));
-    const filtered = filterByRange(entries, range);
+    entries.sort((a, b) => getDaysUntilAnnualEvent(a.date_of_birth, todayRef) - getDaysUntilAnnualEvent(b.date_of_birth, todayRef));
+    const filtered = filterByRange(entries, range, todayRef);
 
-    return NextResponse.json({ birthdays: filtered, stats: getStats(entries) });
+    return NextResponse.json({ birthdays: filtered, stats: getStats(entries, todayRef) });
   } catch (err: any) {
     return NextResponse.json({ error: err.message || "Failed to fetch birthdays" }, { status: 500 });
   }
 }
 
-function filterByRange(entries: BirthdayEntry[], range: string) {
+function filterByRange(entries: BirthdayEntry[], range: string, todayRef: { year: number; month: number; day: number }) {
   return entries.filter(e => {
-    const days = daysUntilBirthday(e.date_of_birth);
+    const days = getDaysUntilAnnualEvent(e.date_of_birth, todayRef);
+    if (days === -1) return false;
     if (range === "today") return days === 0;
     if (range === "week") return days <= 7;
     if (range === "month") return days <= 30;
@@ -132,11 +128,12 @@ function filterByRange(entries: BirthdayEntry[], range: string) {
   });
 }
 
-function getStats(entries: BirthdayEntry[]) {
+function getStats(entries: BirthdayEntry[], todayRef: { year: number; month: number; day: number }) {
+  const valid = entries.filter(e => getDaysUntilAnnualEvent(e.date_of_birth, todayRef) !== -1);
   return {
-    today: entries.filter(e => daysUntilBirthday(e.date_of_birth) === 0).length,
-    thisWeek: entries.filter(e => daysUntilBirthday(e.date_of_birth) <= 7).length,
-    thisMonth: entries.filter(e => daysUntilBirthday(e.date_of_birth) <= 30).length,
-    total: entries.length,
+    today: valid.filter(e => getDaysUntilAnnualEvent(e.date_of_birth, todayRef) === 0).length,
+    thisWeek: valid.filter(e => getDaysUntilAnnualEvent(e.date_of_birth, todayRef) <= 7).length,
+    thisMonth: valid.filter(e => getDaysUntilAnnualEvent(e.date_of_birth, todayRef) <= 30).length,
+    total: valid.length,
   };
 }
