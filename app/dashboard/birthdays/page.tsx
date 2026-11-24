@@ -427,46 +427,61 @@ export default function BirthdaysPage() {
     setShareStatus("idle");
     try {
       const blob = await generateCardBlob();
-      const prefix = activeTab === "birthdays" ? "birthday" : "anniversary";
-      const fileName = `${prefix}-${selectedPerson.name.replace(/\s+/g, "-").toLowerCase()}.png`;
 
       const raw = (selectedPerson.phone || "").replace(/\D/g, "").replace(/^0+/, "");
       const waNumber = raw.length === 10 ? `91${raw}` : raw;
 
-      const file = new File([blob], fileName, { type: "image/png" });
-
-      // If mobile or browser supports sharing files directly via Web Share API
-      if (typeof navigator !== "undefined" && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          files: [file],
-        });
-        setShareStatus("success");
-        return;
-      }
-
-      // Desktop / fallback: Copy image to clipboard and open WhatsApp chat without downloading file
+      // Copy image directly to system clipboard
+      let copied = false;
       try {
         if (typeof navigator !== "undefined" && navigator.clipboard && typeof ClipboardItem !== "undefined") {
           await navigator.clipboard.write([
             new ClipboardItem({ "image/png": blob }),
           ]);
-          toast.success("Card copied to clipboard! Paste directly in WhatsApp (Ctrl+V).");
+          copied = true;
         }
-      } catch {
-        // clipboard write fallback
+      } catch (clipErr) {
+        console.warn("Clipboard copy warning:", clipErr);
       }
 
+      // Directly launch WhatsApp conversation to this specific contact number
+      // Completely bypasses generic OS share sheets (e.g. Windows Share dialog)
       const waUrl = waNumber
         ? `https://wa.me/${waNumber}`
         : `https://web.whatsapp.com`;
 
       window.open(waUrl, "_blank", "noopener,noreferrer");
       setShareStatus("success");
+      if (copied) {
+        toast.success(`Opening WhatsApp chat with ${selectedPerson.name}! Press Ctrl+V to paste card.`);
+      } else {
+        toast.success(`Opening WhatsApp chat with ${selectedPerson.name}!`);
+      }
     } catch (err: any) {
       if (err.name !== "AbortError") {
         console.error("Share error:", err);
         setShareStatus("error");
       }
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleCopyCard = async () => {
+    if (!selectedPerson) return;
+    setGenerating(true);
+    try {
+      const blob = await generateCardBlob();
+      if (typeof navigator !== "undefined" && navigator.clipboard && typeof ClipboardItem !== "undefined") {
+        await navigator.clipboard.write([
+          new ClipboardItem({ "image/png": blob }),
+        ]);
+        toast.success("Card image copied! Paste directly in WhatsApp (Ctrl+V).");
+      } else {
+        toast.error("Clipboard access not supported in this browser.");
+      }
+    } catch {
+      toast.error("Failed to copy image to clipboard.");
     } finally {
       setGenerating(false);
     }
@@ -1771,18 +1786,48 @@ export default function BirthdaysPage() {
                 {/* Actions */}
                 <button className="btn-whatsapp" onClick={handleShare} disabled={generating}>
                   {generating ? (
-                    <><div style={{width:15,height:15,border:"2.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin .6s linear infinite"}}/> Generating…</>
+                    <><div style={{width:15,height:15,border:"2.5px solid rgba(255,255,255,.3)",borderTopColor:"#fff",borderRadius:"50%",animation:"spin .6s linear infinite"}}/> Opening WhatsApp…</>
                   ) : (
-                    <><WhatsAppIcon size={16}/> {selectedPerson.phone?`Send to ${selectedPerson.phone}`:"Share via WhatsApp"}</>
+                    <><WhatsAppIcon size={16}/> {selectedPerson.phone ? `Send to ${selectedPerson.phone}` : "Share via WhatsApp"}</>
                   )}
                 </button>
 
-                <button className="btn-download" onClick={handleDownload} disabled={generating}>
-                  ⬇ Download PNG card
-                </button>
+                <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                  <button
+                    type="button"
+                    className="btn-download"
+                    style={{ flex: 1 }}
+                    onClick={handleCopyCard}
+                    disabled={generating}
+                    title="Copy card image to clipboard"
+                  >
+                    📋 Copy Card
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-download"
+                    style={{ flex: 1 }}
+                    onClick={handleDownload}
+                    disabled={generating}
+                    title="Download card as PNG image"
+                  >
+                    ⬇ Download PNG
+                  </button>
+                </div>
 
-                {shareStatus==="success"&&<p className="status-ok">✓ Card ready / sent to WhatsApp!</p>}
-                {shareStatus==="error"  &&<p className="status-err">⚠ Failed. Try downloading and sharing manually.</p>}
+                {shareStatus === "success" && (
+                  <div style={{ background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "12px", padding: "10px 14px", textAlign: "center" }}>
+                    <p style={{ fontSize: "12px", fontWeight: 700, color: "#166534", marginBottom: "3px" }}>
+                      ✓ WhatsApp opened to {selectedPerson.phone || selectedPerson.name}!
+                    </p>
+                    <p style={{ fontSize: "11px", color: "#15803d", fontWeight: 500 }}>
+                      📋 Card is copied to your clipboard — press <b>Ctrl + V</b> in WhatsApp and hit Send!
+                    </p>
+                  </div>
+                )}
+                {shareStatus === "error" && (
+                  <p className="status-err">⚠ Failed to open WhatsApp. Try copying or downloading card.</p>
+                )}
 
               </div>
             </div>
